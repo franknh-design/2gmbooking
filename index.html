@@ -340,24 +340,26 @@ async function loadCurrentUser(){
   if(!accounts.length)return;
   const email=(accounts[0].username||'').toLowerCase();
   currentUser.email=email;
-  currentUser.displayName=accounts[0].name||email;
+  currentUser.displayName=email; // fallback
 
   try{
     allUsers=await getListItems('Users');
+    console.log('Current email:',email);
+    console.log('Users loaded:',allUsers.length,allUsers.map(u=>u.Epost+' → '+u.Role));
     const match=allUsers.find(u=>(u.Epost||'').toLowerCase()===email&&u.Active!==false);
     if(match){
       currentUser.role=match.Role||'ReadOnly';
-      currentUser.displayName=match.DisplayName||currentUser.displayName;
+      currentUser.displayName=match.DisplayName||email;
       currentUser.userId=match.id;
+      console.log('Matched user:',match.DisplayName,match.Role);
     }else{
-      // Unknown user — default ReadOnly
       currentUser.role='ReadOnly';
+      console.warn('No user match found for:',email);
     }
   }catch(e){
     console.error('Failed to load user role:',e);
     currentUser.role='ReadOnly';
   }
-  console.log('User:',currentUser.email,'Role:',currentUser.role);
 }
 
 // Permission check
