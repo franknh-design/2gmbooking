@@ -166,14 +166,6 @@ function showNewBooking(){alert('New booking form \u2014 coming soon!')}
 function showIncoming(){alert('Incoming list \u2014 coming soon!')}
 
 let msalReady=false;msalInstance.initialize().then(()=>{msalReady=true;const a=msalInstance.getAllAccounts();if(a.length>0){getToken().then(()=>{if(accessToken){showApp();loadProperties().then(()=>loadData())}})}});
-  msalReady = true;
-  const a = msalInstance.getAllAccounts();
-  if(a.length > 0){
-    getToken().then(()=>{
-      if(accessToken){ showApp(); loadProperties().then(()=>loadData()); }
-    });
-  }
-});
 </script>
 </body>
 </html>
