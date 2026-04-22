@@ -107,8 +107,8 @@ async function graphGet(ep){await getToken();const r=await fetch('https://graph.
 async function graphPatch(ep,body){await getToken();const r=await fetch('https://graph.microsoft.com/v1.0'+ep,{method:'PATCH',headers:{'Authorization':'Bearer '+accessToken,'Content-Type':'application/json'},body:JSON.stringify(body)});if(!r.ok)throw new Error('Graph error '+r.status);return r.json()}
 
 async function getSiteId(){if(siteId)return siteId;const r=await graphGet('/sites/'+SITE_HOST+':'+SITE_PATH);siteId=r.id;return siteId}
-async function getListId(name){if(listIdCache[name])return listIdCache[name];const s=await getSiteId();const r=await graphGet('/sites/'+s+"/lists?$filter=displayName eq '"+name+"'");if(r.value&&r.value.length>0){listIdCache[name]=r.value[0].id;return listIdCache[name]}throw new Error('List not found: '+name)}
-
+const LIST_IDS={'Properties':'d842d574-f238-442a-be3d-77334727e89f','Rooms':'bfa962a0-5eb2-416c-abe8-adba06558c11','Bookings':'fe1dfe34-23df-4864-b0b1-b01bf60bfb75','Persons':'ebbe517d-83f8-4169-9423-70c63a3f8c07','Cleaning_Log':'6b1bd5f9-c54f-42ee-892f-d50c79481375','Hours':'9db53c54-70dd-483d-ad1d-565d0e4ac7ac'};
+async function getListId(name){if(LIST_IDS[name])return LIST_IDS[name];throw new Error('List not found: '+name)}
 async function getListItems(listName){const s=await getSiteId();const lid=await getListId(listName);let all=[];let url='/sites/'+s+'/lists/'+lid+'/items?$expand=fields&$top=500';while(url){const r=await graphGet(url);all=all.concat(r.value.map(i=>({id:i.id,...i.fields})));url=r['@odata.nextLink']?r['@odata.nextLink'].replace('https://graph.microsoft.com/v1.0',''):null}return all}
 
 async function updateListItem(listName,itemId,fields){const s=await getSiteId();const lid=await getListId(listName);return graphPatch('/sites/'+s+'/lists/'+lid+'/items/'+itemId+'/fields',fields)}
