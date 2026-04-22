@@ -467,12 +467,16 @@ async function cycleCS(e,id){
 async function checkIn(id){
   if(!confirm('Check in this guest?'))return;
   try{
-    await updateListItem('Bookings',id,{Status:'Active',Check_In:new Date().toISOString()});
-    await loadData();closeDetail();
+    const now=new Date().toISOString();
+    await updateListItem('Bookings',id,{Status:'Active',Check_In:now});
+    const local=allBookings.find(x=>x.id===id);
+    if(local){local.Status='Active';local.Check_In=now}
+    closeDetail();refreshLocal();
+    loadData();
   }catch(e){console.error(e);alert('Failed to check in')}
 }
 
-async function checkOut(id){
+function checkOut(id){
   const b=bookings.find(x=>x.id===id)||allBookings.find(x=>x.id===id);
   if(!b)return;
   checkoutBookingId=id;
@@ -492,8 +496,10 @@ async function confirmCheckout(){
   btn.disabled=true;btn.textContent='Processing...';
   try{
     await updateListItem('Bookings',checkoutBookingId,{Status:'Completed',Cleaning_Status:'Dirty',Check_Out:dateVal+'T12:00:00Z'});
-    closeCheckoutModal();
-    await loadData();closeDetail();
+    const local=allBookings.find(x=>x.id===checkoutBookingId);
+    if(local){local.Status='Completed';local.Cleaning_Status='Dirty';local.Check_Out=dateVal+'T12:00:00Z'}
+    closeCheckoutModal();closeDetail();refreshLocal();
+    loadData();
   }catch(e){
     console.error(e);alert('Failed to check out: '+e.message);
   }finally{btn.disabled=false;btn.textContent='Confirm check-out'}
@@ -503,8 +509,18 @@ async function cancelBooking(id){
   if(!confirm('Cancel this booking?'))return;
   try{
     await updateListItem('Bookings',id,{Status:'Cancelled'});
-    await loadData();closeDetail();
+    const local=allBookings.find(x=>x.id===id);
+    if(local)local.Status='Cancelled';
+    closeDetail();refreshLocal();
+    loadData();
   }catch(e){console.error(e);alert('Failed to cancel')}
+}
+
+// Refresh UI from local data without waiting for API
+function refreshLocal(){
+  const roomIdSet=new Set(rooms.map(r=>r.id));
+  bookings=allBookings.filter(b=>{const rid=String(b.RoomLookupId||'');return roomIdSet.has(rid)&&(b.Status==='Active'||b.Status==='Upcoming')});
+  renderFloors();updateStats();
 }
 
 // ============================================================
@@ -590,17 +606,21 @@ async function saveBooking(){
 
   try{
     if(editingBookingId){
-      // Edit existing
-      delete fields.Door_Tag_Status; // Don't reset door tag on edit
-      delete fields.Cleaning_Status; // Don't reset cleaning on edit
+      // Edit existing — update locally first for instant UI
+      delete fields.Door_Tag_Status;
+      delete fields.Cleaning_Status;
       await updateListItem('Bookings',editingBookingId,fields);
+      // Update local data immediately
+      const local=allBookings.find(x=>x.id===editingBookingId);
+      if(local){Object.assign(local,fields);if(fields.Check_Out)local.Check_Out=fields.Check_Out}
+      closeBookingModal();closeDetail();refreshLocal();
+      loadData();
     }else{
-      // Create new
+      // Create new — need full reload to get new ID
       await createListItem('Bookings',fields);
+      closeBookingModal();closeDetail();
+      await loadData();
     }
-    closeBookingModal();
-    await loadData();
-    closeDetail();
   }catch(e){
     console.error('Save failed:',e);
     alert('Failed to save booking: '+e.message);
