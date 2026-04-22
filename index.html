@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- 2GM Booking v10.1 — Created by Frank Haugan -->
+<!-- 2GM Booking v10.2 — Created by Frank Haugan -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -132,7 +132,7 @@
     </div>
   </div>
   <div class="detail" id="detailPanel"></div>
-  <div style="text-align:center;padding:12px;font-size:11px;color:var(--text-tertiary);margin-top:1rem" id="appFooter">v10.1 — Created by Frank Haugan</div>
+  <div style="text-align:center;padding:12px;font-size:11px;color:var(--text-tertiary);margin-top:1rem" id="appFooter">v10.2 — Created by Frank Haugan</div>
   <div class="incoming-panel" id="incomingPanel">
     <div class="incoming-head"><span class="title">Upcoming — next 30 days</span><button class="modal-close" onclick="toggleIncoming()">&times;</button></div>
     <table id="tableUpcoming"><colgroup><col style="width:50px"><col><col style="width:80px"><col style="width:100px"><col style="width:100px"><col style="width:80px"><col style="width:50px"></colgroup>
@@ -634,10 +634,12 @@ function getNextWashDate(booking){
 }
 
 function renderFloors(){
+  // For dirty filter: use ALL bookings to build bMap since rooms come from all properties
+  const sourceBk=(activeFilter==='dirty')?allBookings:bookings;
   const bMap={};
-  bookings.forEach(b=>{
+  sourceBk.forEach(b=>{
     const rid=String(b.RoomLookupId||'');
-    if(rid&&(!bMap[rid]||b.Status==='Active'))bMap[rid]=b;
+    if(rid&&(b.Status==='Active'||b.Status==='Upcoming')&&(!bMap[rid]||b.Status==='Active'))bMap[rid]=b;
   });
 
   const isCleaner=currentUser.role==='Cleaner';
@@ -657,13 +659,59 @@ function renderFloors(){
   const allF2=rooms.filter(r=>r.Floor===2||String(r.Floor)==='2');
 
   const noMatch='<tr><td colspan="'+cols+'" class="loading">No matching rooms</td></tr>';
-  document.getElementById('floor1Body').innerHTML=f1.length?f1.map(r=>renderRow(r,bMap[r.id])).join(''):noMatch;
-  document.getElementById('floor2Body').innerHTML=f2.length?f2.map(r=>renderRow(r,bMap[r.id])).join(''):noMatch;
+  document.getElementById('floor1Body').innerHTML=f1.length?f1.map(r=>{
+    const b=bMap[r.id];
+    // For dirty cross-property: show property name in room title
+    if(activeFilter==='dirty'){
+      const prop=properties.find(p=>String(p.id)===String(r.PropertyLookupId));
+      const propName=prop?prop.Title:'';
+      return renderRowWithProperty(r,b,propName);
+    }
+    return renderRow(r,b);
+  }).join(''):noMatch;
+  document.getElementById('floor2Body').innerHTML=f2.length?f2.map(r=>{
+    const b=bMap[r.id];
+    if(activeFilter==='dirty'){
+      const prop=properties.find(p=>String(p.id)===String(r.PropertyLookupId));
+      const propName=prop?prop.Title:'';
+      return renderRowWithProperty(r,b,propName);
+    }
+    return renderRow(r,b);
+  }).join(''):noMatch;
 
   const f1range=allF1.length?'Rooms '+allF1.sort((a,b)=>(a.Title||'').localeCompare(b.Title||'',undefined,{numeric:true}))[0].Title+'–'+allF1[allF1.length-1].Title:'';
   const f2range=allF2.length?'Rooms '+allF2.sort((a,b)=>(a.Title||'').localeCompare(b.Title||'',undefined,{numeric:true}))[0].Title+'–'+allF2[allF2.length-1].Title:'';
-  document.getElementById('floor1Sub').textContent=activeFilter?f1.length+' of '+allF1.length+' rooms':f1range;
-  document.getElementById('floor2Sub').textContent=activeFilter?f2.length+' of '+allF2.length+' rooms':f2range;
+
+  if(activeFilter==='dirty'){
+    document.getElementById('floor1Sub').textContent=f1.length+' rooms — all properties';
+    document.getElementById('floor2Sub').textContent=f2.length+' rooms — all properties';
+  }else{
+    document.getElementById('floor1Sub').textContent=activeFilter?f1.length+' of '+allF1.length+' rooms':f1range;
+    document.getElementById('floor2Sub').textContent=activeFilter?f2.length+' of '+allF2.length+' rooms':f2range;
+  }
+}
+
+function renderRowWithProperty(room,booking,propName){
+  const isCleaner=currentUser.role==='Cleaner';
+  if(isCleaner){
+    const washNext=booking?getNextWashDate(booking):'';
+    return'<tr onclick="showDetail(\''+room.id+'\')">'
+      +'<td>'+cleanBtn(booking)+'</td>'
+      +'<td style="font-variant-numeric:tabular-nums;font-weight:500">'+room.Title+'</td>'
+      +'<td class="muted" style="font-size:11px">'+propName+'</td>'
+      +'<td>'+washNext+'</td>'
+      +'</tr>';
+  }
+  const n=booking?booking.Person_Name:'';
+  const washNext=booking?getNextWashDate(booking):'';
+  return'<tr onclick="showDetail(\''+room.id+'\')">'
+    +'<td>'+cleanBtn(booking)+'</td>'
+    +'<td style="font-variant-numeric:tabular-nums;font-weight:500">'+room.Title+'</td>'
+    +'<td class="muted" style="font-size:11px">'+propName+'</td>'
+    +'<td>'+(n||'<span class="empty-text">—</span>')+'</td>'
+    +'<td>'+washNext+'</td>'
+    +'<td style="font-variant-numeric:tabular-nums">'+(booking?datesCell(booking):'')+'</td>'
+    +'</tr>';
 }
 
 function updateStats(){
@@ -678,7 +726,17 @@ function updateStats(){
 
   document.getElementById('statCheckedIn').textContent=occupiedRoomIds.size+' / '+tr;
   document.getElementById('statEmpty').textContent=tr-occupiedRoomIds.size;
-  document.getElementById('statDirty').textContent=bookings.filter(b=>b.Cleaning_Status==='Dirty').length;
+  // Needs cleaning: count ALL rooms across ALL properties that are dirty OR have wash today
+  const allDirtyRoomIds=new Set();
+  allBookings.forEach(b=>{
+    if(b.Cleaning_Status==='Dirty'&&(b.Status==='Active'||b.Status==='Upcoming'))allDirtyRoomIds.add(String(b.RoomLookupId));
+    // Also check wash schedule for today
+    if(b.Status==='Active'&&b.Check_In){
+      const washes=calcWashDates(b.Check_In,b.Check_Out);
+      if(washes.some(w=>w.isToday))allDirtyRoomIds.add(String(b.RoomLookupId));
+    }
+  });
+  document.getElementById('statDirty').textContent=allDirtyRoomIds.size;
   document.getElementById('statDoorTag').textContent=bookings.filter(b=>b.Door_Tag_Status==='Needs-print').length;
   document.getElementById('statBattery').textContent=rooms.filter(r=>r.Door_Battery_Level!=null&&r.Door_Battery_Level<30).length;
 }
@@ -1514,11 +1572,15 @@ function clearFilter(){
 }
 
 function getFilteredRoomsForFloor(floor){
-  let floorRooms=rooms.filter(r=>r.Floor===floor||String(r.Floor)===String(floor));
+  // For 'dirty' filter: use ALL rooms across all properties
+  const sourceRooms=(activeFilter==='dirty')?allRooms:rooms;
+  let floorRooms=sourceRooms.filter(r=>r.Floor===floor||String(r.Floor)===String(floor));
   if(!activeFilter)return floorRooms;
 
+  // For dirty filter, build booking map from ALL bookings
+  const sourceBookings=(activeFilter==='dirty')?allBookings:bookings;
   const bMap={};
-  bookings.forEach(b=>{const rid=String(b.RoomLookupId||'');if(rid&&(!bMap[rid]||b.Status==='Active'))bMap[rid]=b});
+  sourceBookings.forEach(b=>{const rid=String(b.RoomLookupId||'');if(rid&&(b.Status==='Active'||b.Status==='Upcoming')&&(!bMap[rid]||b.Status==='Active'))bMap[rid]=b});
 
   switch(activeFilter){
     case 'checkedIn':
@@ -1526,7 +1588,17 @@ function getFilteredRoomsForFloor(floor){
     case 'empty':
       return floorRooms.filter(r=>!bMap[r.id]);
     case 'dirty':
-      return floorRooms.filter(r=>bMap[r.id]&&bMap[r.id].Cleaning_Status==='Dirty');
+      return floorRooms.filter(r=>{
+        const b=bMap[r.id];
+        if(!b)return false;
+        if(b.Cleaning_Status==='Dirty')return true;
+        // Also include rooms with wash scheduled today
+        if(b.Status==='Active'&&b.Check_In){
+          const washes=calcWashDates(b.Check_In,b.Check_Out);
+          if(washes.some(w=>w.isToday))return true;
+        }
+        return false;
+      });
     case 'doorTag':
       return floorRooms.filter(r=>bMap[r.id]&&bMap[r.id].Door_Tag_Status==='Needs-print');
     case 'battery':
