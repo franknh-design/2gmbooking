@@ -1,10 +1,11 @@
 // ============================================================
-// 2GM Booking v10.6 — modules.js
+// 2GM Booking v10.7 — modules.js
 // Hours, Archive, Import/Export, Admin (checkbox permissions)
 // ============================================================
 
 // --- UPCOMING ---
 function toggleIncoming(){
+  ensureMainView();
   document.getElementById('archivePanel').classList.remove('open');
   document.getElementById('incomingPanel').classList.toggle('open');
   if(document.getElementById('incomingPanel').classList.contains('open'))renderIncoming();
@@ -31,12 +32,13 @@ function renderIncoming(){
       +'<td style="font-weight:500">'+roomTitle+'</td><td>'+b.Person_Name+'</td><td class="muted">'+(b.Company||'')+'</td>'
       +'<td>'+formatDate(b.Check_In)+' '+badge+'</td><td>'+(b.Check_Out?formatDate(b.Check_Out):'Open-ended')+'</td>'
       +'<td><span class="pill" style="background:var(--bg-warning);color:var(--text-warning)">Upcoming</span></td>'
-      +'<td><button style="border:0;background:0 0;cursor:pointer;font-size:11px;color:var(--accent);text-decoration:underline" onclick="event.stopPropagation();openEditBooking(\''+b.id+'\')">Edit</button></td></tr>';
+      +'<td><button onclick="event.stopPropagation();openEditBooking(\''+b.id+'\')" style="padding:3px 10px;border:1px solid var(--accent);border-radius:4px;background:var(--bg-success);color:var(--text-success);cursor:pointer;font-size:11px;font-family:inherit">Edit</button></td></tr>';
   }).join('');
 }
 
 // --- ARCHIVE ---
 function toggleArchive(){
+  ensureMainView();
   document.getElementById('incomingPanel').classList.remove('open');
   document.getElementById('archivePanel').classList.toggle('open');
   if(document.getElementById('archivePanel').classList.contains('open'))renderArchive();
@@ -212,7 +214,7 @@ function renderHours(){
     const wName=workerUser?workerUser.DisplayName:(h.Worker||'');
     return'<tr><td>'+days[d.getDay()]+' '+formatDate(h.Date)+'</td><td>'+(h.Location||'')+'</td><td>'+wName+'</td><td>'+(h.Time_From||'')+'</td><td>'+(h.Time_To||'')+'</td><td style="text-align:right">'+hrs.toFixed(2)+'</td>'
       +'<td class="muted" style="font-size:11px">'+(h.Notes||'')+'</td>'
-      +'<td><button onclick="deleteHoursEntry(\''+h.id+'\')" style="border:0;background:0 0;color:var(--text-danger);cursor:pointer;font-size:11px">✕</button></td></tr>';
+      +'<td style="text-align:right"><button onclick="deleteHoursEntry(\''+h.id+'\')" style="width:20px;height:20px;border-radius:50%;border:1px solid var(--border-tertiary);background:var(--bg-primary);color:var(--text-danger);cursor:pointer;font-size:11px;line-height:1;padding:0" title="Delete">✕</button></td></tr>';
   }).join('');
   document.getElementById('hoursTotal').textContent=total.toFixed(2);
 }
@@ -284,7 +286,8 @@ function exportHoursExcel(){
   const headers=['Date','Day','Location','Worker','From','To','Hours','Notes'];let total=0;
   const rows=filtered.map(h=>{const hrs=calcHoursDiff(h.Time_From,h.Time_To);total+=hrs;const d=new Date(h.Date);const wu=allUsers.find(u=>(u.Epost||'').toLowerCase()===(h.Worker||'').toLowerCase());return[formatDate(h.Date),days[d.getDay()],h.Location||'',wu?wu.DisplayName:h.Worker||'',h.Time_From||'',h.Time_To||'',hrs.toFixed(2),h.Notes||'']});
   rows.push(['','','','','','','Total',total.toFixed(2)]);
-  downloadCSV('Hours_'+months[month]+'_'+year,headers,rows);
+  const workerName=workerFilter==='all'?'All':(allUsers.find(u=>(u.Epost||'').toLowerCase()===workerFilter.toLowerCase())||{}).DisplayName||workerFilter;
+  downloadCSV('Hours_'+workerName.replace(/\s+/g,'_')+'_'+months[month]+'_'+year,headers,rows);
 }
 
 async function archiveHoursMonth(){

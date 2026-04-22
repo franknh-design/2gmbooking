@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v10.6 — app.js (Core)
+// 2GM Booking v10.7 — app.js (Core)
 // Auth, Graph API, Data, Rendering, Bookings
 // ============================================================
 
@@ -416,6 +416,7 @@ function populateRoomSelect(preselectedRoomId){
   const rm=rooms.find(r=>r.id===sel.value);document.getElementById('fFloor').value=rm?rm.Floor:'';
 }
 function openNewBooking(preselectedRoomId){
+  ensureMainView();
   editingBookingId=null;document.getElementById('bookingModalTitle').textContent='New booking';
   document.getElementById('bookingSaveBtn').textContent='Create booking';
   populateRoomSelect(preselectedRoomId||'');
@@ -497,6 +498,7 @@ function printDoorTag(bookingId){
 // --- VIEW SWITCHING ---
 function showMainView(){currentView='main';document.getElementById('mainView').style.display='';document.getElementById('hoursView').style.display='none';document.getElementById('propertySelect').style.display='';if(selectedProperty)document.getElementById('headerTitle').textContent='2GM Booking — '+selectedProperty.Title}
 function showHoursView(){currentView='hours';document.getElementById('mainView').style.display='none';document.getElementById('hoursView').style.display='';document.getElementById('propertySelect').style.display='none';document.getElementById('headerTitle').textContent='2GM Booking — Hours'}
+function ensureMainView(){if(currentView==='hours')showMainView()}
 
 // --- FILTER ---
 function toggleFilter(filter){
