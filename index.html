@@ -598,6 +598,7 @@ async function saveBooking(){
     Notes:notes||null
   };
   if(checkOut)fields.Check_Out=checkOut+'T12:00:00Z';
+  else fields.Check_Out=null;
   // RoomLookupId is set via the lookup field
   fields.RoomLookupId=parseInt(roomId);
 
@@ -612,7 +613,7 @@ async function saveBooking(){
       await updateListItem('Bookings',editingBookingId,fields);
       // Update local data immediately
       const local=allBookings.find(x=>x.id===editingBookingId);
-      if(local){Object.assign(local,fields);if(fields.Check_Out)local.Check_Out=fields.Check_Out}
+      if(local){Object.assign(local,fields);local.Check_Out=fields.Check_Out}
       closeBookingModal();closeDetail();refreshLocal();
       loadData();
     }else{
