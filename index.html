@@ -16,14 +16,20 @@
   .header-btn{padding:6px 14px;border-radius:var(--radius-md);border:1px solid rgba(255,255,255,.3);background:0 0;color:#fff;font-size:13px;cursor:pointer;font-family:inherit}
   .header-btn:hover{background:rgba(255,255,255,.1)}.header-btn.primary{background:var(--accent);border-color:var(--accent)}.header-btn.primary:hover{background:var(--accent-hover)}
   .stats{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:1rem}
-  .stat{background:var(--bg-secondary);border-radius:var(--radius-md);padding:12px}
+  .stat{background:var(--bg-secondary);border-radius:var(--radius-md);padding:12px;cursor:pointer;transition:all .15s;border:2px solid transparent;user-select:none}
+  .stat:hover{background:#eeede7}.stat.active{border-color:var(--accent);background:#E1F5EE}
   .stat-label{font-size:12px;color:var(--text-secondary)}.stat-value{font-size:22px;font-weight:500;margin-top:2px}
+  .filter-bar{display:none;margin-bottom:1rem;padding:8px 14px;background:var(--bg-success);border:1px solid var(--accent);border-radius:var(--radius-md);font-size:13px;color:var(--text-success);align-items:center;justify-content:space-between}
+  .filter-bar.open{display:flex}
+  .filter-bar button{background:0 0;border:0;color:var(--accent);cursor:pointer;font-family:inherit;font-size:13px;font-weight:500;text-decoration:underline}
   .floors{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px}
   .floor-card{background:var(--bg-primary);border:.5px solid var(--border-tertiary);border-radius:var(--radius-lg);overflow:hidden}
   .floor-head{padding:10px 14px;background:var(--bg-secondary);border-bottom:.5px solid var(--border-tertiary);display:flex;justify-content:space-between;align-items:center}
   .floor-head .title{font-weight:500;font-size:14px}.floor-head .sub{font-size:12px;color:var(--text-secondary)}
-  table{width:100%;font-size:12px;border-collapse:collapse;table-layout:fixed}
-  thead th{padding:6px;text-align:left;color:var(--text-secondary);font-weight:400;border-bottom:.5px solid var(--border-tertiary)}
+  table{width:100%;font-size:12px;border-collapse:collapse}
+  thead th{padding:6px;text-align:left;color:var(--text-secondary);font-weight:400;border-bottom:.5px solid var(--border-tertiary);position:relative;user-select:none}
+  thead th .th-resize{position:absolute;right:0;top:0;bottom:0;width:5px;cursor:col-resize;z-index:2}
+  thead th .th-resize:hover{background:var(--accent)}
   tbody tr{border-bottom:.5px solid var(--border-tertiary);cursor:pointer}tbody tr:hover{background:var(--bg-secondary)}
   tbody td{padding:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .status-btn{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:4px;border:1px solid var(--border-secondary);cursor:pointer;padding:0;background:0 0;font-size:13px;font-weight:700;line-height:1}
@@ -100,23 +106,24 @@
     </div>
   </div>
   <div class="stats">
-    <div class="stat"><div class="stat-label">Checked in</div><div class="stat-value" id="statCheckedIn">-</div></div>
-    <div class="stat"><div class="stat-label">Empty rooms</div><div class="stat-value" id="statEmpty">-</div></div>
-    <div class="stat"><div class="stat-label">Needs cleaning</div><div class="stat-value" id="statDirty">-</div></div>
-    <div class="stat"><div class="stat-label">Door tag: needs print</div><div class="stat-value" id="statDoorTag">-</div></div>
-    <div class="stat"><div class="stat-label">Low battery (&lt;30%)</div><div class="stat-value" id="statBattery">-</div></div>
+    <div class="stat" onclick="toggleFilter('checkedIn')"><div class="stat-label">Checked in</div><div class="stat-value" id="statCheckedIn">-</div></div>
+    <div class="stat" onclick="toggleFilter('empty')"><div class="stat-label">Empty rooms</div><div class="stat-value" id="statEmpty">-</div></div>
+    <div class="stat" onclick="toggleFilter('dirty')"><div class="stat-label">Needs cleaning</div><div class="stat-value" id="statDirty">-</div></div>
+    <div class="stat" onclick="toggleFilter('doorTag')"><div class="stat-label">Door tag: needs print</div><div class="stat-value" id="statDoorTag">-</div></div>
+    <div class="stat" onclick="toggleFilter('battery')"><div class="stat-label">Low battery (&lt;30%)</div><div class="stat-value" id="statBattery">-</div></div>
   </div>
+  <div class="filter-bar" id="filterBar"><span id="filterLabel"></span><button onclick="clearFilter()">Clear filter ✕</button></div>
   <div class="floors">
     <div class="floor-card">
       <div class="floor-head"><span class="title" id="floor1Title">1st floor</span><span class="sub" id="floor1Sub"></span></div>
-      <table><colgroup><col style="width:28px"><col style="width:28px"><col style="width:50px"><col><col style="width:80px"><col style="width:44px"><col style="width:180px"></colgroup>
-      <thead><tr><th>T</th><th>C</th><th>Room</th><th>Name</th><th>Company</th><th>Bat.</th><th>Dates</th></tr></thead>
+      <table id="table1"><colgroup><col style="width:28px"><col style="width:28px"><col style="width:50px"><col><col style="width:80px"><col style="width:44px"><col style="width:180px"></colgroup>
+      <thead><tr><th>T<div class="th-resize"></div></th><th>C<div class="th-resize"></div></th><th>Room<div class="th-resize"></div></th><th>Name<div class="th-resize"></div></th><th>Company<div class="th-resize"></div></th><th>Bat.<div class="th-resize"></div></th><th>Dates</th></tr></thead>
       <tbody id="floor1Body"><tr><td colspan="7" class="loading">Loading...</td></tr></tbody></table>
     </div>
     <div class="floor-card">
       <div class="floor-head"><span class="title" id="floor2Title">2nd floor</span><span class="sub" id="floor2Sub"></span></div>
-      <table><colgroup><col style="width:28px"><col style="width:28px"><col style="width:50px"><col><col style="width:80px"><col style="width:44px"><col style="width:180px"></colgroup>
-      <thead><tr><th>T</th><th>C</th><th>Room</th><th>Name</th><th>Company</th><th>Bat.</th><th>Dates</th></tr></thead>
+      <table id="table2"><colgroup><col style="width:28px"><col style="width:28px"><col style="width:50px"><col><col style="width:80px"><col style="width:44px"><col style="width:180px"></colgroup>
+      <thead><tr><th>T<div class="th-resize"></div></th><th>C<div class="th-resize"></div></th><th>Room<div class="th-resize"></div></th><th>Name<div class="th-resize"></div></th><th>Company<div class="th-resize"></div></th><th>Bat.<div class="th-resize"></div></th><th>Dates</th></tr></thead>
       <tbody id="floor2Body"><tr><td colspan="7" class="loading">Loading...</td></tr></tbody></table>
     </div>
   </div>
@@ -319,13 +326,20 @@ function renderFloors(){
     if(rid&&(!bMap[rid]||b.Status==='Active'))bMap[rid]=b;
   });
 
-  const f1=rooms.filter(r=>r.Floor===1||String(r.Floor)==='1').sort((a,b)=>(a.Title||'').localeCompare(b.Title||'',undefined,{numeric:true}));
-  const f2=rooms.filter(r=>r.Floor===2||String(r.Floor)==='2').sort((a,b)=>(a.Title||'').localeCompare(b.Title||'',undefined,{numeric:true}));
+  const f1=getFilteredRoomsForFloor(1).sort((a,b)=>(a.Title||'').localeCompare(b.Title||'',undefined,{numeric:true}));
+  const f2=getFilteredRoomsForFloor(2).sort((a,b)=>(a.Title||'').localeCompare(b.Title||'',undefined,{numeric:true}));
 
-  document.getElementById('floor1Body').innerHTML=f1.length?f1.map(r=>renderRow(r,bMap[r.id])).join(''):'<tr><td colspan="7" class="loading">No rooms on floor 1</td></tr>';
-  document.getElementById('floor2Body').innerHTML=f2.length?f2.map(r=>renderRow(r,bMap[r.id])).join(''):'<tr><td colspan="7" class="loading">No rooms on floor 2</td></tr>';
-  document.getElementById('floor1Sub').textContent=f1.length?'Rooms '+f1[0].Title+'–'+f1[f1.length-1].Title:'';
-  document.getElementById('floor2Sub').textContent=f2.length?'Rooms '+f2[0].Title+'–'+f2[f2.length-1].Title:'';
+  const allF1=rooms.filter(r=>r.Floor===1||String(r.Floor)==='1');
+  const allF2=rooms.filter(r=>r.Floor===2||String(r.Floor)==='2');
+
+  const noMatch='<tr><td colspan="7" class="loading">No matching rooms</td></tr>';
+  document.getElementById('floor1Body').innerHTML=f1.length?f1.map(r=>renderRow(r,bMap[r.id])).join(''):noMatch;
+  document.getElementById('floor2Body').innerHTML=f2.length?f2.map(r=>renderRow(r,bMap[r.id])).join(''):noMatch;
+
+  const f1range=allF1.length?'Rooms '+allF1.sort((a,b)=>(a.Title||'').localeCompare(b.Title||'',undefined,{numeric:true}))[0].Title+'–'+allF1[allF1.length-1].Title:'';
+  const f2range=allF2.length?'Rooms '+allF2.sort((a,b)=>(a.Title||'').localeCompare(b.Title||'',undefined,{numeric:true}))[0].Title+'–'+allF2[allF2.length-1].Title:'';
+  document.getElementById('floor1Sub').textContent=activeFilter?f1.length+' of '+allF1.length+' rooms':f1range;
+  document.getElementById('floor2Sub').textContent=activeFilter?f2.length+' of '+allF2.length+' rooms':f2range;
 }
 
 function updateStats(){
@@ -637,11 +651,102 @@ async function cycleDTDirect(id,status){
 }
 
 // ============================================================
+// STAT CARD FILTERING
+// ============================================================
+let activeFilter=null;
+
+function toggleFilter(filter){
+  if(activeFilter===filter){clearFilter();return}
+  activeFilter=filter;
+
+  // Highlight active stat card
+  document.querySelectorAll('.stat').forEach((el,i)=>{
+    const filters=['checkedIn','empty','dirty','doorTag','battery'];
+    el.classList.toggle('active',filters[i]===filter);
+  });
+
+  const labels={checkedIn:'Showing: Checked-in rooms',empty:'Showing: Empty rooms',dirty:'Showing: Rooms needing cleaning',doorTag:'Showing: Door tags needing print',battery:'Showing: Low battery rooms (<30%)'};
+  document.getElementById('filterLabel').textContent=labels[filter]||'';
+  document.getElementById('filterBar').classList.add('open');
+  renderFloors();
+}
+
+function clearFilter(){
+  activeFilter=null;
+  document.querySelectorAll('.stat').forEach(el=>el.classList.remove('active'));
+  document.getElementById('filterBar').classList.remove('open');
+  renderFloors();
+}
+
+function getFilteredRoomsForFloor(floor){
+  let floorRooms=rooms.filter(r=>r.Floor===floor||String(r.Floor)===String(floor));
+  if(!activeFilter)return floorRooms;
+
+  const bMap={};
+  bookings.forEach(b=>{const rid=String(b.RoomLookupId||'');if(rid&&(!bMap[rid]||b.Status==='Active'))bMap[rid]=b});
+
+  switch(activeFilter){
+    case 'checkedIn':
+      return floorRooms.filter(r=>bMap[r.id]&&bMap[r.id].Status==='Active');
+    case 'empty':
+      return floorRooms.filter(r=>!bMap[r.id]||bMap[r.id].Status!=='Active');
+    case 'dirty':
+      return floorRooms.filter(r=>bMap[r.id]&&bMap[r.id].Cleaning_Status==='Dirty');
+    case 'doorTag':
+      return floorRooms.filter(r=>bMap[r.id]&&bMap[r.id].Door_Tag_Status==='Needs-print');
+    case 'battery':
+      return floorRooms.filter(r=>r.Door_Battery_Level!=null&&r.Door_Battery_Level<30);
+    default:
+      return floorRooms;
+  }
+}
+
+// ============================================================
+// COLUMN RESIZE
+// ============================================================
+function initResize(){
+  document.querySelectorAll('.th-resize').forEach(handle=>{
+    handle.addEventListener('mousedown',function(e){
+      e.preventDefault();e.stopPropagation();
+      const th=this.parentElement;
+      const table=th.closest('table');
+      const startX=e.pageX;
+      const startW=th.offsetWidth;
+      const colIndex=Array.from(th.parentElement.children).indexOf(th);
+
+      // Also get the matching col element
+      const col=table.querySelector('colgroup').children[colIndex];
+
+      function onMove(ev){
+        const diff=ev.pageX-startX;
+        const newW=Math.max(20,startW+diff);
+        th.style.width=newW+'px';
+        if(col)col.style.width=newW+'px';
+
+        // Sync the other table's column
+        const otherId=table.id==='table1'?'table2':'table1';
+        const other=document.getElementById(otherId);
+        if(other){
+          const otherTh=other.querySelectorAll('thead th')[colIndex];
+          const otherCol=other.querySelector('colgroup').children[colIndex];
+          if(otherTh)otherTh.style.width=newW+'px';
+          if(otherCol)otherCol.style.width=newW+'px';
+        }
+      }
+      function onUp(){document.removeEventListener('mousemove',onMove);document.removeEventListener('mouseup',onUp)}
+      document.addEventListener('mousemove',onMove);
+      document.addEventListener('mouseup',onUp);
+    });
+  });
+}
+
+// ============================================================
 // INIT
 // ============================================================
 let msalReady=false;
 msalInstance.initialize().then(()=>{
   msalReady=true;
+  initResize();
   const a=msalInstance.getAllAccounts();
   if(a.length>0){
     getToken().then(()=>{
