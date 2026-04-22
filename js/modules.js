@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v10.8 — modules.js
+// 2GM Booking v10.9 — modules.js
 // Hours, Archive, Import/Export, Admin (checkbox permissions)
 // ============================================================
 
@@ -212,11 +212,21 @@ function renderHours(){
     const d=new Date(h.Date);
     const workerUser=allUsers.find(u=>(u.Epost||'').toLowerCase()===(h.Worker||'').toLowerCase());
     const wName=workerUser?workerUser.DisplayName:(h.Worker||'');
-    return'<tr onclick="openEditHours(\''+h.id+'\')" style="cursor:pointer"><td>'+days[d.getDay()]+' '+formatDate(h.Date)+'</td><td>'+(h.Location||'')+'</td><td>'+wName+'</td><td>'+(h.Time_From||'')+'</td><td>'+(h.Time_To||'')+'</td><td style="text-align:right">'+hrs.toFixed(2)+'</td>'
+    return'<tr data-hours-id="'+h.id+'" style="cursor:pointer"><td>'+days[d.getDay()]+' '+formatDate(h.Date)+'</td><td>'+(h.Location||'')+'</td><td>'+wName+'</td><td>'+(h.Time_From||'')+'</td><td>'+(h.Time_To||'')+'</td><td style="text-align:right">'+hrs.toFixed(2)+'</td>'
       +'<td class="muted" style="font-size:11px">'+(h.Notes||'')+'</td>'
-      +'<td style="text-align:right"><button onclick="event.stopPropagation();deleteHoursEntry(\''+h.id+'\')" style="width:20px;height:20px;border-radius:50%;border:1px solid var(--border-tertiary);background:var(--bg-primary);color:var(--text-danger);cursor:pointer;font-size:11px;line-height:1;padding:0" title="Delete">✕</button></td></tr>';
+      +'<td style="text-align:right"><button data-hours-delete="'+h.id+'" style="width:20px;height:20px;border-radius:50%;border:1px solid var(--border-tertiary);background:var(--bg-primary);color:var(--text-danger);cursor:pointer;font-size:11px;line-height:1;padding:0" title="Delete">✕</button></td></tr>';
   }).join('');
   document.getElementById('hoursTotal').textContent=total.toFixed(2);
+
+  // Attach click handlers via delegation
+  document.getElementById('hoursBody').onclick=function(e){
+    // Check if delete button was clicked
+    const delBtn=e.target.closest('[data-hours-delete]');
+    if(delBtn){e.stopPropagation();deleteHoursEntry(delBtn.dataset.hoursDelete);return}
+    // Otherwise check if row was clicked for edit
+    const row=e.target.closest('tr[data-hours-id]');
+    if(row)openEditHours(row.dataset.hoursId);
+  };
 }
 
 function calcHoursDiff(from,to){
