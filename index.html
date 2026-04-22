@@ -283,17 +283,20 @@ async function loadData(){
     }
 
     // Filter bookings: match via RoomLookupId to rooms in this property
-    // Active bookings always show. Upcoming only if check-in is within 2 days.
+    // Active bookings always show. Upcoming only on check-in day from 12:00.
     const roomIds=new Set(rooms.map(r=>r.id));
-    const now=new Date();now.setHours(0,0,0,0);
-    const cutoff=new Date(now);cutoff.setDate(cutoff.getDate()+2);
+    const now=new Date();
     bookings=allBookings.filter(b=>{
       const rid=String(b.RoomLookupId||'');
       if(!roomIds.has(rid))return false;
       if(b.Status==='Active')return true;
       if(b.Status==='Upcoming'){
         const ci=new Date(b.Check_In);ci.setHours(0,0,0,0);
-        return ci<=cutoff;
+        const today=new Date();today.setHours(0,0,0,0);
+        // Same day and past 12:00, or overdue (check-in was before today)
+        if(ci.getTime()<today.getTime())return true;
+        if(ci.getTime()===today.getTime()&&now.getHours()>=12)return true;
+        return false;
       }
       return false;
     });
@@ -394,32 +397,16 @@ function renderFloors(){
 }
 
 function updateStats(){
-  const today=new Date();today.setHours(0,0,0,0);
   const tr=rooms.length;
 
-  // A room is "occupied" if it has an Active booking OR an Upcoming booking with check-in <= today
+  // bookings array is already filtered: Active + Upcoming that passed the 12:00 rule
   const occupiedRoomIds=new Set();
-  const checkedInRoomIds=new Set();
-
   bookings.forEach(b=>{
     const rid=String(b.RoomLookupId||'');
-    if(b.Status==='Active'){
-      occupiedRoomIds.add(rid);
-      checkedInRoomIds.add(rid);
-    }else if(b.Status==='Upcoming'){
-      const ci=new Date(b.Check_In);ci.setHours(0,0,0,0);
-      if(ci<=today){
-        // Check-in is today or overdue — should be checked in
-        occupiedRoomIds.add(rid);
-        checkedInRoomIds.add(rid);
-      }else{
-        // Future booking — room is reserved but not yet occupied
-        occupiedRoomIds.add(rid);
-      }
-    }
+    occupiedRoomIds.add(rid);
   });
 
-  document.getElementById('statCheckedIn').textContent=checkedInRoomIds.size+' / '+tr;
+  document.getElementById('statCheckedIn').textContent=occupiedRoomIds.size+' / '+tr;
   document.getElementById('statEmpty').textContent=tr-occupiedRoomIds.size;
   document.getElementById('statDirty').textContent=bookings.filter(b=>b.Cleaning_Status==='Dirty').length;
   document.getElementById('statDoorTag').textContent=bookings.filter(b=>b.Door_Tag_Status==='Needs-print').length;
@@ -549,13 +536,18 @@ async function cancelBooking(id){
 // Refresh UI from local data without waiting for API
 function refreshLocal(){
   const roomIdSet=new Set(rooms.map(r=>r.id));
-  const now=new Date();now.setHours(0,0,0,0);
-  const cutoff=new Date(now);cutoff.setDate(cutoff.getDate()+2);
+  const now=new Date();
   bookings=allBookings.filter(b=>{
     const rid=String(b.RoomLookupId||'');
     if(!roomIdSet.has(rid))return false;
     if(b.Status==='Active')return true;
-    if(b.Status==='Upcoming'){const ci=new Date(b.Check_In);ci.setHours(0,0,0,0);return ci<=cutoff}
+    if(b.Status==='Upcoming'){
+      const ci=new Date(b.Check_In);ci.setHours(0,0,0,0);
+      const today=new Date();today.setHours(0,0,0,0);
+      if(ci.getTime()<today.getTime())return true;
+      if(ci.getTime()===today.getTime()&&now.getHours()>=12)return true;
+      return false;
+    }
     return false;
   });
   renderFloors();updateStats();
@@ -932,31 +924,14 @@ function getFilteredRoomsForFloor(floor){
   let floorRooms=rooms.filter(r=>r.Floor===floor||String(r.Floor)===String(floor));
   if(!activeFilter)return floorRooms;
 
-  const today=new Date();today.setHours(0,0,0,0);
   const bMap={};
   bookings.forEach(b=>{const rid=String(b.RoomLookupId||'');if(rid&&(!bMap[rid]||b.Status==='Active'))bMap[rid]=b});
 
-  function isOccupied(r){
-    const b=bMap[r.id];
-    if(!b)return false;
-    if(b.Status==='Active')return true;
-    if(b.Status==='Upcoming')return true;
-    return false;
-  }
-
-  function isCheckedIn(r){
-    const b=bMap[r.id];
-    if(!b)return false;
-    if(b.Status==='Active')return true;
-    if(b.Status==='Upcoming'){const ci=new Date(b.Check_In);ci.setHours(0,0,0,0);return ci<=today}
-    return false;
-  }
-
   switch(activeFilter){
     case 'checkedIn':
-      return floorRooms.filter(r=>isCheckedIn(r));
+      return floorRooms.filter(r=>!!bMap[r.id]);
     case 'empty':
-      return floorRooms.filter(r=>!isOccupied(r));
+      return floorRooms.filter(r=>!bMap[r.id]);
     case 'dirty':
       return floorRooms.filter(r=>bMap[r.id]&&bMap[r.id].Cleaning_Status==='Dirty');
     case 'doorTag':
