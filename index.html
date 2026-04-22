@@ -668,14 +668,15 @@ function renderIncoming(){
   const today=new Date();today.setHours(0,0,0,0);
   const in30=new Date(today);in30.setDate(in30.getDate()+30);
 
-  // Get all upcoming bookings for this property's rooms
+  // Get upcoming bookings with check-in in the future (not today — those are already on the board)
   const roomIds=new Set(rooms.map(r=>r.id));
+  const tomorrow=new Date(today);tomorrow.setDate(tomorrow.getDate()+1);
   const upcoming=allBookings.filter(b=>{
     if(b.Status!=='Upcoming')return false;
     const rid=String(b.RoomLookupId||'');
     if(!roomIds.has(rid))return false;
-    const ci=new Date(b.Check_In);
-    return ci>=today&&ci<=in30;
+    const ci=new Date(b.Check_In);ci.setHours(0,0,0,0);
+    return ci>=tomorrow&&ci<=in30;
   }).sort((a,b)=>new Date(a.Check_In)-new Date(b.Check_In));
 
   const body=document.getElementById('incomingBody');
