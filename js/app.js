@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v11.3 — app.js (Core)
+// 2GM Booking v11.4 — app.js (Core)
 // Auth, Graph API, Data, Rendering, Bookings
 // ============================================================
 
@@ -104,24 +104,24 @@ async function loadCurrentUser(){
 function can(perm){return currentUser.permissions.includes(perm)}
 
 function applyPermissions(){
-  const el=id=>{const e=document.getElementById(id);if(!e)console.warn('Element not found:',id);return e};
+  const el=id=>document.getElementById(id);
+  const show=(id,vis)=>{const e=el(id);if(e)e.style.display=vis?'':'none'};
+  const showBlock=(id,vis)=>{const e=el(id);if(e)e.style.display=vis?'block':'none'};
   // Header buttons
-  el('btnNewBooking').style.display=can('edit_bookings')?'':'none';
-  el('btnArchive').style.display=can('archive')||can('view_bookings')?'':'none';
-  el('btnUpcoming').style.display=can('view_bookings')?'':'none';
-  el('btnHours').style.display=can('view_hours')||can('edit_hours')?'':'none';
-  // Admin bar above banner
-  el('adminBar').style.display=can('admin')?'block':'none';
+  show('btnNewBooking',can('edit_bookings'));
+  show('btnArchive',can('archive')||can('view_bookings'));
+  show('btnUpcoming',can('view_bookings'));
+  show('btnHours',can('view_hours')||can('edit_hours'));
+  showBlock('adminBar',can('admin'));
   // Property select
-  el('propertySelect').style.display='';
+  const ps=el('propertySelect');if(ps)ps.style.display='';
   // Sign out label
-  el('btnSignOut').textContent=currentUser.displayName+' — Sign out';
+  const so=el('btnSignOut');if(so)so.textContent=currentUser.displayName+' — Sign out';
   // Stats: hide if no view permission
   if(!can('view_bookings')){
-    el('statsBar').style.display='none';
-    document.querySelector('.floors').style.display='none';
+    const sb=el('statsBar');if(sb)sb.style.display='none';
+    const fl=document.querySelector('.floors');if(fl)fl.style.display='none';
   }
-  console.log('Permissions applied. Admin:',can('admin'),'View:',can('view_bookings'));
 }
 
 // --- DATA LOADING ---
