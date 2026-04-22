@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v11.1 — app.js (Core)
+// 2GM Booking v11.2 — app.js (Core)
 // Auth, Graph API, Data, Rendering, Bookings
 // ============================================================
 
@@ -32,7 +32,7 @@ const ALL_PERMS=[
 // --- STATE ---
 let accessToken=null,siteId=null;
 let currentUser={email:'',displayName:'',permissions:[]};
-let properties=[],rooms=[],allRooms=[],bookings=[],allBookings=[],allUsers=[];
+let properties=[],rooms=[],allRooms=[],bookings=[],allBookings=[],allUsers=[],allPersons=[];
 let selectedProperty=null,selectedRoom=null,selectedBooking=null;
 let editingBookingId=null,checkoutBookingId=null;
 let activeFilter=null;
@@ -107,7 +107,7 @@ function applyPermissions(){
   const el=id=>document.getElementById(id);
   // Header buttons
   el('btnNewBooking').style.display=can('edit_bookings')?'':'none';
-  el('adminBtn').style.display=can('admin')?'':'none';
+  el('adminBar').style.display=can('admin')?'':'none';
   el('btnArchive').style.display=can('archive')||can('view_bookings')?'':'none';
   el('btnUpcoming').style.display=can('view_bookings')?'':'none';
   el('btnHours').style.display=can('view_hours')||can('edit_hours')?'':'none';
@@ -148,6 +148,7 @@ async function loadData(){
   try{
     allRooms=await getListItems('Rooms');
     allBookings=await getListItems('Bookings');
+    try{allPersons=await getListItems('Persons')}catch(e){allPersons=[]}
     rooms=allRooms.filter(r=>String(r.PropertyLookupId)===String(selectedProperty.id));
     if(rooms.length===0){rooms=allRooms.filter(r=>r.Active!==false)}
     filterBookingsForView();
@@ -329,6 +330,24 @@ function updateStats(){
   document.getElementById('statDirty').textContent=allDirtyRoomIds.size;
   document.getElementById('statDoorTag').textContent=bookings.filter(b=>b.Door_Tag_Status==='Needs-print').length;
   document.getElementById('statBattery').textContent=rooms.filter(r=>r.Door_Battery_Level!=null&&r.Door_Battery_Level<30).length;
+  // Occupancy: current month for selected property
+  const now=new Date();const curMonth=now.getMonth();const curYear=now.getFullYear();
+  const daysInMonth=new Date(curYear,curMonth+1,0).getDate();
+  const today=now.getDate();
+  const propRoomIds=new Set(rooms.map(r=>r.id));
+  let occupiedNights=0;
+  allBookings.forEach(b=>{
+    if(b.Status!=='Active'&&b.Status!=='Completed')return;
+    const rid=String(b.RoomLookupId||'');if(!propRoomIds.has(rid))return;
+    const ci=new Date(b.Check_In);const co=b.Check_Out?new Date(b.Check_Out):now;
+    const monthStart=new Date(curYear,curMonth,1);const monthEnd=new Date(curYear,curMonth,today+1);
+    const start=ci>monthStart?ci:monthStart;const end=co<monthEnd?co:monthEnd;
+    const nights=Math.max(0,Math.round((end-start)/864e5));
+    occupiedNights+=nights;
+  });
+  const totalPossible=tr*today;
+  const occPct=totalPossible>0?Math.round(occupiedNights/totalPossible*100):0;
+  document.getElementById('statOccupancy').textContent=occPct+'%';
 }
 
 // --- DETAIL PANEL ---
@@ -353,9 +372,14 @@ function showDetail(roomId){
     const washHtml=getWashScheduleHtml(booking);
     let infoHtml='';
     if(can('view_bookings')){
+      // Look up phone from Persons list
+      const person=allPersons.find(p=>(p.Title||'').toLowerCase()===(booking.Person_Name||'').toLowerCase()
+        ||(p.Name||'').toLowerCase()===(booking.Person_Name||'').toLowerCase());
+      const phone=person?(person.Phone||person.Telefon||''):'';
       infoHtml='<div class="detail-name">'+booking.Person_Name+'</div>'
         +'<div class="detail-sub">Room '+room.Title+' · '+(booking.Company||'')+' · '+propName+'</div>'
         +'<table class="detail-info">'
+        +(phone?'<tr><td>Phone</td><td><a href="tel:'+phone+'" style="color:var(--accent)">'+phone+'</a></td></tr>':'')
         +'<tr><td>Check-in</td><td>'+formatDate(booking.Check_In)+'</td></tr>'
         +'<tr><td>Check-out</td><td>'+(booking.Check_Out?formatDate(booking.Check_Out):'Open-ended')+'</td></tr>'
         +'<tr><td>Status</td><td>'+booking.Status+'</td></tr>'

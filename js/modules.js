@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v11.1 — modules.js
+// 2GM Booking v11.2 — modules.js
 // Hours, Archive, Import/Export, Admin (checkbox permissions)
 // ============================================================
 
@@ -493,4 +493,105 @@ function buildInviteHtml(u){
     +'<p style="font-size:13px;color:#888">If you have any questions, contact Frank at frank@2gm.no or +47 99 10 10 41.</p>'
     +'<hr style="border:none;border-top:1px solid #eee;margin:24px 0">'
     +'<p style="font-size:11px;color:#aaa">This email was sent from the 2GM Booking system.</p></div>';
+}
+
+// --- OCCUPANCY REPORT ---
+function showOccupancyReport(){
+  const now=new Date();
+  const yearSel=document.getElementById('occYear');
+  const propSel=document.getElementById('occProperty');
+  if(!yearSel.children.length){
+    const curYear=now.getFullYear();
+    const years=[];
+    allBookings.forEach(b=>{if(b.Check_In){const y=new Date(b.Check_In).getFullYear();if(!years.includes(y))years.push(y)}});
+    if(!years.includes(curYear))years.push(curYear);
+    years.sort((a,b)=>b-a);
+    yearSel.innerHTML=years.map(y=>'<option value="'+y+'"'+(y===curYear?' selected':'')+'>'+y+'</option>').join('');
+    propSel.innerHTML='<option value="all">All properties</option>'+properties.map(p=>'<option value="'+p.id+'">'+p.Title+'</option>').join('');
+  }
+  renderOccupancyReport();
+  document.getElementById('occupancyModal').classList.add('open');
+}
+
+function renderOccupancyReport(){
+  const year=parseInt(document.getElementById('occYear').value);
+  const propFilter=document.getElementById('occProperty').value;
+  const months=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const now=new Date();
+
+  // Get rooms for selected property
+  let reportRooms=propFilter==='all'?allRooms.filter(r=>{const pids=new Set(properties.map(p=>p.id));return pids.has(String(r.PropertyLookupId))}):allRooms.filter(r=>String(r.PropertyLookupId)===propFilter);
+  const roomCount=reportRooms.length;
+  const roomIds=new Set(reportRooms.map(r=>r.id));
+
+  // Relevant bookings
+  const yearBookings=allBookings.filter(b=>{
+    if(b.Status!=='Active'&&b.Status!=='Completed')return false;
+    const rid=String(b.RoomLookupId||'');if(!roomIds.has(rid))return false;
+    if(!b.Check_In)return false;
+    const ci=new Date(b.Check_In);const co=b.Check_Out?new Date(b.Check_Out):now;
+    return ci.getFullYear()===year||co.getFullYear()===year||(ci.getFullYear()<year&&co.getFullYear()>year);
+  });
+
+  let html='<table style="width:100%;font-size:13px;border-collapse:collapse"><thead><tr style="border-bottom:2px solid var(--border-secondary)"><th style="text-align:left;padding:6px">Month</th><th style="text-align:right;padding:6px">Room nights</th><th style="text-align:right;padding:6px">Possible</th><th style="text-align:right;padding:6px">Occupancy</th></tr></thead><tbody>';
+
+  let totalOccupied=0,totalPossible=0;
+
+  for(let m=0;m<12;m++){
+    const monthStart=new Date(year,m,1);
+    const monthEnd=new Date(year,m+1,0);// last day
+    const daysInMonth=monthEnd.getDate();
+
+    // Don't count future months
+    if(monthStart>now){html+='<tr style="color:var(--text-tertiary)"><td style="padding:4px 6px">'+months[m]+'</td><td style="text-align:right;padding:4px 6px">—</td><td style="text-align:right;padding:4px 6px">—</td><td style="text-align:right;padding:4px 6px">—</td></tr>';continue}
+
+    const lastDay=monthEnd<now?daysInMonth:now.getDate();
+    const possible=roomCount*lastDay;
+
+    let occupied=0;
+    yearBookings.forEach(b=>{
+      const ci=new Date(b.Check_In);const co=b.Check_Out?new Date(b.Check_Out):now;
+      const start=ci>monthStart?ci:monthStart;
+      const end=co<new Date(year,m,lastDay+1)?co:new Date(year,m,lastDay+1);
+      const nights=Math.max(0,Math.round((end-start)/864e5));
+      occupied+=nights;
+    });
+
+    // Cap at possible (can't have more than 100%)
+    occupied=Math.min(occupied,possible);
+    totalOccupied+=occupied;totalPossible+=possible;
+    const pct=possible>0?Math.round(occupied/possible*100):0;
+    const barColor=pct>=80?'var(--accent)':pct>=50?'#EF9F27':'var(--text-danger)';
+
+    html+='<tr style="border-bottom:1px solid var(--border-tertiary)"><td style="padding:6px">'+months[m]+'</td><td style="text-align:right;padding:6px">'+occupied+'</td><td style="text-align:right;padding:6px">'+possible+'</td><td style="text-align:right;padding:6px"><div style="display:flex;align-items:center;justify-content:flex-end;gap:8px"><div style="width:80px;height:8px;background:var(--bg-secondary);border-radius:4px;overflow:hidden"><div style="height:100%;width:'+pct+'%;background:'+barColor+';border-radius:4px"></div></div><strong>'+pct+'%</strong></div></td></tr>';
+  }
+
+  const totalPct=totalPossible>0?Math.round(totalOccupied/totalPossible*100):0;
+  html+='</tbody><tfoot><tr style="border-top:2px solid var(--border-secondary);font-weight:500"><td style="padding:6px">Total '+year+'</td><td style="text-align:right;padding:6px">'+totalOccupied+'</td><td style="text-align:right;padding:6px">'+totalPossible+'</td><td style="text-align:right;padding:6px"><strong>'+totalPct+'%</strong></td></tr></tfoot></table>';
+  html+='<div style="margin-top:8px;font-size:12px;color:var(--text-tertiary)">Based on '+roomCount+' rooms. Active and completed bookings only.</div>';
+
+  document.getElementById('occReport').innerHTML=html;
+}
+
+function exportOccupancyReport(){
+  const year=parseInt(document.getElementById('occYear').value);
+  const propFilter=document.getElementById('occProperty').value;
+  const propName=propFilter==='all'?'All':(properties.find(p=>p.id===propFilter)||{}).Title||'Unknown';
+  const months=['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const now=new Date();
+  let reportRooms=propFilter==='all'?allRooms.filter(r=>{const pids=new Set(properties.map(p=>p.id));return pids.has(String(r.PropertyLookupId))}):allRooms.filter(r=>String(r.PropertyLookupId)===propFilter);
+  const roomCount=reportRooms.length;const roomIds=new Set(reportRooms.map(r=>r.id));
+  const yearBookings=allBookings.filter(b=>{if(b.Status!=='Active'&&b.Status!=='Completed')return false;const rid=String(b.RoomLookupId||'');if(!roomIds.has(rid))return false;if(!b.Check_In)return false;const ci=new Date(b.Check_In);const co=b.Check_Out?new Date(b.Check_Out):now;return ci.getFullYear()===year||co.getFullYear()===year||(ci.getFullYear()<year&&co.getFullYear()>year)});
+  const headers=['Month','Room nights','Possible','Occupancy %'];
+  const rows=[];let tO=0,tP=0;
+  for(let m=0;m<12;m++){
+    const monthStart=new Date(year,m,1);const monthEnd=new Date(year,m+1,0);const daysInMonth=monthEnd.getDate();
+    if(monthStart>now){rows.push([months[m],'','','']);continue}
+    const lastDay=monthEnd<now?daysInMonth:now.getDate();const possible=roomCount*lastDay;
+    let occupied=0;yearBookings.forEach(b=>{const ci=new Date(b.Check_In);const co=b.Check_Out?new Date(b.Check_Out):now;const start=ci>monthStart?ci:monthStart;const end=co<new Date(year,m,lastDay+1)?co:new Date(year,m,lastDay+1);occupied+=Math.max(0,Math.round((end-start)/864e5))});
+    occupied=Math.min(occupied,possible);tO+=occupied;tP+=possible;
+    rows.push([months[m],occupied,possible,possible>0?Math.round(occupied/possible*100)+'%':'']);
+  }
+  rows.push(['Total',tO,tP,tP>0?Math.round(tO/tP*100)+'%':'']);
+  downloadCSV('Occupancy_'+propName.replace(/\s+/g,'_')+'_'+year,headers,rows);
 }
