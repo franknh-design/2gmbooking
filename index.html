@@ -147,7 +147,8 @@
           <option value="Active">Active</option>
           <option value="Upcoming">Upcoming</option>
         </select>
-        <button onclick="exportArchiveExcel()" style="padding:5px 12px;border:1px solid var(--border-tertiary);border-radius:var(--radius-md);font-size:13px;font-family:inherit;background:var(--accent);color:#fff;cursor:pointer;white-space:nowrap">↓ Export Excel</button>
+        <button onclick="exportArchiveExcel()" style="padding:5px 12px;border:1px solid var(--border-tertiary);border-radius:var(--radius-md);font-size:13px;font-family:inherit;background:var(--accent);color:#fff;cursor:pointer;white-space:nowrap">↓ Export</button>
+        <button onclick="document.getElementById('importModal').classList.add('open')" style="padding:5px 12px;border:1px solid var(--border-tertiary);border-radius:var(--radius-md);font-size:13px;font-family:inherit;background:#EF9F27;color:#fff;cursor:pointer;white-space:nowrap">↑ Import</button>
         <button class="modal-close" onclick="toggleArchive()">&times;</button>
       </div>
     </div>
@@ -202,6 +203,54 @@
     <div class="modal-footer">
       <button onclick="closeCheckoutModal()">Cancel</button>
       <button class="primary" id="checkoutConfirmBtn" onclick="confirmCheckout()" style="background:#EF9F27;border-color:#EF9F27">Confirm check-out</button>
+    </div>
+  </div>
+</div>
+
+<!-- Import Modal -->
+<div class="modal-overlay" id="importModal">
+  <div class="modal" style="max-width:620px">
+    <div class="modal-header"><h2>Import bookings</h2><button class="modal-close" onclick="closeImportModal()">&times;</button></div>
+    <div class="modal-body">
+      <p style="margin:0 0 8px;font-size:13px;color:var(--text-secondary)">Upload a CSV file with booking data. The file must use semicolon (;) as separator.</p>
+      <div style="margin-bottom:16px;padding:12px;background:var(--bg-secondary);border-radius:var(--radius-md);font-size:12px;font-family:monospace">
+        <strong>Required columns:</strong><br>
+        Room ; Name ; Company ; Check-in ; Check-out ; Status<br><br>
+        <strong>Example:</strong><br>
+        101 ; John Doe ; SalMar ; 01.01.2025 ; 15.03.2025 ; Completed<br>
+        205 ; Jane Smith ; Mowi ; 10.02.2025 ; ; Completed
+      </div>
+      <div class="form-group">
+        <label>CSV file</label>
+        <input type="file" id="importFile" accept=".csv,.txt" style="font-family:inherit;font-size:14px">
+      </div>
+      <div class="form-group">
+        <label>Default status for imported rows</label>
+        <select id="importStatus" style="width:100%;padding:8px 10px;border:1px solid var(--border-tertiary);border-radius:var(--radius-md);font-family:inherit;font-size:14px">
+          <option value="Completed" selected>Completed (archive)</option>
+          <option value="Active">Active</option>
+          <option value="Upcoming">Upcoming</option>
+          <option value="Cancelled">Cancelled</option>
+        </select>
+        <div style="font-size:11px;color:var(--text-tertiary);margin-top:2px">Used when Status column is missing or empty</div>
+      </div>
+      <div id="importPreview" style="display:none;margin-top:12px">
+        <div style="font-size:13px;font-weight:500;margin-bottom:6px" id="importPreviewTitle"></div>
+        <div style="max-height:200px;overflow-y:auto;border:1px solid var(--border-tertiary);border-radius:var(--radius-md)">
+          <table style="font-size:11px"><thead><tr><th>Room</th><th>Name</th><th>Company</th><th>Check-in</th><th>Check-out</th><th>Status</th></tr></thead>
+          <tbody id="importPreviewBody"></tbody></table>
+        </div>
+      </div>
+      <div id="importProgress" style="display:none;margin-top:12px">
+        <div style="font-size:13px" id="importProgressText">Importing...</div>
+        <div style="height:6px;background:var(--bg-secondary);border-radius:3px;margin-top:6px;overflow:hidden"><div id="importProgressBar" style="height:100%;background:var(--accent);width:0%;transition:width .2s"></div></div>
+      </div>
+      <div id="importResult" style="display:none;margin-top:12px;padding:10px;border-radius:var(--radius-md);font-size:13px"></div>
+    </div>
+    <div class="modal-footer">
+      <button onclick="closeImportModal()">Cancel</button>
+      <button id="importParseBtn" onclick="parseImportFile()" style="background:var(--bg-secondary);border:1px solid var(--border-tertiary);border-radius:var(--radius-md);padding:8px 16px;cursor:pointer;font-family:inherit;font-size:13px">Preview</button>
+      <button class="primary" id="importRunBtn" onclick="runImport()" disabled style="background:#EF9F27;border-color:#EF9F27">Import</button>
     </div>
   </div>
 </div>
@@ -835,6 +884,184 @@ function exportArchiveExcel(){
   a.download='Archive_'+propName+'_'+date+'.csv';
   a.click();
   URL.revokeObjectURL(url);
+}
+
+// ============================================================
+// IMPORT
+// ============================================================
+let importData=[];
+
+function closeImportModal(){
+  document.getElementById('importModal').classList.remove('open');
+  document.getElementById('importFile').value='';
+  document.getElementById('importPreview').style.display='none';
+  document.getElementById('importProgress').style.display='none';
+  document.getElementById('importResult').style.display='none';
+  document.getElementById('importRunBtn').disabled=true;
+  importData=[];
+}
+
+function parseDate(str){
+  if(!str||!str.trim())return null;
+  str=str.trim();
+  // Try dd.mm.yyyy
+  let m=str.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
+  if(m)return m[3]+'-'+m[2].padStart(2,'0')+'-'+m[1].padStart(2,'0');
+  // Try dd.mm.yy
+  m=str.match(/^(\d{1,2})\.(\d{1,2})\.(\d{2})$/);
+  if(m){const y=parseInt(m[3]);const full=y>50?'19'+m[3]:'20'+m[3];return full+'-'+m[2].padStart(2,'0')+'-'+m[1].padStart(2,'0')}
+  // Try yyyy-mm-dd
+  m=str.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if(m)return str;
+  // Try dd/mm/yyyy
+  m=str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if(m)return m[3]+'-'+m[2].padStart(2,'0')+'-'+m[1].padStart(2,'0');
+  return null;
+}
+
+function parseImportFile(){
+  const file=document.getElementById('importFile').files[0];
+  if(!file){alert('Please select a CSV file');return}
+
+  const reader=new FileReader();
+  reader.onload=function(e){
+    const text=e.target.result;
+    // Split lines, handle both \r\n and \n
+    const lines=text.split(/\r?\n/).filter(l=>l.trim());
+    if(lines.length<2){alert('File must have a header row and at least one data row');return}
+
+    // Detect separator: semicolon or comma
+    const sep=lines[0].includes(';')?';':',';
+
+    // Parse header
+    const headers=lines[0].split(sep).map(h=>h.trim().toLowerCase().replace(/['"]/g,''));
+
+    // Find column indices (flexible matching)
+    const colRoom=headers.findIndex(h=>h==='room'||h==='rom'||h==='room_number');
+    const colName=headers.findIndex(h=>h==='name'||h==='navn'||h==='person_name'||h==='guest');
+    const colCompany=headers.findIndex(h=>h==='company'||h==='firma'||h==='bedrift');
+    const colCheckIn=headers.findIndex(h=>h.includes('check-in')||h.includes('checkin')||h==='innflytting'||h==='inn'||h==='from');
+    const colCheckOut=headers.findIndex(h=>h.includes('check-out')||h.includes('checkout')||h==='utflytting'||h==='ut'||h==='to');
+    const colStatus=headers.findIndex(h=>h==='status');
+    const colNotes=headers.findIndex(h=>h==='notes'||h==='notat'||h==='merknad');
+
+    if(colRoom===-1||colName===-1){
+      alert('Could not find required columns: Room and Name.\n\nFound headers: '+headers.join(', '));
+      return;
+    }
+    if(colCheckIn===-1){
+      alert('Could not find Check-in column.\n\nFound headers: '+headers.join(', '));
+      return;
+    }
+
+    const defaultStatus=document.getElementById('importStatus').value;
+    importData=[];
+
+    for(let i=1;i<lines.length;i++){
+      const cols=lines[i].split(sep).map(c=>c.trim().replace(/^['"]|['"]$/g,''));
+      const roomTitle=cols[colRoom]||'';
+      const name=cols[colName]||'';
+      if(!roomTitle||!name)continue;
+
+      const checkIn=parseDate(cols[colCheckIn]||'');
+      const checkOut=colCheckOut>=0?parseDate(cols[colCheckOut]||''):null;
+      const status=(colStatus>=0&&cols[colStatus])?cols[colStatus]:defaultStatus;
+      const notes=(colNotes>=0)?cols[colNotes]||'':'';
+
+      // Find room by title
+      const room=allRooms.find(r=>r.Title===roomTitle);
+
+      importData.push({
+        roomTitle,roomId:room?room.id:null,
+        name,company:cols[colCompany]||'',
+        checkIn,checkOut,status,notes,
+        error:!room?'Room not found':(!checkIn?'Invalid date':null)
+      });
+    }
+
+    // Show preview
+    const preview=document.getElementById('importPreview');
+    const errors=importData.filter(r=>r.error);
+    document.getElementById('importPreviewTitle').textContent=importData.length+' rows parsed'+(errors.length?' — '+errors.length+' with issues':'');
+    document.getElementById('importPreviewBody').innerHTML=importData.slice(0,50).map(r=>{
+      const style=r.error?'background:var(--bg-danger)':'';
+      return'<tr style="'+style+'">'
+        +'<td>'+r.roomTitle+(r.error?' ⚠':'')+'</td>'
+        +'<td>'+r.name+'</td>'
+        +'<td>'+r.company+'</td>'
+        +'<td>'+(r.checkIn||'—')+'</td>'
+        +'<td>'+(r.checkOut||'—')+'</td>'
+        +'<td>'+r.status+'</td>'
+        +'</tr>';
+    }).join('')+(importData.length>50?'<tr><td colspan="6" class="loading">... and '+(importData.length-50)+' more rows</td></tr>':'');
+
+    preview.style.display='block';
+    document.getElementById('importRunBtn').disabled=importData.filter(r=>!r.error).length===0;
+  };
+  reader.readAsText(file,'UTF-8');
+}
+
+async function runImport(){
+  const valid=importData.filter(r=>!r.error);
+  if(!valid.length){alert('No valid rows to import');return}
+
+  if(!confirm('Import '+valid.length+' bookings to '+selectedProperty.Title+'?\n\nRows with issues will be skipped.'))return;
+
+  const progress=document.getElementById('importProgress');
+  const bar=document.getElementById('importProgressBar');
+  const text=document.getElementById('importProgressText');
+  const result=document.getElementById('importResult');
+  progress.style.display='block';
+  document.getElementById('importRunBtn').disabled=true;
+  document.getElementById('importParseBtn').disabled=true;
+
+  let success=0,failed=0;
+
+  for(let i=0;i<valid.length;i++){
+    const r=valid[i];
+    text.textContent='Importing '+(i+1)+' of '+valid.length+'... ('+r.name+')';
+    bar.style.width=Math.round((i+1)/valid.length*100)+'%';
+
+    const fields={
+      Person_Name:r.name,
+      Company:r.company,
+      Check_In:r.checkIn+'T15:00:00Z',
+      Status:r.status,
+      Door_Tag_Status:'None',
+      Cleaning_Status:'None',
+      Property_Name:selectedProperty.Title,
+      RoomLookupId:parseInt(r.roomId)
+    };
+    if(r.checkOut)fields.Check_Out=r.checkOut+'T12:00:00Z';
+    if(r.notes)fields.Notes=r.notes;
+
+    // Get floor from room
+    const room=allRooms.find(rm=>rm.id===r.roomId);
+    if(room)fields.Floor=room.Floor;
+
+    try{
+      await createListItem('Bookings',fields);
+      success++;
+    }catch(e){
+      console.error('Import failed for',r.name,e);
+      failed++;
+    }
+
+    // Small delay to avoid throttling
+    if(i%10===9)await new Promise(res=>setTimeout(res,500));
+  }
+
+  progress.style.display='none';
+  result.style.display='block';
+  result.style.background=failed?'var(--bg-warning)':'var(--bg-success)';
+  result.style.color=failed?'var(--text-warning)':'var(--text-success)';
+  result.textContent='Done! '+success+' imported'+(failed?', '+failed+' failed':'')+'.'+(importData.filter(r=>r.error).length?' '+importData.filter(r=>r.error).length+' skipped (room not found or invalid date).':'');
+
+  document.getElementById('importParseBtn').disabled=false;
+
+  // Reload data
+  await loadData();
+  renderArchive();
 }
 
 // ============================================================
