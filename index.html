@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- 2GM Booking v11.1 — Created by Frank Haugan -->
+<!-- 2GM Booking v11.2 — Created by Frank Haugan -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -97,9 +97,12 @@ tbody td{padding:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
       <button class="header-btn" id="btnArchive" onclick="toggleArchive()">Archive</button>
       <button class="header-btn" id="btnHours" onclick="toggleHours()">Hours</button>
       <button class="header-btn primary" id="btnNewBooking" onclick="openNewBooking()">+ New booking</button>
-      <button class="header-btn" id="adminBtn" onclick="openAdminPanel()" style="display:none">⚙ Admin</button>
       <button class="header-btn" id="btnSignOut" onclick="signOut()" style="margin-left:12px">Sign out</button>
     </div>
+  </div>
+  <!-- ADMIN BAR (above banner, right aligned) -->
+  <div id="adminBar" style="display:none;text-align:right;margin-bottom:4px">
+    <button onclick="openAdminPanel()" style="background:0 0;border:0;color:var(--text-tertiary);cursor:pointer;font-size:11px;font-family:inherit;text-decoration:underline">⚙ Admin</button>
   </div>
   <!-- HOURS REMINDER BANNER -->
   <div id="hoursReminder" style="display:none;margin-bottom:1rem;padding:12px 20px;background:var(--bg-warning);border:1px solid #EF9F27;border-radius:var(--radius-lg);font-size:14px;color:var(--text-warning);display:none;align-items:center;justify-content:space-between">
@@ -111,12 +114,13 @@ tbody td{padding:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   </div>
   <!-- MAIN BOOKING VIEW -->
   <div id="mainView">
-    <div class="stats" id="statsBar">
+    <div class="stats" id="statsBar" style="grid-template-columns:repeat(6,1fr)">
       <div class="stat" onclick="toggleFilter('checkedIn')"><div class="stat-label">Checked in</div><div class="stat-value" id="statCheckedIn">-</div></div>
       <div class="stat" onclick="toggleFilter('empty')"><div class="stat-label">Empty rooms</div><div class="stat-value" id="statEmpty">-</div></div>
       <div class="stat" onclick="toggleFilter('dirty')"><div class="stat-label">Needs cleaning</div><div class="stat-value" id="statDirty">-</div></div>
       <div class="stat" onclick="toggleFilter('doorTag')"><div class="stat-label">Door tag: needs print</div><div class="stat-value" id="statDoorTag">-</div></div>
       <div class="stat" onclick="toggleFilter('battery')"><div class="stat-label">Low battery (&lt;30%)</div><div class="stat-value" id="statBattery">-</div></div>
+      <div class="stat" onclick="showOccupancyReport()"><div class="stat-label">Occupancy</div><div class="stat-value" id="statOccupancy">-</div></div>
     </div>
     <div class="filter-bar" id="filterBar"><span id="filterLabel"></span><button onclick="clearFilter()">Clear filter ✕</button></div>
     <div class="floors">
@@ -170,7 +174,7 @@ tbody td{padding:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
       </div>
     </div>
   </div>
-  <div style="text-align:center;padding:12px;font-size:11px;color:var(--text-tertiary);margin-top:1rem">v11.1 — Created by Frank Haugan</div>
+  <div style="text-align:center;padding:12px;font-size:11px;color:var(--text-tertiary);margin-top:1rem">v11.2 — Created by Frank Haugan</div>
 </div>
 <!-- Modals -->
 <div class="modal-overlay" id="bookingModal"><div class="modal"><div class="modal-header"><h2 id="bookingModalTitle">New booking</h2><button class="modal-close" onclick="closeBookingModal()">&times;</button></div><div class="modal-body"><div class="form-group"><label>Room</label><select id="fRoom"></select></div><div class="form-group"><label>Guest name</label><input id="fName" type="text" placeholder="Full name"></div><div class="form-group"><label>Company</label><input id="fCompany" type="text" placeholder="Company name"></div><div class="form-row"><div class="form-group"><label>Check-in</label><input id="fCheckIn" type="date"></div><div class="form-group"><label>Check-out</label><input id="fCheckOut" type="date"><div style="font-size:11px;color:var(--text-tertiary);margin-top:2px">Leave empty for open-ended</div></div></div><div class="form-row"><div class="form-group"><label>Status</label><select id="fStatus"><option value="Upcoming">Upcoming</option><option value="Active">Active (checked in)</option></select></div><div class="form-group"><label>Floor</label><input id="fFloor" type="number" min="1" max="9" readonly></div></div><div class="form-group"><label>Notes</label><textarea id="fNotes" placeholder="Optional notes..."></textarea></div></div><div class="modal-footer"><button onclick="closeBookingModal()">Cancel</button><button class="primary" id="bookingSaveBtn" onclick="saveBooking()">Create booking</button></div></div></div>
@@ -179,6 +183,11 @@ tbody td{padding:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 <div class="modal-overlay" id="importModal"><div class="modal" style="max-width:620px"><div class="modal-header"><h2>Import bookings</h2><button class="modal-close" onclick="closeImportModal()">&times;</button></div><div class="modal-body"><p style="margin:0 0 8px;font-size:13px;color:var(--text-secondary)">CSV with semicolon separator.</p><div class="form-group"><label>CSV file</label><input type="file" id="importFile" accept=".csv,.txt"></div><div class="form-group"><label>Default status</label><select id="importStatus" style="width:100%;padding:8px;border:1px solid var(--border-tertiary);border-radius:var(--radius-md);font-size:14px"><option value="Completed" selected>Completed</option><option value="Active">Active</option><option value="Upcoming">Upcoming</option></select></div><div id="importPreview" style="display:none;margin-top:12px"><div id="importPreviewTitle" style="font-size:13px;font-weight:500;margin-bottom:6px"></div><div style="max-height:200px;overflow-y:auto;border:1px solid var(--border-tertiary);border-radius:var(--radius-md)"><table style="font-size:11px"><thead><tr><th>Room</th><th>Name</th><th>Company</th><th>Check-in</th><th>Check-out</th><th>Status</th></tr></thead><tbody id="importPreviewBody"></tbody></table></div></div><div id="importProgress" style="display:none;margin-top:12px"><div id="importProgressText" style="font-size:13px"></div><div style="height:6px;background:var(--bg-secondary);border-radius:3px;margin-top:6px;overflow:hidden"><div id="importProgressBar" style="height:100%;background:var(--accent);width:0%;transition:width .2s"></div></div></div><div id="importResult" style="display:none;margin-top:12px;padding:10px;border-radius:var(--radius-md);font-size:13px"></div></div><div class="modal-footer"><button onclick="closeImportModal()">Cancel</button><button id="importParseBtn" onclick="parseImportFile()" style="background:var(--bg-secondary);border:1px solid var(--border-tertiary);border-radius:var(--radius-md);padding:8px 16px;cursor:pointer;font-size:13px">Preview</button><button class="primary" id="importRunBtn" onclick="runImport()" disabled style="background:#EF9F27;border-color:#EF9F27">Import</button></div></div></div>
 <div class="modal-overlay" id="adminModal"><div class="modal" style="max-width:750px"><div class="modal-header"><h2>User Administration</h2><button class="modal-close" onclick="closeAdminPanel()">&times;</button></div><div class="modal-body"><div id="adminUserList" style="max-height:450px;overflow-y:auto;margin-bottom:16px"></div><div style="border-top:1px solid var(--border-tertiary);padding-top:14px"><div style="font-size:13px;font-weight:500;margin-bottom:8px">Add user</div><div class="form-row" style="grid-template-columns:1fr 1fr auto;gap:8px"><input id="aName" type="text" placeholder="Display name" style="padding:6px 8px;border:1px solid var(--border-tertiary);border-radius:var(--radius-md);font-size:13px"><input id="aEmail" type="email" placeholder="email@example.com" style="padding:6px 8px;border:1px solid var(--border-tertiary);border-radius:var(--radius-md);font-size:13px"><button onclick="addUser()" style="padding:6px 14px;background:var(--accent);color:#fff;border:none;border-radius:var(--radius-md);cursor:pointer;font-size:13px">+ Add</button></div></div></div><div class="modal-footer"><button onclick="sendAllInvites()" style="margin-right:auto;background:var(--accent);color:#fff;border:1px solid var(--accent);border-radius:var(--radius-md);padding:8px 16px;cursor:pointer;font-size:13px">✉ Send all invites</button><button onclick="closeAdminPanel()">Close</button></div></div></div>
 <div id="doorTagPrint" style="display:none"></div>
+<!-- Occupancy Report Modal -->
+<div class="modal-overlay" id="occupancyModal"><div class="modal" style="max-width:700px"><div class="modal-header"><h2>Occupancy Report</h2><button class="modal-close" onclick="document.getElementById('occupancyModal').classList.remove('open')">&times;</button></div><div class="modal-body">
+<div class="form-row" style="margin-bottom:16px"><div class="form-group"><label>Year</label><select id="occYear" onchange="renderOccupancyReport()" style="width:100%;padding:8px;border:1px solid var(--border-tertiary);border-radius:var(--radius-md);font-size:14px"></select></div><div class="form-group"><label>Property</label><select id="occProperty" onchange="renderOccupancyReport()" style="width:100%;padding:8px;border:1px solid var(--border-tertiary);border-radius:var(--radius-md);font-size:14px"></select></div></div>
+<div id="occReport"></div>
+</div><div class="modal-footer"><button onclick="exportOccupancyReport()" style="background:var(--accent);color:#fff;border:1px solid var(--accent);border-radius:var(--radius-md);padding:8px 16px;cursor:pointer;font-size:13px">↓ Export</button><button onclick="document.getElementById('occupancyModal').classList.remove('open')">Close</button></div></div></div>
 <script src="js/app.js"></script>
 <script src="js/modules.js"></script>
 </body>
