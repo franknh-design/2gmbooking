@@ -187,6 +187,25 @@
 <!-- Door Tag Print (hidden, used for printing) -->
 <div id="doorTagPrint" style="display:none"></div>
 
+<!-- Check-out Modal -->
+<div class="modal-overlay" id="checkoutModal">
+  <div class="modal" style="max-width:380px">
+    <div class="modal-header"><h2>Check out</h2><button class="modal-close" onclick="closeCheckoutModal()">&times;</button></div>
+    <div class="modal-body">
+      <p style="margin:0 0 16px;font-size:14px">Check out <strong id="checkoutGuestName"></strong></p>
+      <div class="form-group">
+        <label>Check-out date</label>
+        <input id="fCheckOutDate" type="date">
+        <div style="font-size:11px;color:var(--text-tertiary);margin-top:4px">Defaults to today. Change if the guest left earlier.</div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button onclick="closeCheckoutModal()">Cancel</button>
+      <button class="primary" id="checkoutConfirmBtn" onclick="confirmCheckout()" style="background:#EF9F27;border-color:#EF9F27">Confirm check-out</button>
+    </div>
+  </div>
+</div>
+
 <script>
 // ============================================================
 // AUTH
@@ -228,6 +247,7 @@ async function updateListItem(listName,itemId,fields){const s=await getSiteId();
 let properties=[],rooms=[],allRooms=[],bookings=[],allBookings=[];
 let selectedProperty=null,selectedRoom=null,selectedBooking=null;
 let editingBookingId=null;
+let checkoutBookingId=null;
 
 // ============================================================
 // DATA LOADING
@@ -453,11 +473,30 @@ async function checkIn(id){
 }
 
 async function checkOut(id){
-  if(!confirm('Check out this guest?'))return;
+  const b=bookings.find(x=>x.id===id)||allBookings.find(x=>x.id===id);
+  if(!b)return;
+  checkoutBookingId=id;
+  const today=new Date().toISOString().split('T')[0];
+  document.getElementById('fCheckOutDate').value=today;
+  document.getElementById('checkoutGuestName').textContent=b.Person_Name||'Guest';
+  document.getElementById('checkoutModal').classList.add('open');
+}
+
+function closeCheckoutModal(){document.getElementById('checkoutModal').classList.remove('open');checkoutBookingId=null}
+
+async function confirmCheckout(){
+  if(!checkoutBookingId)return;
+  const dateVal=document.getElementById('fCheckOutDate').value;
+  if(!dateVal){alert('Please select a date');return}
+  const btn=document.getElementById('checkoutConfirmBtn');
+  btn.disabled=true;btn.textContent='Processing...';
   try{
-    await updateListItem('Bookings',id,{Status:'Completed',Cleaning_Status:'Dirty',Check_Out:new Date().toISOString()});
+    await updateListItem('Bookings',checkoutBookingId,{Status:'Completed',Cleaning_Status:'Dirty',Check_Out:dateVal+'T12:00:00Z'});
+    closeCheckoutModal();
     await loadData();closeDetail();
-  }catch(e){console.error(e);alert('Failed to check out')}
+  }catch(e){
+    console.error(e);alert('Failed to check out: '+e.message);
+  }finally{btn.disabled=false;btn.textContent='Confirm check-out'}
 }
 
 async function cancelBooking(id){
