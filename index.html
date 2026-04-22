@@ -147,6 +147,7 @@
           <option value="Active">Active</option>
           <option value="Upcoming">Upcoming</option>
         </select>
+        <button onclick="exportArchiveExcel()" style="padding:5px 12px;border:1px solid var(--border-tertiary);border-radius:var(--radius-md);font-size:13px;font-family:inherit;background:var(--accent);color:#fff;cursor:pointer;white-space:nowrap">↓ Export Excel</button>
         <button class="modal-close" onclick="toggleArchive()">&times;</button>
       </div>
     </div>
@@ -409,8 +410,8 @@ function showDetail(roomId){
       +'</table></div><div class="detail-actions">'
       +'<button onclick="openEditBooking(\''+booking.id+'\')">Edit booking</button>'
       +'<button onclick="printDoorTag(\''+booking.id+'\')">Print door tag</button>'
-      +(booking.Status==='Active'?'<button onclick="checkOut(\''+booking.id+'\')">Check out</button>':'')
       +(booking.Status==='Upcoming'?'<button class="primary" onclick="checkIn(\''+booking.id+'\')">Check in</button>':'')
+      +(booking.Status==='Active'?'<button class="primary" style="background:#EF9F27;border-color:#EF9F27" onclick="checkOut(\''+booking.id+'\')">Check out</button>':'')
       +'<button class="danger" onclick="cancelBooking(\''+booking.id+'\')">Cancel booking</button>'
       +'<button onclick="closeDetail()">Close</button>'
       +'</div></div>';
@@ -690,6 +691,58 @@ async function reopenBooking(id){
     await loadData();
     renderArchive();
   }catch(e){console.error(e);alert('Failed to reopen: '+e.message)}
+}
+
+function exportArchiveExcel(){
+  const search=(document.getElementById('archiveSearch').value||'').toLowerCase();
+  const statusFilter=document.getElementById('archiveStatus').value;
+  const roomIds=new Set(rooms.map(r=>r.id));
+
+  let archived=allBookings.filter(b=>{
+    const rid=String(b.RoomLookupId||'');
+    if(!roomIds.has(rid))return false;
+    if(statusFilter!=='all'&&b.Status!==statusFilter)return false;
+    if(search){
+      const haystack=((b.Person_Name||'')+(b.Company||'')+getRoomTitle(b)).toLowerCase();
+      if(!haystack.includes(search))return false;
+    }
+    return true;
+  });
+  archived.sort((a,b)=>new Date(b.Check_In||0)-new Date(a.Check_In||0));
+
+  // Build CSV with semicolon separator (Norwegian Excel default) and BOM
+  const headers=['Room','Name','Company','Check-in','Check-out','Status','Door Tag','Cleaning','Notes'];
+  const rows=archived.map(b=>{
+    const roomTitle=getRoomTitle(b);
+    return [
+      roomTitle,
+      b.Person_Name||'',
+      b.Company||'',
+      formatDate(b.Check_In),
+      b.Check_Out?formatDate(b.Check_Out):'Open-ended',
+      b.Status||'',
+      b.Door_Tag_Status||'',
+      b.Cleaning_Status||'',
+      (b.Notes||'').replace(/[\r\n]+/g,' ')
+    ];
+  });
+
+  const escape=v=>{
+    const s=String(v);
+    if(s.includes(';')||s.includes('"')||s.includes('\n'))return'"'+s.replace(/"/g,'""')+'"';
+    return s;
+  };
+
+  const csv='\uFEFF'+headers.join(';')+'\n'+rows.map(r=>r.map(escape).join(';')).join('\n');
+  const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  const propName=(selectedProperty?selectedProperty.Title:'2GM').replace(/\s+/g,'_');
+  const date=new Date().toISOString().split('T')[0];
+  a.href=url;
+  a.download='Archive_'+propName+'_'+date+'.csv';
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 // ============================================================
