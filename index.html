@@ -93,7 +93,7 @@ const msalConfig={auth:{clientId:'f8e2259d-c440-41d3-94e3-3a2dce095817',authorit
 const msalInstance=new msal.PublicClientApplication(msalConfig);
 let accessToken=null;
 
-async function signIn(){try{await msalInstance.loginPopup({scopes:['Sites.ReadWrite.All']});await getToken();showApp();await loadProperties();await loadData()}catch(e){console.error('Login failed:',e);alert('Login failed: '+e.message)}}
+async function signIn(){if(!msalReady){alert('Please wait, loading...');return}try{await msalInstance.loginPopup({scopes:['Sites.ReadWrite.All']});await getToken();showApp();await loadProperties();await loadData()}catch(e){console.error('Login failed:',e);alert('Login failed: '+e.message)}}
 async function getToken(){const a=msalInstance.getAllAccounts();if(!a.length)return null;try{const r=await msalInstance.acquireTokenSilent({scopes:['Sites.ReadWrite.All'],account:a[0]});accessToken=r.accessToken;return accessToken}catch(e){const r=await msalInstance.acquireTokenPopup({scopes:['Sites.ReadWrite.All']});accessToken=r.accessToken;return accessToken}}
 function signOut(){msalInstance.logoutPopup();document.getElementById('app').style.display='none';document.getElementById('loginScreen').style.display='block'}
 function showApp(){document.getElementById('loginScreen').style.display='none';document.getElementById('app').style.display='block'}
@@ -165,7 +165,16 @@ function editBooking(id){alert('Edit form \u2014 coming soon!')}
 function showNewBooking(){alert('New booking form \u2014 coming soon!')}
 function showIncoming(){alert('Incoming list \u2014 coming soon!')}
 
-msalInstance.initialize().then(()=>{const a=msalInstance.getAllAccounts();if(a.length>0){getToken().then(()=>{if(accessToken){showApp();loadProperties().then(()=>loadData())}})}});
+let msalReady = false;
+let msalReady=false;msalInstance.initialize().then(()=>{msalReady=true;const a=msalInstance.getAllAccounts();if(a.length>0){getToken().then(()=>{if(accessToken){showApp();loadProperties().then(()=>loadData())}})}});
+  msalReady = true;
+  const a = msalInstance.getAllAccounts();
+  if(a.length > 0){
+    getToken().then(()=>{
+      if(accessToken){ showApp(); loadProperties().then(()=>loadData()); }
+    });
+  }
+});
 </script>
 </body>
 </html>
