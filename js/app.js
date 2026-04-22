@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v11.6 — app.js (Core)
+// 2GM Booking v11.7 — app.js (Core)
 // Auth, Graph API, Data, Rendering, Bookings
 // ============================================================
 
@@ -241,8 +241,8 @@ function getBookingForRoom(roomId){
 }
 
 // --- PRICING ---
-function getDailyRate(personName,company,propertyTitle){
-  // Priority: 1) Person+Property  2) Person (any property)  3) Company+Property  4) Company (any)  5) Property default
+function getDailyRate(personName,company,propertyTitle,roomId){
+  // Priority: 1) Person+Property  2) Person (any)  3) Company+Property  4) Company (any)  5) Room rate  6) Property default
   const pn=(personName||'').toLowerCase();
   const co=(company||'').toLowerCase();
   const pt=(propertyTitle||'').toLowerCase();
@@ -267,7 +267,13 @@ function getDailyRate(personName,company,propertyTitle){
     if(rate)return{rate:rate.DailyRate,source:'Company'};
   }
 
-  // 5. Property default
+  // 5. Room rate
+  if(roomId){
+    const room=allRooms.find(r=>r.id===String(roomId));
+    if(room&&room.DailyRate)return{rate:room.DailyRate,source:'Room rate'};
+  }
+
+  // 6. Property default
   const prop=properties.find(p=>(p.Title||'').toLowerCase()===pt);
   if(prop&&prop.DailyRate)return{rate:prop.DailyRate,source:'Property default'};
 
@@ -283,7 +289,7 @@ function calcBookingNights(booking){
 
 function calcBookingCost(booking,propertyTitle){
   const nights=calcBookingNights(booking);
-  const rateInfo=getDailyRate(booking.Person_Name,booking.Company,propertyTitle);
+  const rateInfo=getDailyRate(booking.Person_Name,booking.Company,propertyTitle,booking.RoomLookupId);
   return{nights,rate:rateInfo.rate,total:nights*rateInfo.rate,source:rateInfo.source};
 }
 
