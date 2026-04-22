@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v10.5 — app.js (Core)
+// 2GM Booking v10.6 — app.js (Core)
 // Auth, Graph API, Data, Rendering, Bookings
 // ============================================================
 
@@ -495,8 +495,8 @@ function printDoorTag(bookingId){
 }
 
 // --- VIEW SWITCHING ---
-function showMainView(){currentView='main';document.getElementById('mainView').style.display='';document.getElementById('hoursView').style.display='none';document.getElementById('propertySelect').style.display=''}
-function showHoursView(){currentView='hours';document.getElementById('mainView').style.display='none';document.getElementById('hoursView').style.display='';document.getElementById('propertySelect').style.display='none'}
+function showMainView(){currentView='main';document.getElementById('mainView').style.display='';document.getElementById('hoursView').style.display='none';document.getElementById('propertySelect').style.display='';if(selectedProperty)document.getElementById('headerTitle').textContent='2GM Booking — '+selectedProperty.Title}
+function showHoursView(){currentView='hours';document.getElementById('mainView').style.display='none';document.getElementById('hoursView').style.display='';document.getElementById('propertySelect').style.display='none';document.getElementById('headerTitle').textContent='2GM Booking — Hours'}
 
 // --- FILTER ---
 function toggleFilter(filter){

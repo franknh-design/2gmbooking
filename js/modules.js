@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v10.5 — modules.js
+// 2GM Booking v10.6 — modules.js
 // Hours, Archive, Import/Export, Admin (checkbox permissions)
 // ============================================================
 
@@ -202,7 +202,7 @@ function renderHours(){
   document.getElementById('hoursTitle').textContent='Hours — '+months[month]+' '+year+' — '+workerName;
 
   const body=document.getElementById('hoursBody');
-  if(!filtered.length){body.innerHTML='<tr><td colspan="7" class="loading">No hours registered</td></tr>';document.getElementById('hoursTotal').textContent='0.00';return}
+  if(!filtered.length){body.innerHTML='<tr><td colspan="8" class="loading">No hours registered</td></tr>';document.getElementById('hoursTotal').textContent='0.00';return}
 
   const days=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];let total=0;
   body.innerHTML=filtered.map(h=>{
@@ -211,6 +211,7 @@ function renderHours(){
     const workerUser=allUsers.find(u=>(u.Epost||'').toLowerCase()===(h.Worker||'').toLowerCase());
     const wName=workerUser?workerUser.DisplayName:(h.Worker||'');
     return'<tr><td>'+days[d.getDay()]+' '+formatDate(h.Date)+'</td><td>'+(h.Location||'')+'</td><td>'+wName+'</td><td>'+(h.Time_From||'')+'</td><td>'+(h.Time_To||'')+'</td><td style="text-align:right">'+hrs.toFixed(2)+'</td>'
+      +'<td class="muted" style="font-size:11px">'+(h.Notes||'')+'</td>'
       +'<td><button onclick="deleteHoursEntry(\''+h.id+'\')" style="border:0;background:0 0;color:var(--text-danger);cursor:pointer;font-size:11px">✕</button></td></tr>';
   }).join('');
   document.getElementById('hoursTotal').textContent=total.toFixed(2);
@@ -222,9 +223,22 @@ function calcHoursDiff(from,to){
 }
 
 function openAddHours(){
-  document.getElementById('hDate').value=new Date().toISOString().split('T')[0];
+  // Default date: first day of selected month, or today if current month
+  const selMonth=parseInt(document.getElementById('hoursMonth').value);
+  const selYear=parseInt(document.getElementById('hoursYear').value);
+  const now=new Date();
+  let defaultDate;
+  if(selMonth===now.getMonth()&&selYear===now.getFullYear()){
+    defaultDate=now.toISOString().split('T')[0];
+  }else{
+    // Last day of selected month (to start filling from end)
+    const lastDay=new Date(selYear,selMonth+1,0).getDate();
+    defaultDate=selYear+'-'+String(selMonth+1).padStart(2,'0')+'-'+String(lastDay).padStart(2,'0');
+  }
+  document.getElementById('hDate').value=defaultDate;
   document.getElementById('hFrom').value='08:00';document.getElementById('hTo').value='16:00';
   document.getElementById('hLocation').value='';
+  document.getElementById('hNotes').value='';
   // Worker selector
   const ws=document.getElementById('hWorker');
   if(can('edit_others_hours')){
@@ -243,12 +257,15 @@ async function saveHours(){
   const date=document.getElementById('hDate').value;const location=document.getElementById('hLocation').value;
   const from=document.getElementById('hFrom').value;const to=document.getElementById('hTo').value;
   const worker=document.getElementById('hWorker').value;
+  const notes=document.getElementById('hNotes').value.trim();
   if(!date){alert('Date required');return}if(!from||!to){alert('From/To required');return}if(!location){alert('Location required');return}
   const workerUser=allUsers.find(u=>(u.Epost||'').toLowerCase()===worker.toLowerCase());
   const workerName=workerUser?workerUser.DisplayName:worker;
   const btn=document.getElementById('hoursSaveBtn');btn.disabled=true;btn.textContent='Saving...';
+  const fields={Title:workerName+' — '+location+' — '+date,Date:date+'T00:00:00Z',Location:location,Time_From:from,Time_To:to,Worker:worker};
+  if(notes)fields.Notes=notes;
   try{
-    await createListItem('Hours',{Title:workerName+' — '+location+' — '+date,Date:date+'T00:00:00Z',Location:location,Time_From:from,Time_To:to,Worker:worker});
+    await createListItem('Hours',fields);
     closeHoursModal();await loadHoursData();
   }catch(e){alert('Failed: '+e.message)}finally{btn.disabled=false;btn.textContent='Save'}
 }
@@ -264,9 +281,9 @@ function exportHoursExcel(){
   const months=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   const days=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
   const filtered=allHours.filter(h=>{if(!h.Date)return false;const d=new Date(h.Date);if(d.getMonth()!==month||d.getFullYear()!==year)return false;if(workerFilter!=='all'&&(h.Worker||'').toLowerCase()!==workerFilter.toLowerCase())return false;return true}).sort((a,b)=>new Date(a.Date)-new Date(b.Date));
-  const headers=['Date','Day','Location','Worker','From','To','Hours'];let total=0;
-  const rows=filtered.map(h=>{const hrs=calcHoursDiff(h.Time_From,h.Time_To);total+=hrs;const d=new Date(h.Date);const wu=allUsers.find(u=>(u.Epost||'').toLowerCase()===(h.Worker||'').toLowerCase());return[formatDate(h.Date),days[d.getDay()],h.Location||'',wu?wu.DisplayName:h.Worker||'',h.Time_From||'',h.Time_To||'',hrs.toFixed(2)]});
-  rows.push(['','','','','','Total',total.toFixed(2)]);
+  const headers=['Date','Day','Location','Worker','From','To','Hours','Notes'];let total=0;
+  const rows=filtered.map(h=>{const hrs=calcHoursDiff(h.Time_From,h.Time_To);total+=hrs;const d=new Date(h.Date);const wu=allUsers.find(u=>(u.Epost||'').toLowerCase()===(h.Worker||'').toLowerCase());return[formatDate(h.Date),days[d.getDay()],h.Location||'',wu?wu.DisplayName:h.Worker||'',h.Time_From||'',h.Time_To||'',hrs.toFixed(2),h.Notes||'']});
+  rows.push(['','','','','','','Total',total.toFixed(2)]);
   downloadCSV('Hours_'+months[month]+'_'+year,headers,rows);
 }
 
