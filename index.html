@@ -370,6 +370,72 @@ function getBookingForRoom(roomId){
 function formatDate(d){if(!d)return'';const dt=new Date(d);return String(dt.getDate()).padStart(2,'0')+'.'+String(dt.getMonth()+1).padStart(2,'0')+'.'+dt.getFullYear()}
 function toISODate(d){if(!d)return'';const dt=new Date(d);return dt.toISOString().split('T')[0]}
 
+function getNextWeekday(date){
+  // If Saturday (6) → Monday, if Sunday (0) → Monday, else same day
+  const d=new Date(date);
+  const day=d.getDay();
+  if(day===0)d.setDate(d.getDate()+1); // Sunday → Monday
+  else if(day===6)d.setDate(d.getDate()+2); // Saturday → Monday
+  return d;
+}
+
+function calcWashDates(checkInDate,checkOutDate){
+  const ci=new Date(checkInDate);ci.setHours(0,0,0,0);
+  const co=checkOutDate?new Date(checkOutDate):null;
+  if(co)co.setHours(0,0,0,0);
+  const today=new Date();today.setHours(0,0,0,0);
+
+  const washes=[];
+  let week=1;
+  const maxWeeks=52; // safety limit
+
+  while(week<=maxWeeks){
+    const rawDate=new Date(ci);
+    rawDate.setDate(rawDate.getDate()+week*7);
+    const washDate=getNextWeekday(rawDate);
+
+    // Stop if past check-out date
+    if(co&&washDate>=co)break;
+
+    const type=(week%2===1)?'Towels':'Towels + Beddings';
+    const isPast=washDate<today;
+    const isToday=washDate.getTime()===today.getTime();
+    const isNext=!isPast&&!isToday&&washes.every(w=>w.isPast||w.isToday);
+
+    washes.push({date:washDate,type,week,isPast,isToday,isNext});
+    week++;
+  }
+
+  return washes;
+}
+
+function getWashScheduleHtml(booking){
+  if(!booking.Check_In)return'';
+  if(booking.Status!=='Active'&&booking.Status!=='Upcoming')return'';
+
+  const washes=calcWashDates(booking.Check_In,booking.Check_Out);
+  if(!washes.length)return'';
+
+  // Show upcoming washes (next 6) + today's
+  const upcoming=washes.filter(w=>!w.isPast);
+  const show=upcoming.slice(0,6);
+
+  if(!show.length)return'';
+
+  const dayNames=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  let html='<div style="margin-top:14px"><div style="font-size:12px;color:var(--text-secondary);margin-bottom:4px;font-weight:500">Wash schedule</div>';
+  html+='<table style="font-size:12px;width:auto">';
+  show.forEach(w=>{
+    let style='';
+    let badge='';
+    if(w.isToday){style='color:var(--text-danger);font-weight:500';badge=' <span class="pill danger">Today</span>'}
+    else if(w.isNext){style='color:var(--accent);font-weight:500';badge=' <span class="pill" style="background:var(--bg-success);color:var(--text-success)">Next</span>'}
+    html+='<tr style="'+style+'"><td style="padding:2px 12px 2px 0">'+dayNames[w.date.getDay()]+' '+formatDate(w.date)+badge+'</td><td style="padding:2px 0">'+w.type+'</td></tr>';
+  });
+  html+='</table></div>';
+  return html;
+}
+
 function doorTagBtn(b){
   if(!b)return'<button class="status-btn" disabled></button>';
   const s=b.Door_Tag_Status||'None';
@@ -483,6 +549,7 @@ function showDetail(roomId){
   }else{
     const dt={'None':'—','Needs-print':'✕ Needs print','Printed':'✓ Printed'}[booking.Door_Tag_Status]||'—';
     const cl={'None':'—','Dirty':'● Needs cleaning','Clean':'● Clean'}[booking.Cleaning_Status]||'—';
+    const washHtml=getWashScheduleHtml(booking);
     p.innerHTML='<div class="detail-grid"><div class="detail-main">'
       +'<div class="detail-name">'+booking.Person_Name+'</div>'
       +'<div class="detail-sub">Room '+room.Title+' · '+(booking.Company||'')+' · '+selectedProperty.Title+'</div>'
@@ -493,7 +560,9 @@ function showDetail(roomId){
       +'<tr><td>Door tag</td><td>'+dt+'</td></tr>'
       +'<tr><td>Cleaning</td><td>'+cl+'</td></tr>'
       +(booking.Notes?'<tr><td>Notes</td><td>'+booking.Notes+'</td></tr>':'')
-      +'</table></div><div class="detail-actions">'
+      +'</table>'
+      +washHtml
+      +'</div><div class="detail-actions">'
       +'<button onclick="openEditBooking(\''+booking.id+'\')">Edit booking</button>'
       +'<button onclick="printDoorTag(\''+booking.id+'\')">Print door tag</button>'
       +(booking.Status==='Upcoming'?'<button class="primary" onclick="checkIn(\''+booking.id+'\')">Check in</button>':'')
@@ -665,6 +734,38 @@ async function saveBooking(){
   if(!name){alert('Guest name is required');return}
   if(!checkIn){alert('Check-in date is required');return}
 
+  // === COLLISION CHECK ===
+  const newIn=new Date(checkIn);newIn.setHours(0,0,0,0);
+  const newOut=checkOut?new Date(checkOut):null;
+  if(newOut)newOut.setHours(0,0,0,0);
+
+  const conflicts=allBookings.filter(b=>{
+    if(editingBookingId&&b.id===editingBookingId)return false;
+    if(b.Status==='Cancelled'||b.Status==='Completed')return false;
+    if(String(b.RoomLookupId)!==String(roomId))return false;
+
+    const bIn=new Date(b.Check_In);bIn.setHours(0,0,0,0);
+    const bOut=b.Check_Out?new Date(b.Check_Out):null;
+    if(bOut)bOut.setHours(0,0,0,0);
+
+    // Open-ended existing booking: conflicts if new check-in >= existing check-in
+    if(!bOut){return newIn>=bIn||(newOut?newOut>bIn:true)}
+    // Open-ended new booking: conflicts if existing check-out > new check-in
+    if(!newOut){return bOut>newIn||bIn>=newIn}
+    // Both have dates: overlap if one starts before the other ends
+    return newIn<bOut&&newOut>bIn;
+  });
+
+  if(conflicts.length>0){
+    const c=conflicts[0];
+    const cRoom=allRooms.find(r=>r.id===String(c.RoomLookupId));
+    const msg='Room '+(cRoom?cRoom.Title:'?')+' already has a booking:\n\n'
+      +c.Person_Name+' ('+c.Status+')\n'
+      +formatDate(c.Check_In)+' — '+(c.Check_Out?formatDate(c.Check_Out):'Open-ended')
+      +'\n\nThis overlaps with your dates. Continue anyway?';
+    if(!confirm(msg))return;
+  }
+
   const fields={
     Person_Name:name,
     Company:company,
@@ -678,7 +779,6 @@ async function saveBooking(){
   };
   if(checkOut)fields.Check_Out=checkOut+'T12:00:00Z';
   else fields.Check_Out=null;
-  // RoomLookupId is set via the lookup field
   fields.RoomLookupId=parseInt(roomId);
 
   const btn=document.getElementById('bookingSaveBtn');
