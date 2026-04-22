@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v10.9 — app.js (Core)
+// 2GM Booking v11.0 — app.js (Core)
 // Auth, Graph API, Data, Rendering, Bookings
 // ============================================================
 
@@ -123,7 +123,15 @@ function applyPermissions(){
 // --- DATA LOADING ---
 async function loadProperties(){
   try{
-    properties=await getListItems('Properties');
+    const allProps=await getListItems('Properties');
+    // Filter properties based on user's AssignedProperties (if set)
+    const user=allUsers.find(u=>(u.Epost||'').toLowerCase()===currentUser.email);
+    const assigned=user&&user.AssignedProperties?user.AssignedProperties.split(',').map(s=>s.trim()):[];
+    if(assigned.length>0&&!can('admin')){
+      properties=allProps.filter(p=>assigned.includes(p.Title));
+    }else{
+      properties=allProps;
+    }
     const sel=document.getElementById('propertySelect');
     sel.innerHTML=properties.map(p=>'<option value="'+p.id+'">'+p.Title+'</option>').join('');
     sel.onchange=()=>{selectedProperty=properties.find(p=>p.id===sel.value);loadData()};
@@ -308,11 +316,15 @@ function updateStats(){
   bookings.forEach(b=>occupiedRoomIds.add(String(b.RoomLookupId||'')));
   document.getElementById('statCheckedIn').textContent=occupiedRoomIds.size+' / '+tr;
   document.getElementById('statEmpty').textContent=tr-occupiedRoomIds.size;
-  // Dirty: all properties
+  // Dirty: all assigned properties
+  const assignedPropIds=new Set(properties.map(p=>p.id));
+  const assignedRoomIds=new Set(allRooms.filter(r=>assignedPropIds.has(String(r.PropertyLookupId))).map(r=>r.id));
   const allDirtyRoomIds=new Set();
   allBookings.forEach(b=>{
-    if(b.Cleaning_Status==='Dirty'&&(b.Status==='Active'||b.Status==='Upcoming'))allDirtyRoomIds.add(String(b.RoomLookupId));
-    if(b.Status==='Active'&&b.Check_In){const w=calcWashDates(b.Check_In,b.Check_Out);if(w.some(x=>x.isToday))allDirtyRoomIds.add(String(b.RoomLookupId))}
+    const rid=String(b.RoomLookupId||'');
+    if(!assignedRoomIds.has(rid))return;
+    if(b.Cleaning_Status==='Dirty'&&(b.Status==='Active'||b.Status==='Upcoming'))allDirtyRoomIds.add(rid);
+    if(b.Status==='Active'&&b.Check_In){const w=calcWashDates(b.Check_In,b.Check_Out);if(w.some(x=>x.isToday))allDirtyRoomIds.add(rid)}
   });
   document.getElementById('statDirty').textContent=allDirtyRoomIds.size;
   document.getElementById('statDoorTag').textContent=bookings.filter(b=>b.Door_Tag_Status==='Needs-print').length;
@@ -514,7 +526,9 @@ function toggleFilter(filter){
 function clearFilter(){activeFilter=null;document.querySelectorAll('.stat').forEach(el=>el.classList.remove('active'));document.getElementById('filterBar').classList.remove('open');renderFloors()}
 
 function getFilteredRoomsForFloor(floor){
-  const sourceRooms=(activeFilter==='dirty')?allRooms:rooms;
+  // For dirty filter: show rooms from all assigned properties (not just selected)
+  const assignedPropIds=new Set(properties.map(p=>p.id));
+  const sourceRooms=(activeFilter==='dirty')?allRooms.filter(r=>assignedPropIds.has(String(r.PropertyLookupId))):rooms;
   let floorRooms=sourceRooms.filter(r=>r.Floor===floor||String(r.Floor)===String(floor));
   if(!activeFilter)return floorRooms;
   const sourceBookings=(activeFilter==='dirty')?allBookings:bookings;

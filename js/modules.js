@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v10.9 — modules.js
+// 2GM Booking v11.0 — modules.js
 // Hours, Archive, Import/Export, Admin (checkbox permissions)
 // ============================================================
 
@@ -359,6 +359,8 @@ function renderAdminUsers(){
       const roleMap={SuperAdmin:ALL_PERMS.map(p=>p.key),Admin:ALL_PERMS.filter(p=>p.key!=='admin').map(p=>p.key),Cleaner:['cleaning','print_doortag','view_hours','edit_hours'],ReadOnly:['view_bookings']};
       perms.push(...(roleMap[u.Role]||['view_bookings']));
     }
+    const assigned=u.AssignedProperties?u.AssignedProperties.split(',').map(s=>s.trim()):[];
+
     let html='<div style="padding:12px;border-bottom:1px solid var(--border-tertiary)">';
     html+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">';
     html+='<div><strong>'+(u.DisplayName||'—')+'</strong> <span class="muted" style="font-size:12px">'+(u.Epost||'')+'</span></div>';
@@ -374,7 +376,17 @@ function renderAdminUsers(){
       const disabled=isSelf&&p.key==='admin';
       html+='<label><input type="checkbox"'+(checked?' checked':'')+(disabled?' disabled':'')+' onchange="toggleUserPerm(\''+u.id+'\',\''+p.key+'\',this.checked)"> '+p.label+'</label>';
     });
-    html+='</div></div>';
+    html+='</div>';
+    // Assigned properties
+    html+='<div style="margin-top:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">';
+    html+='<span style="font-size:12px;color:var(--text-secondary)">Locations:</span>';
+    properties.forEach(p=>{
+      const checked=assigned.includes(p.Title);
+      html+='<label style="font-size:12px;display:flex;align-items:center;gap:3px"><input type="checkbox"'+(checked?' checked':'')+' onchange="toggleUserProperty(\''+u.id+'\',\''+p.Title.replace(/'/g,"\\'")+'\',this.checked)"> '+p.Title+'</label>';
+    });
+    if(assigned.length===0)html+='<span style="font-size:11px;color:var(--text-tertiary);font-style:italic">All (no restriction)</span>';
+    html+='</div>';
+    html+='</div>';
     return html;
   }).join('');
 }
@@ -395,6 +407,18 @@ async function toggleUserPerm(userId,perm,enabled){
 
 async function toggleUserActive(userId,active){
   try{await updateListItem('Users',userId,{Active:active});const u=allUsers.find(x=>x.id===userId);if(u)u.Active=active}catch(e){alert('Failed')}
+}
+
+async function toggleUserProperty(userId,propTitle,enabled){
+  const u=allUsers.find(x=>x.id===userId);if(!u)return;
+  let assigned=u.AssignedProperties?u.AssignedProperties.split(',').map(s=>s.trim()).filter(Boolean):[];
+  if(enabled&&!assigned.includes(propTitle))assigned.push(propTitle);
+  if(!enabled)assigned=assigned.filter(p=>p!==propTitle);
+  const assignedStr=assigned.join(',');
+  try{
+    await updateListItem('Users',userId,{AssignedProperties:assignedStr});
+    u.AssignedProperties=assignedStr;
+  }catch(e){alert('Failed — have you created the AssignedProperties column in the Users list?');renderAdminUsers()}
 }
 
 async function addUser(){
