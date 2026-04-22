@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v11.2 — app.js (Core)
+// 2GM Booking v11.3 — app.js (Core)
 // Auth, Graph API, Data, Rendering, Bookings
 // ============================================================
 
@@ -104,13 +104,16 @@ async function loadCurrentUser(){
 function can(perm){return currentUser.permissions.includes(perm)}
 
 function applyPermissions(){
-  const el=id=>document.getElementById(id);
+  const el=id=>{const e=document.getElementById(id);if(!e)console.warn('Element not found:',id);return e};
   // Header buttons
   el('btnNewBooking').style.display=can('edit_bookings')?'':'none';
-  el('adminBar').style.display=can('admin')?'':'none';
   el('btnArchive').style.display=can('archive')||can('view_bookings')?'':'none';
   el('btnUpcoming').style.display=can('view_bookings')?'':'none';
   el('btnHours').style.display=can('view_hours')||can('edit_hours')?'':'none';
+  // Admin bar above banner
+  el('adminBar').style.display=can('admin')?'block':'none';
+  // Property select
+  el('propertySelect').style.display='';
   // Sign out label
   el('btnSignOut').textContent=currentUser.displayName+' — Sign out';
   // Stats: hide if no view permission
@@ -118,6 +121,7 @@ function applyPermissions(){
     el('statsBar').style.display='none';
     document.querySelector('.floors').style.display='none';
   }
+  console.log('Permissions applied. Admin:',can('admin'),'View:',can('view_bookings'));
 }
 
 // --- DATA LOADING ---
