@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- 2GM Booking v11.7 — Created by Frank Haugan -->
+<!-- 2GM Booking v11.8 — Created by Frank Haugan -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -175,7 +175,7 @@ tbody td{padding:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
       </div>
     </div>
   </div>
-  <div style="text-align:center;padding:12px;font-size:11px;color:var(--text-tertiary);margin-top:1rem">v11.7 — Created by Frank Haugan</div>
+  <div style="text-align:center;padding:12px;font-size:11px;color:var(--text-tertiary);margin-top:1rem">v11.8 — Created by Frank Haugan</div>
 </div>
 <!-- Modals -->
 <div class="modal-overlay" id="bookingModal"><div class="modal"><div class="modal-header"><h2 id="bookingModalTitle">New booking</h2><button class="modal-close" onclick="closeBookingModal()">&times;</button></div><div class="modal-body"><div class="form-group"><label>Room</label><select id="fRoom"></select></div><div class="form-group"><label>Guest name</label><input id="fName" type="text" placeholder="Full name"></div><div class="form-group"><label>Company</label><input id="fCompany" type="text" placeholder="Company name"></div><div class="form-row"><div class="form-group"><label>Check-in</label><input id="fCheckIn" type="date"></div><div class="form-group"><label>Check-out</label><input id="fCheckOut" type="date"><div style="font-size:11px;color:var(--text-tertiary);margin-top:2px">Leave empty for open-ended</div></div></div><div class="form-row"><div class="form-group"><label>Status</label><select id="fStatus"><option value="Upcoming">Upcoming</option><option value="Active">Active (checked in)</option></select></div><div class="form-group"><label>Floor</label><input id="fFloor" type="number" min="1" max="9" readonly></div></div><div class="form-group"><label>Notes</label><textarea id="fNotes" placeholder="Optional notes..."></textarea></div></div><div class="modal-footer"><button onclick="closeBookingModal()">Cancel</button><button class="primary" id="bookingSaveBtn" onclick="saveBooking()">Create booking</button></div></div></div>
@@ -188,7 +188,10 @@ tbody td{padding:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 <div class="modal-overlay" id="ratesModal"><div class="modal" style="max-width:700px"><div class="modal-header"><h2>Rates Management</h2><button class="modal-close" onclick="document.getElementById('ratesModal').classList.remove('open')">&times;</button></div><div class="modal-body">
 <div style="margin-bottom:12px"><strong style="font-size:13px">Property default rates</strong></div>
 <div id="ratesPropertyList" style="margin-bottom:16px"></div>
-<div style="border-top:1px solid var(--border-tertiary);padding-top:12px;margin-bottom:12px"><strong style="font-size:13px">Company / Person rates</strong> <span class="muted" style="font-size:11px">(overrides property default)</span></div>
+<div style="border-top:1px solid var(--border-tertiary);padding-top:12px;margin-bottom:12px"><strong style="font-size:13px">Room rates</strong> <span class="muted" style="font-size:11px">(overrides property default — only rooms with individual pricing)</span></div>
+<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px"><select id="rRoomProperty" onchange="renderRoomRates()" style="padding:5px 8px;border:1px solid var(--border-tertiary);border-radius:var(--radius-md);font-size:13px;font-family:inherit"></select></div>
+<div id="ratesRoomList" style="max-height:200px;overflow-y:auto;margin-bottom:16px"></div>
+<div style="border-top:1px solid var(--border-tertiary);padding-top:12px;margin-bottom:12px"><strong style="font-size:13px">Company / Person rates</strong> <span class="muted" style="font-size:11px">(overrides room &amp; property rates)</span></div>
 <div id="ratesCustomList" style="max-height:300px;overflow-y:auto;margin-bottom:12px"></div>
 <div style="border-top:1px solid var(--border-tertiary);padding-top:12px"><strong style="font-size:13px">Add custom rate</strong>
 <div style="display:grid;grid-template-columns:1fr 1fr 1fr 80px auto;gap:8px;margin-top:8px">
