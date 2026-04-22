@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>2GM Bookings</title>
+<title>2GM Booking</title>
 <style>
   :root {
     --bg-primary: #ffffff;
@@ -192,7 +192,7 @@
       <select id="propertySelect"></select>
       <button class="header-btn" onclick="loadData()">Refresh</button>
       <button class="header-btn" onclick="showIncoming()">Incoming List</button>
-      <button class="header-btn primary" onclick="showNewBooking()">+ New Booking</button>
+      <button class="header-btn primary" onclick="showNewBooking()">+ New booking</button>
     </div>
   </div>
 
@@ -257,7 +257,7 @@ const API_BASE = SITE_URL + '/_api/web/lists';
 // ============================================================
 let properties = [];
 let rooms = [];
-let Bookings = [];
+let bookings = [];
 let selectedProperty = null;
 let selectedRoom = null;
 let selectedBooking = null;
@@ -375,13 +375,13 @@ async function loadData() {
       'Property'
     );
 
-    // Load active and upcoming Bookings
-    const allBookings = await spGet('Bookings',
+    // Load active and upcoming bookings
+    const allBookings = await spGet('Booking',
       'Id,Title,Person_Name,Company,Check_In,Check_Out,Status,Door_Tag_Status,Cleaning_Status,Notes,Property_Name,Floor,Room/Title',
       `Property_Name eq '${selectedProperty.Title}' and (Status eq 'Active' or Status eq 'Upcoming')`,
       'Room'
     );
-    Bookings = allBookings;
+    bookings = allBookings;
 
     renderFloors();
     updateStats();
@@ -395,12 +395,12 @@ async function loadData() {
 // ============================================================
 function getBookingForRoom(roomNumber) {
   // Prefer Active over Upcoming
-  const active = Bookings.find(b => 
+  const active = bookings.find(b => 
     b.Room && b.Room.Title === roomNumber && b.Status === 'Active'
   );
   if (active) return active;
   
-  return Bookings.find(b => 
+  return bookings.find(b => 
     b.Room && b.Room.Title === roomNumber && b.Status === 'Upcoming'
   );
 }
@@ -411,20 +411,20 @@ function formatDate(dateStr) {
   return `${String(d.getDate()).padStart(2,'0')}.${String(d.getMonth()+1).padStart(2,'0')}.${d.getFullYear()}`;
 }
 
-function doorTagButton(Booking) {
-  if (!Booking) return '<button class="status-btn" disabled></button>';
-  const status = Booking.Door_Tag_Status || 'None';
-  if (status === 'Needs-print') return `<button class="status-btn needs-print" onclick="cycleDoorTag(event, ${Booking.Id})">✕</button>`;
-  if (status === 'Printed') return `<button class="status-btn printed" onclick="cycleDoorTag(event, ${Booking.Id})">✓</button>`;
-  return `<button class="status-btn" onclick="cycleDoorTag(event, ${Booking.Id})"></button>`;
+function doorTagButton(booking) {
+  if (!booking) return '<button class="status-btn" disabled></button>';
+  const status = booking.Door_Tag_Status || 'None';
+  if (status === 'Needs-print') return `<button class="status-btn needs-print" onclick="cycleDoorTag(event, ${booking.Id})">✕</button>`;
+  if (status === 'Printed') return `<button class="status-btn printed" onclick="cycleDoorTag(event, ${booking.Id})">✓</button>`;
+  return `<button class="status-btn" onclick="cycleDoorTag(event, ${booking.Id})"></button>`;
 }
 
-function cleaningButton(Booking) {
-  if (!Booking) return '<button class="clean-btn" disabled></button>';
-  const status = Booking.Cleaning_Status || 'None';
-  if (status === 'Dirty') return `<button class="clean-btn dirty" onclick="cycleCleaning(event, ${Booking.Id})"></button>`;
-  if (status === 'Clean') return `<button class="clean-btn clean" onclick="cycleCleaning(event, ${Booking.Id})"></button>`;
-  return `<button class="clean-btn" onclick="cycleCleaning(event, ${Booking.Id})"></button>`;
+function cleaningButton(booking) {
+  if (!booking) return '<button class="clean-btn" disabled></button>';
+  const status = booking.Cleaning_Status || 'None';
+  if (status === 'Dirty') return `<button class="clean-btn dirty" onclick="cycleCleaning(event, ${booking.Id})"></button>`;
+  if (status === 'Clean') return `<button class="clean-btn clean" onclick="cycleCleaning(event, ${booking.Id})"></button>`;
+  return `<button class="clean-btn" onclick="cycleCleaning(event, ${booking.Id})"></button>`;
 }
 
 function batteryCell(level) {
@@ -434,20 +434,20 @@ function batteryCell(level) {
   return `<span>${level}</span>`;
 }
 
-function datesCell(Booking) {
-  if (!Booking) return '<span class="empty-text">Empty</span>';
+function datesCell(booking) {
+  if (!booking) return '<span class="empty-text">Empty</span>';
   
-  const checkIn = formatDate(Booking.Check_In);
-  const checkOut = Booking.Check_Out ? formatDate(Booking.Check_Out) : 'Open-ended';
+  const checkIn = formatDate(booking.Check_In);
+  const checkOut = booking.Check_Out ? formatDate(booking.Check_Out) : 'Open-ended';
   
   const today = new Date();
   today.setHours(0,0,0,0);
-  const inDate = new Date(Booking.Check_In);
+  const inDate = new Date(booking.Check_In);
   inDate.setHours(0,0,0,0);
   const daysUntil = Math.round((inDate - today) / (1000*60*60*24));
   
   let dateStyle = '';
-  if (Booking.Status === 'Upcoming' || daysUntil > 0) {
+  if (booking.Status === 'Upcoming' || daysUntil > 0) {
     if (daysUntil >= 0 && daysUntil <= 4) dateStyle = 'color: #1D9E75; font-weight: 500;';
     else if (daysUntil > 4 && daysUntil <= 30) dateStyle = 'color: #EF9F27; font-weight: 500;';
   }
@@ -456,19 +456,19 @@ function datesCell(Booking) {
 }
 
 function renderRow(room) {
-  const Booking = getBookingForRoom(room.Title);
-  const name = Booking ? Booking.Person_Name : '';
-  const company = Booking ? (Booking.Company || '') : '';
+  const booking = getBookingForRoom(room.Title);
+  const name = booking ? booking.Person_Name : '';
+  const company = booking ? (booking.Company || '') : '';
   const battery = room.Door_Battery_Level;
   
   return `<tr onclick="showDetail('${room.Title}')">
-    <td>${doorTagButton(Booking)}</td>
-    <td>${cleaningButton(Booking)}</td>
+    <td>${doorTagButton(booking)}</td>
+    <td>${cleaningButton(booking)}</td>
     <td style="font-variant-numeric: tabular-nums; font-weight: 500;">${room.Title}</td>
-    <td>${name || '<span class="empty-text">—</span>'}${Booking && Booking.Notes ? '<span class="note-dot"></span>' : ''}</td>
+    <td>${name || '<span class="empty-text">—</span>'}${booking && booking.Notes ? '<span class="note-dot"></span>' : ''}</td>
     <td class="muted">${company}</td>
     <td style="text-align: right; font-variant-numeric: tabular-nums;">${batteryCell(battery)}</td>
-    <td style="font-variant-numeric: tabular-nums;">${datesCell(Booking)}</td>
+    <td style="font-variant-numeric: tabular-nums;">${datesCell(booking)}</td>
   </tr>`;
 }
 
@@ -491,12 +491,12 @@ function renderFloors() {
 }
 
 function updateStats() {
-  const activeBookings = Bookings.filter(b => b.Status === 'Active');
+  const activeBookings = bookings.filter(b => b.Status === 'Active');
   const totalRooms = rooms.length;
   const occupiedRooms = activeBookings.length;
   const emptyRooms = totalRooms - occupiedRooms;
-  const dirtyRooms = Bookings.filter(b => b.Cleaning_Status === 'Dirty').length;
-  const needsPrint = Bookings.filter(b => b.Door_Tag_Status === 'Needs-print').length;
+  const dirtyRooms = bookings.filter(b => b.Cleaning_Status === 'Dirty').length;
+  const needsPrint = bookings.filter(b => b.Door_Tag_Status === 'Needs-print').length;
   const lowBattery = rooms.filter(r => r.Door_Battery_Level !== null && r.Door_Battery_Level < 30).length;
   
   document.getElementById('statCheckedIn').textContent = `${occupiedRooms} / ${totalRooms}`;
@@ -511,13 +511,13 @@ function updateStats() {
 // ============================================================
 function showDetail(roomNumber) {
   const room = rooms.find(r => r.Title === roomNumber);
-  const Booking = getBookingForRoom(roomNumber);
+  const booking = getBookingForRoom(roomNumber);
   const panel = document.getElementById('detailPanel');
   
   selectedRoom = room;
-  selectedBooking = Booking;
+  selectedBooking = booking;
   
-  if (!Booking) {
+  if (!booking) {
     panel.innerHTML = `
       <div class="detail-grid">
         <div class="detail-main">
@@ -525,32 +525,32 @@ function showDetail(roomNumber) {
           <div class="detail-sub">Empty</div>
         </div>
         <div class="detail-actions">
-          <button class="primary" onclick="showNewBooking()">Create Booking</button>
+          <button class="primary" onclick="showNewBooking()">Create booking</button>
           <button onclick="closeDetail()">Close</button>
         </div>
       </div>`;
   } else {
-    const doorTagLabel = {'None':'—', 'Needs-print':'✕ Needs print', 'Printed':'✓ Printed'}[Booking.Door_Tag_Status] || '—';
-    const cleaningLabel = {'None':'—', 'Dirty':'● Needs cleaning', 'Clean':'● Clean'}[Booking.Cleaning_Status] || '—';
+    const doorTagLabel = {'None':'—', 'Needs-print':'✕ Needs print', 'Printed':'✓ Printed'}[booking.Door_Tag_Status] || '—';
+    const cleaningLabel = {'None':'—', 'Dirty':'● Needs cleaning', 'Clean':'● Clean'}[booking.Cleaning_Status] || '—';
     
     panel.innerHTML = `
       <div class="detail-grid">
         <div class="detail-main">
-          <div class="detail-name">${Booking.Person_Name}</div>
-          <div class="detail-sub">Room ${roomNumber} · ${Booking.Company || ''}</div>
+          <div class="detail-name">${booking.Person_Name}</div>
+          <div class="detail-sub">Room ${roomNumber} · ${booking.Company || ''}</div>
           <table class="detail-info">
-            <tr><td>Check-in</td><td>${formatDate(Booking.Check_In)}</td></tr>
-            <tr><td>Check-out</td><td>${Booking.Check_Out ? formatDate(Booking.Check_Out) : 'Open-ended'}</td></tr>
-            <tr><td>Status</td><td>${Booking.Status}</td></tr>
+            <tr><td>Check-in</td><td>${formatDate(booking.Check_In)}</td></tr>
+            <tr><td>Check-out</td><td>${booking.Check_Out ? formatDate(booking.Check_Out) : 'Open-ended'}</td></tr>
+            <tr><td>Status</td><td>${booking.Status}</td></tr>
             <tr><td>Door tag</td><td>${doorTagLabel}</td></tr>
             <tr><td>Cleaning</td><td>${cleaningLabel}</td></tr>
-            ${Booking.Notes ? `<tr><td>Notes</td><td>${Booking.Notes}</td></tr>` : ''}
+            ${booking.Notes ? `<tr><td>Notes</td><td>${booking.Notes}</td></tr>` : ''}
           </table>
         </div>
         <div class="detail-actions">
-          <button onclick="editBooking(${Booking.Id})">Edit</button>
-          ${Booking.Status === 'Active' ? `<button onclick="checkOut(${Booking.Id})">Check out</button>` : ''}
-          <button class="danger" onclick="cancelBooking(${Booking.Id})">Cancel Booking</button>
+          <button onclick="editBooking(${booking.Id})">Edit</button>
+          ${booking.Status === 'Active' ? `<button onclick="checkOut(${booking.Id})">Check out</button>` : ''}
+          <button class="danger" onclick="cancelBooking(${booking.Id})">Cancel booking</button>
           <button onclick="closeDetail()">Close</button>
         </div>
       </div>`;
@@ -568,17 +568,17 @@ function closeDetail() {
 // ============================================================
 // ACTIONS
 // ============================================================
-async function cycleDoorTag(event, BookingId) {
+async function cycleDoorTag(event, bookingId) {
   event.stopPropagation();
-  const Booking = Bookings.find(b => b.Id === BookingId);
-  if (!Booking) return;
+  const booking = bookings.find(b => b.Id === bookingId);
+  if (!booking) return;
   
   const cycle = {'None':'Needs-print', 'Needs-print':'Printed', 'Printed':'None'};
-  const newStatus = cycle[Booking.Door_Tag_Status || 'None'];
+  const newStatus = cycle[booking.Door_Tag_Status || 'None'];
   
   try {
-    await spUpdate('Bookings', BookingId, { Door_Tag_Status: newStatus });
-    Booking.Door_Tag_Status = newStatus;
+    await spUpdate('Booking', bookingId, { Door_Tag_Status: newStatus });
+    booking.Door_Tag_Status = newStatus;
     renderFloors();
     updateStats();
   } catch (e) {
@@ -587,17 +587,17 @@ async function cycleDoorTag(event, BookingId) {
   }
 }
 
-async function cycleCleaning(event, BookingId) {
+async function cycleCleaning(event, bookingId) {
   event.stopPropagation();
-  const Booking = Bookings.find(b => b.Id === BookingId);
-  if (!Booking) return;
+  const booking = bookings.find(b => b.Id === bookingId);
+  if (!booking) return;
   
   const cycle = {'None':'Dirty', 'Dirty':'Clean', 'Clean':'None'};
-  const newStatus = cycle[Booking.Cleaning_Status || 'None'];
+  const newStatus = cycle[booking.Cleaning_Status || 'None'];
   
   try {
-    await spUpdate('Bookings', BookingId, { Cleaning_Status: newStatus });
-    Booking.Cleaning_Status = newStatus;
+    await spUpdate('Booking', bookingId, { Cleaning_Status: newStatus });
+    booking.Cleaning_Status = newStatus;
     renderFloors();
     updateStats();
   } catch (e) {
@@ -606,12 +606,12 @@ async function cycleCleaning(event, BookingId) {
   }
 }
 
-async function checkOut(BookingId) {
+async function checkOut(bookingId) {
   if (!confirm('Check out this guest?')) return;
   
   try {
     const today = new Date().toISOString();
-    await spUpdate('Bookings', BookingId, { 
+    await spUpdate('Booking', bookingId, { 
       Status: 'Completed', 
       Cleaning_Status: 'Dirty',
       Check_Out: today
@@ -624,25 +624,25 @@ async function checkOut(BookingId) {
   }
 }
 
-async function cancelBooking(BookingId) {
-  if (!confirm('Cancel this Booking?')) return;
+async function cancelBooking(bookingId) {
+  if (!confirm('Cancel this booking?')) return;
   
   try {
-    await spUpdate('Bookings', BookingId, { Status: 'Cancelled' });
+    await spUpdate('Booking', bookingId, { Status: 'Cancelled' });
     await loadData();
     closeDetail();
   } catch (e) {
     console.error('Error cancelling:', e);
-    alert('Failed to cancel Booking');
+    alert('Failed to cancel booking');
   }
 }
 
-function editBooking(BookingId) {
-  alert('Edit Booking form — coming soon!\nFor now, edit in SharePoint:\n' + SITE_URL + '/Lists/Booking/DispForm.aspx?ID=' + BookingId);
+function editBooking(bookingId) {
+  alert('Edit booking form — coming soon!\nFor now, edit in SharePoint:\n' + SITE_URL + '/Lists/Booking/DispForm.aspx?ID=' + bookingId);
 }
 
 function showNewBooking() {
-  alert('New Booking form — coming soon!\nFor now, create in SharePoint:\n' + SITE_URL + '/Lists/Booking/NewForm.aspx');
+  alert('New booking form — coming soon!\nFor now, create in SharePoint:\n' + SITE_URL + '/Lists/Booking/NewForm.aspx');
 }
 
 function showIncoming() {
