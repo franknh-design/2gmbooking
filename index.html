@@ -4,188 +4,57 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>2GM Booking</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-authentication-library-for-js/2.38.0/msal-browser.min.js"></script>
 <style>
-  :root {
-    --bg-primary: #ffffff;
-    --bg-secondary: #f5f4ef;
-    --bg-tertiary: #faf9f5;
-    --bg-warning: #FAEEDA;
-    --bg-danger: #FCEBEB;
-    --bg-success: #E1F5EE;
-    --text-primary: #2C2C2A;
-    --text-secondary: #5F5E5A;
-    --text-tertiary: #888780;
-    --text-warning: #854F0B;
-    --text-danger: #A32D2D;
-    --text-success: #0F6E56;
-    --border-tertiary: rgba(0,0,0,0.12);
-    --border-secondary: rgba(0,0,0,0.2);
-    --radius-md: 8px;
-    --radius-lg: 12px;
-  }
-
-  * { box-sizing: border-box; }
-  body {
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, sans-serif;
-    font-size: 14px;
-    line-height: 1.5;
-    color: var(--text-primary);
-    background: var(--bg-tertiary);
-    margin: 0;
-    padding: 1.5rem;
-  }
-
-  .container { max-width: 1800px; margin: 0 auto; }
-
-  .header {
-    background: #2C2C2A;
-    color: white;
-    padding: 12px 20px;
-    border-radius: var(--radius-lg);
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 1rem;
-  }
-  .header h1 { margin: 0; font-size: 20px; font-weight: 500; }
-  .header select {
-    padding: 6px 12px;
-    border-radius: var(--radius-md);
-    border: 1px solid rgba(255,255,255,0.3);
-    background: #444;
-    color: white;
-    font-size: 14px;
-    font-family: inherit;
-  }
-  .header-buttons { display: flex; gap: 8px; align-items: center; }
-  .header-btn {
-    padding: 6px 14px;
-    border-radius: var(--radius-md);
-    border: 1px solid rgba(255,255,255,0.3);
-    background: transparent;
-    color: white;
-    font-size: 13px;
-    cursor: pointer;
-    font-family: inherit;
-  }
-  .header-btn:hover { background: rgba(255,255,255,0.1); }
-  .header-btn.primary { background: #1D9E75; border-color: #1D9E75; }
-
-  .stats { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-bottom: 1rem; }
-  .stat { background: var(--bg-secondary); border-radius: var(--radius-md); padding: 12px; }
-  .stat-label { font-size: 12px; color: var(--text-secondary); }
-  .stat-value { font-size: 22px; font-weight: 500; margin-top: 2px; }
-
-  .floors { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 12px; }
-  .floor-card {
-    background: var(--bg-primary);
-    border: 0.5px solid var(--border-tertiary);
-    border-radius: var(--radius-lg);
-    overflow: hidden;
-  }
-  .floor-head {
-    padding: 10px 14px;
-    background: var(--bg-secondary);
-    border-bottom: 0.5px solid var(--border-tertiary);
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-  }
-  .floor-head .title { font-weight: 500; font-size: 14px; }
-  .floor-head .sub { font-size: 12px; color: var(--text-secondary); }
-
-  table { width: 100%; font-size: 12px; border-collapse: collapse; table-layout: fixed; }
-  thead th {
-    padding: 6px 6px;
-    text-align: left;
-    color: var(--text-secondary);
-    font-weight: 400;
-    border-bottom: 0.5px solid var(--border-tertiary);
-  }
-  tbody tr { border-bottom: 0.5px solid var(--border-tertiary); cursor: pointer; }
-  tbody tr:hover { background: var(--bg-secondary); }
-  tbody td { padding: 6px 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-
-  .status-btn {
-    display: inline-flex; align-items: center; justify-content: center;
-    width: 22px; height: 22px; border-radius: 4px;
-    border: 1px solid var(--border-secondary); cursor: pointer; padding: 0;
-    background: transparent; font-size: 13px; font-weight: 700; line-height: 1;
-    vertical-align: middle;
-  }
-  .status-btn.needs-print { background: #FCEBEB; color: #A32D2D; border-color: #E24B4A; }
-  .status-btn.printed { background: #E1F5EE; color: #0F6E56; border-color: #1D9E75; }
-
-  .clean-btn {
-    display: inline-block; width: 18px; height: 18px; border-radius: 50%;
-    border: 1px solid var(--border-secondary); cursor: pointer; padding: 0;
-    vertical-align: middle;
-  }
-  .clean-btn.dirty { background: #E24B4A; border-color: #A32D2D; }
-  .clean-btn.clean { background: #1D9E75; border-color: #0F6E56; }
-
-  .muted { color: var(--text-secondary); }
-  .empty-text { color: var(--text-tertiary); font-style: italic; }
-
-  .pill { padding: 1px 6px; border-radius: 4px; font-size: 11px; }
-  .pill.danger { background: var(--bg-danger); color: var(--text-danger); }
-  .pill.warning { background: var(--bg-warning); color: var(--text-warning); }
-
-  .detail {
-    margin-top: 1rem;
-    background: var(--bg-primary);
-    border: 0.5px solid var(--border-tertiary);
-    border-radius: var(--radius-lg);
-    padding: 1rem 1.25rem;
-    display: none;
-  }
-  .detail.open { display: block; }
-  .detail-grid {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    gap: 1.5rem;
-    flex-wrap: wrap;
-  }
-  .detail-main { flex: 1; min-width: 280px; }
-  .detail-name { font-weight: 500; font-size: 18px; margin-bottom: 4px; }
-  .detail-sub { color: var(--text-secondary); font-size: 13px; margin-bottom: 12px; }
-  .detail-info { font-size: 13px; }
-  .detail-info td { padding: 3px 0; }
-  .detail-info td:first-child { color: var(--text-secondary); padding-right: 20px; }
-  .detail-actions { display: flex; flex-direction: column; gap: 6px; min-width: 160px; }
-  .detail-actions button {
-    padding: 8px 16px;
-    border: 0.5px solid var(--border-secondary);
-    border-radius: var(--radius-md);
-    background: var(--bg-primary);
-    color: var(--text-primary);
-    font-family: inherit;
-    font-size: 13px;
-    cursor: pointer;
-  }
-  .detail-actions button:hover { background: var(--bg-secondary); }
-  .detail-actions button.primary { background: #2C2C2A; color: white; border-color: #2C2C2A; }
-  .detail-actions button.danger { color: var(--text-danger); }
-
-  .loading { text-align: center; padding: 40px; color: var(--text-secondary); }
-  .error { text-align: center; padding: 40px; color: var(--text-danger); }
-
-  .note-dot {
-    display: inline-block; width: 6px; height: 6px; border-radius: 50%;
-    background: #EF9F27; vertical-align: middle; margin-left: 3px;
-  }
-
-  @media (max-width: 900px) {
-    body { padding: 0.75rem; }
-    .floors { grid-template-columns: 1fr; }
-    .stats { grid-template-columns: repeat(2, 1fr); }
-  }
+  :root{--bg-primary:#fff;--bg-secondary:#f5f4ef;--bg-tertiary:#faf9f5;--bg-warning:#FAEEDA;--bg-danger:#FCEBEB;--bg-success:#E1F5EE;--text-primary:#2C2C2A;--text-secondary:#5F5E5A;--text-tertiary:#888780;--text-warning:#854F0B;--text-danger:#A32D2D;--text-success:#0F6E56;--border-tertiary:rgba(0,0,0,0.12);--border-secondary:rgba(0,0,0,0.2);--radius-md:8px;--radius-lg:12px}
+  *{box-sizing:border-box}body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;font-size:14px;line-height:1.5;color:var(--text-primary);background:var(--bg-tertiary);margin:0;padding:1.5rem}
+  .container{max-width:1800px;margin:0 auto}
+  .header{background:#2C2C2A;color:#fff;padding:12px 20px;border-radius:var(--radius-lg);display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem}
+  .header h1{margin:0;font-size:20px;font-weight:500}
+  .header select{padding:6px 12px;border-radius:var(--radius-md);border:1px solid rgba(255,255,255,.3);background:#444;color:#fff;font-size:14px;font-family:inherit}
+  .header-buttons{display:flex;gap:8px;align-items:center}
+  .header-btn{padding:6px 14px;border-radius:var(--radius-md);border:1px solid rgba(255,255,255,.3);background:0 0;color:#fff;font-size:13px;cursor:pointer;font-family:inherit}
+  .header-btn:hover{background:rgba(255,255,255,.1)}.header-btn.primary{background:#1D9E75;border-color:#1D9E75}
+  .stats{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:1rem}
+  .stat{background:var(--bg-secondary);border-radius:var(--radius-md);padding:12px}
+  .stat-label{font-size:12px;color:var(--text-secondary)}.stat-value{font-size:22px;font-weight:500;margin-top:2px}
+  .floors{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px}
+  .floor-card{background:var(--bg-primary);border:.5px solid var(--border-tertiary);border-radius:var(--radius-lg);overflow:hidden}
+  .floor-head{padding:10px 14px;background:var(--bg-secondary);border-bottom:.5px solid var(--border-tertiary);display:flex;justify-content:space-between;align-items:center}
+  .floor-head .title{font-weight:500;font-size:14px}.floor-head .sub{font-size:12px;color:var(--text-secondary)}
+  table{width:100%;font-size:12px;border-collapse:collapse;table-layout:fixed}
+  thead th{padding:6px;text-align:left;color:var(--text-secondary);font-weight:400;border-bottom:.5px solid var(--border-tertiary)}
+  tbody tr{border-bottom:.5px solid var(--border-tertiary);cursor:pointer}tbody tr:hover{background:var(--bg-secondary)}
+  tbody td{padding:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .status-btn{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:4px;border:1px solid var(--border-secondary);cursor:pointer;padding:0;background:0 0;font-size:13px;font-weight:700;line-height:1}
+  .status-btn.needs-print{background:#FCEBEB;color:#A32D2D;border-color:#E24B4A}.status-btn.printed{background:#E1F5EE;color:#0F6E56;border-color:#1D9E75}
+  .clean-btn{display:inline-block;width:18px;height:18px;border-radius:50%;border:1px solid var(--border-secondary);cursor:pointer;padding:0}
+  .clean-btn.dirty{background:#E24B4A;border-color:#A32D2D}.clean-btn.clean{background:#1D9E75;border-color:#0F6E56}
+  .muted{color:var(--text-secondary)}.empty-text{color:var(--text-tertiary);font-style:italic}
+  .pill{padding:1px 6px;border-radius:4px;font-size:11px}.pill.danger{background:var(--bg-danger);color:var(--text-danger)}.pill.warning{background:var(--bg-warning);color:var(--text-warning)}
+  .note-dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:#EF9F27;vertical-align:middle;margin-left:3px}
+  .detail{margin-top:1rem;background:var(--bg-primary);border:.5px solid var(--border-tertiary);border-radius:var(--radius-lg);padding:1rem 1.25rem;display:none}
+  .detail.open{display:block}
+  .detail-grid{display:flex;justify-content:space-between;align-items:flex-start;gap:1.5rem;flex-wrap:wrap}
+  .detail-main{flex:1;min-width:280px}.detail-name{font-weight:500;font-size:18px;margin-bottom:4px}
+  .detail-sub{color:var(--text-secondary);font-size:13px;margin-bottom:12px}
+  .detail-info{font-size:13px}.detail-info td{padding:3px 0}.detail-info td:first-child{color:var(--text-secondary);padding-right:20px}
+  .detail-actions{display:flex;flex-direction:column;gap:6px;min-width:160px}
+  .detail-actions button{padding:8px 16px;border:.5px solid var(--border-secondary);border-radius:var(--radius-md);background:var(--bg-primary);color:var(--text-primary);font-family:inherit;font-size:13px;cursor:pointer}
+  .detail-actions button:hover{background:var(--bg-secondary)}.detail-actions button.primary{background:#2C2C2A;color:#fff;border-color:#2C2C2A}.detail-actions button.danger{color:var(--text-danger)}
+  .loading{text-align:center;padding:40px;color:var(--text-secondary)}.error{text-align:center;padding:40px;color:var(--text-danger)}
+  .login-screen{text-align:center;padding:100px 20px}.login-screen h1{font-size:32px;color:#2C2C2A;margin-bottom:8px}.login-screen p{color:var(--text-secondary);margin-bottom:30px}
+  .login-btn{padding:12px 32px;background:#2C2C2A;color:#fff;border:none;border-radius:var(--radius-md);font-size:16px;cursor:pointer;font-family:inherit}.login-btn:hover{background:#444}
+  @media(max-width:900px){body{padding:.75rem}.floors{grid-template-columns:1fr}.stats{grid-template-columns:repeat(2,1fr)}}
 </style>
 </head>
 <body>
-<div class="container">
-
+<div id="loginScreen" class="login-screen">
+  <h1>2GM Booking</h1>
+  <p>Sign in with your 2GM account to continue</p>
+  <button class="login-btn" onclick="signIn()">Sign in with Microsoft</button>
+</div>
+<div id="app" class="container" style="display:none">
   <div class="header">
     <h1 id="headerTitle">2GM Booking</h1>
     <div class="header-buttons">
@@ -193,476 +62,110 @@
       <button class="header-btn" onclick="loadData()">Refresh</button>
       <button class="header-btn" onclick="showIncoming()">Incoming List</button>
       <button class="header-btn primary" onclick="showNewBooking()">+ New booking</button>
+      <button class="header-btn" onclick="signOut()" style="margin-left:12px">Sign out</button>
     </div>
   </div>
-
-  <div class="stats" id="statsBar">
+  <div class="stats">
     <div class="stat"><div class="stat-label">Checked in</div><div class="stat-value" id="statCheckedIn">-</div></div>
     <div class="stat"><div class="stat-label">Empty rooms</div><div class="stat-value" id="statEmpty">-</div></div>
     <div class="stat"><div class="stat-label">Needs cleaning</div><div class="stat-value" id="statDirty">-</div></div>
     <div class="stat"><div class="stat-label">Door tag: needs print</div><div class="stat-value" id="statDoorTag">-</div></div>
     <div class="stat"><div class="stat-label">Low battery (&lt;30%)</div><div class="stat-value" id="statBattery">-</div></div>
   </div>
-
   <div class="floors">
     <div class="floor-card">
-      <div class="floor-head">
-        <span class="title" id="floor1Title">1st floor</span>
-        <span class="sub" id="floor1Sub"></span>
-      </div>
-      <table>
-        <colgroup>
-          <col style="width:28px"><col style="width:28px"><col style="width:50px">
-          <col><col style="width:80px"><col style="width:44px">
-          <col style="width:180px">
-        </colgroup>
-        <thead><tr>
-          <th>T</th><th>C</th><th>Room</th><th>Name</th><th>Company</th><th>Bat.</th><th>Dates</th>
-        </tr></thead>
-        <tbody id="floor1Body"></tbody>
-      </table>
+      <div class="floor-head"><span class="title" id="floor1Title">1st floor</span><span class="sub" id="floor1Sub"></span></div>
+      <table><colgroup><col style="width:28px"><col style="width:28px"><col style="width:50px"><col><col style="width:80px"><col style="width:44px"><col style="width:180px"></colgroup>
+      <thead><tr><th>T</th><th>C</th><th>Room</th><th>Name</th><th>Company</th><th>Bat.</th><th>Dates</th></tr></thead>
+      <tbody id="floor1Body"><tr><td colspan="7" class="loading">Loading...</td></tr></tbody></table>
     </div>
     <div class="floor-card">
-      <div class="floor-head">
-        <span class="title" id="floor2Title">2nd floor</span>
-        <span class="sub" id="floor2Sub"></span>
-      </div>
-      <table>
-        <colgroup>
-          <col style="width:28px"><col style="width:28px"><col style="width:50px">
-          <col><col style="width:80px"><col style="width:44px">
-          <col style="width:180px">
-        </colgroup>
-        <thead><tr>
-          <th>T</th><th>C</th><th>Room</th><th>Name</th><th>Company</th><th>Bat.</th><th>Dates</th>
-        </tr></thead>
-        <tbody id="floor2Body"></tbody>
-      </table>
+      <div class="floor-head"><span class="title" id="floor2Title">2nd floor</span><span class="sub" id="floor2Sub"></span></div>
+      <table><colgroup><col style="width:28px"><col style="width:28px"><col style="width:50px"><col><col style="width:80px"><col style="width:44px"><col style="width:180px"></colgroup>
+      <thead><tr><th>T</th><th>C</th><th>Room</th><th>Name</th><th>Company</th><th>Bat.</th><th>Dates</th></tr></thead>
+      <tbody id="floor2Body"><tr><td colspan="7" class="loading">Loading...</td></tr></tbody></table>
     </div>
   </div>
-
   <div class="detail" id="detailPanel"></div>
-
 </div>
-
 <script>
-// ============================================================
-// CONFIGURATION — Update this URL to match your SharePoint site
-// ============================================================
-const SITE_URL = 'https://2gmeiendom.sharepoint.com/sites/2GMBooking';
-const API_BASE = SITE_URL + '/_api/web/lists';
+const msalConfig={auth:{clientId:'f8e2259d-c440-41d3-94e3-3a2dce095817',authority:'https://login.microsoftonline.com/2b495272-f733-47a8-a771-bb744309fa17',redirectUri:'https://franknh-design.github.io/2gmbooking/'},cache:{cacheLocation:'localStorage'}};
+const msalInstance=new msal.PublicClientApplication(msalConfig);
+let accessToken=null;
 
-// ============================================================
-// STATE
-// ============================================================
-let properties = [];
-let rooms = [];
-let bookings = [];
-let selectedProperty = null;
-let selectedRoom = null;
-let selectedBooking = null;
+async function signIn(){try{await msalInstance.loginPopup({scopes:['Sites.ReadWrite.All']});await getToken();showApp();await loadProperties();await loadData()}catch(e){console.error('Login failed:',e);alert('Login failed: '+e.message)}}
+async function getToken(){const a=msalInstance.getAllAccounts();if(!a.length)return null;try{const r=await msalInstance.acquireTokenSilent({scopes:['Sites.ReadWrite.All'],account:a[0]});accessToken=r.accessToken;return accessToken}catch(e){const r=await msalInstance.acquireTokenPopup({scopes:['Sites.ReadWrite.All']});accessToken=r.accessToken;return accessToken}}
+function signOut(){msalInstance.logoutPopup();document.getElementById('app').style.display='none';document.getElementById('loginScreen').style.display='block'}
+function showApp(){document.getElementById('loginScreen').style.display='none';document.getElementById('app').style.display='block'}
 
-// ============================================================
-// SharePoint REST API helpers
-// ============================================================
-async function spGet(listName, select, filter, expand) {
-  let url = `${API_BASE}/getbytitle('${listName}')/items?$top=5000`;
-  if (select) url += `&$select=${select}`;
-  if (filter) url += `&$filter=${filter}`;
-  if (expand) url += `&$expand=${expand}`;
-  
-  const response = await fetch(url, {
-    headers: {
-      'Accept': 'application/json;odata=verbose'
-    },
-    credentials: 'include'
-  });
-  
-  if (!response.ok) {
-    throw new Error(`Failed to fetch ${listName}: ${response.status} ${response.statusText}`);
-  }
-  
-  const data = await response.json();
-  return data.d.results;
-}
+const SITE_HOST='2gmeiendom.sharepoint.com';
+const SITE_PATH='/sites/2GMBooking';
+let siteId=null;
+const listIdCache={};
 
-async function spUpdate(listName, itemId, updates) {
-  // Get the item first for its etag
-  const itemUrl = `${API_BASE}/getbytitle('${listName}')/items(${itemId})`;
-  const itemResp = await fetch(itemUrl, {
-    headers: { 'Accept': 'application/json;odata=verbose' },
-    credentials: 'include'
-  });
-  const itemData = await itemResp.json();
-  const etag = itemData.d.__metadata.etag;
-  const itemType = itemData.d.__metadata.type;
+async function graphGet(ep){await getToken();const r=await fetch('https://graph.microsoft.com/v1.0'+ep,{headers:{'Authorization':'Bearer '+accessToken,'Accept':'application/json'}});if(!r.ok)throw new Error('Graph error '+r.status+': '+await r.text());return r.json()}
+async function graphPatch(ep,body){await getToken();const r=await fetch('https://graph.microsoft.com/v1.0'+ep,{method:'PATCH',headers:{'Authorization':'Bearer '+accessToken,'Content-Type':'application/json'},body:JSON.stringify(body)});if(!r.ok)throw new Error('Graph error '+r.status);return r.json()}
 
-  // Get request digest for write operations
-  const digestResp = await fetch(SITE_URL + '/_api/contextinfo', {
-    method: 'POST',
-    headers: { 'Accept': 'application/json;odata=verbose' },
-    credentials: 'include'
-  });
-  const digestData = await digestResp.json();
-  const digest = digestData.d.GetContextWebInformation.FormDigestValue;
+async function getSiteId(){if(siteId)return siteId;const r=await graphGet('/sites/'+SITE_HOST+':'+SITE_PATH);siteId=r.id;return siteId}
+async function getListId(name){if(listIdCache[name])return listIdCache[name];const s=await getSiteId();const r=await graphGet('/sites/'+s+"/lists?$filter=displayName eq '"+name+"'");if(r.value&&r.value.length>0){listIdCache[name]=r.value[0].id;return listIdCache[name]}throw new Error('List not found: '+name)}
 
-  updates.__metadata = { type: itemType };
+async function getListItems(listName){const s=await getSiteId();const lid=await getListId(listName);let all=[];let url='/sites/'+s+'/lists/'+lid+'/items?$expand=fields&$top=500';while(url){const r=await graphGet(url);all=all.concat(r.value.map(i=>({id:i.id,...i.fields})));url=r['@odata.nextLink']?r['@odata.nextLink'].replace('https://graph.microsoft.com/v1.0',''):null}return all}
 
-  const response = await fetch(itemUrl, {
-    method: 'POST',
-    headers: {
-      'Accept': 'application/json;odata=verbose',
-      'Content-Type': 'application/json;odata=verbose',
-      'X-RequestDigest': digest,
-      'X-HTTP-Method': 'MERGE',
-      'If-Match': etag
-    },
-    credentials: 'include',
-    body: JSON.stringify(updates)
-  });
+async function updateListItem(listName,itemId,fields){const s=await getSiteId();const lid=await getListId(listName);return graphPatch('/sites/'+s+'/lists/'+lid+'/items/'+itemId+'/fields',fields)}
 
-  if (!response.ok && response.status !== 204) {
-    throw new Error(`Failed to update: ${response.status}`);
-  }
-}
+let properties=[],rooms=[],bookings=[],selectedProperty=null,selectedRoom=null,selectedBooking=null;
 
-// ============================================================
-// DATA LOADING
-// ============================================================
-async function loadProperties() {
-  try {
-    properties = await spGet('Properties', 'Id,Title,Address,Contact_Phone,Active');
-    const select = document.getElementById('propertySelect');
-    select.innerHTML = properties.map(p => 
-      `<option value="${p.Id}">${p.Title}</option>`
-    ).join('');
-    select.onchange = () => {
-      selectedProperty = properties.find(p => p.Id === parseInt(select.value));
-      loadData();
-    };
-    selectedProperty = properties[0];
-  } catch (e) {
-    console.error('Error loading properties:', e);
-    document.querySelector('.container').innerHTML = `
-      <div class="error">
-        <h2>Cannot connect to SharePoint</h2>
-        <p>${e.message}</p>
-        <p>Make sure you are logged into SharePoint and accessing this page from the same browser.</p>
-        <p>This page must be hosted on SharePoint to access the data. See instructions below.</p>
-        <hr>
-        <h3>How to host on SharePoint:</h3>
-        <ol style="text-align:left; max-width:600px; margin:0 auto;">
-          <li>Go to your SharePoint site: ${SITE_URL}</li>
-          <li>Click Site Contents (Områdeinnhold)</li>
-          <li>Click Site Assets (Områderessurser) or create a document library</li>
-          <li>Upload this HTML file there</li>
-          <li>Open the file from SharePoint</li>
-        </ol>
-      </div>`;
-  }
-}
+async function loadProperties(){try{properties=await getListItems('Properties');const sel=document.getElementById('propertySelect');sel.innerHTML=properties.map(p=>'<option value="'+p.id+'">'+p.Title+'</option>').join('');sel.onchange=()=>{selectedProperty=properties.find(p=>p.id===sel.value);loadData()};selectedProperty=properties[0]}catch(e){console.error('Error:',e)}}
 
-async function loadData() {
-  if (!selectedProperty) return;
-  
-  document.getElementById('headerTitle').textContent = '2GM Booking — ' + selectedProperty.Title;
-  
-  try {
-    // Load rooms for selected property
-    rooms = await spGet('Rooms', 
-      'Id,Title,Floor,Active,Door_Battery_Level,Property/Title',
-      `Property/Title eq '${selectedProperty.Title}'`,
-      'Property'
-    );
+async function loadData(){if(!selectedProperty)return;document.getElementById('headerTitle').textContent='2GM Booking \u2014 '+selectedProperty.Title;document.getElementById('floor1Body').innerHTML='<tr><td colspan="7" class="loading">Loading...</td></tr>';document.getElementById('floor2Body').innerHTML='<tr><td colspan="7" class="loading">Loading...</td></tr>';
+try{const allRooms=await getListItems('Rooms');const allBookings=await getListItems('Bookings');
+// Filter rooms by property - match using the Property lookup field
+rooms=allRooms.filter(r=>{const pLookup=r.Property_x003a__x0020_NameLookupId||r.PropertyLookupId||r.Property;return true});
+// For now load all rooms since we need to figure out the lookup field name
+rooms=allRooms;
+bookings=allBookings.filter(b=>b.Property_Name===selectedProperty.Title&&(b.Status==='Active'||b.Status==='Upcoming'));
+// Match rooms to property using Floor field - rooms have Floor 1 or 2
+// We need to filter rooms by property. Check what fields are available:
+if(allRooms.length>0){console.log('Room fields:',Object.keys(allRooms[0]));console.log('First room:',allRooms[0])}
+if(allBookings.length>0){console.log('Booking fields:',Object.keys(allBookings[0]));console.log('First booking:',allBookings[0])}
+renderFloors();updateStats()}catch(e){console.error('Error:',e);document.getElementById('floor1Body').innerHTML='<tr><td colspan="7" class="error">Error: '+e.message+'</td></tr>'}}
 
-    // Load active and upcoming bookings
-    const allBookings = await spGet('Booking',
-      'Id,Title,Person_Name,Company,Check_In,Check_Out,Status,Door_Tag_Status,Cleaning_Status,Notes,Property_Name,Floor,Room/Title',
-      `Property_Name eq '${selectedProperty.Title}' and (Status eq 'Active' or Status eq 'Upcoming')`,
-      'Room'
-    );
-    bookings = allBookings;
+function getBookingForRoom(roomTitle){const a=bookings.find(b=>b.RoomLookupId&&rooms.find(r=>r.id===String(b.RoomLookupId)&&r.Title===roomTitle));if(a)return a;return bookings.find(b=>{const rid=b.RoomLookupId;if(!rid)return false;const room=rooms.find(r=>r.id===String(rid));return room&&room.Title===roomTitle})}
 
-    renderFloors();
-    updateStats();
-  } catch (e) {
-    console.error('Error loading data:', e);
-  }
-}
+function formatDate(d){if(!d)return'';const dt=new Date(d);return String(dt.getDate()).padStart(2,'0')+'.'+String(dt.getMonth()+1).padStart(2,'0')+'.'+dt.getFullYear()}
+function doorTagBtn(b){if(!b)return'<button class="status-btn" disabled></button>';const s=b.Door_Tag_Status||'None';if(s==='Needs-print')return'<button class="status-btn needs-print" onclick="cycleDT(event,\''+b.id+'\')">✕</button>';if(s==='Printed')return'<button class="status-btn printed" onclick="cycleDT(event,\''+b.id+'\')">✓</button>';return'<button class="status-btn" onclick="cycleDT(event,\''+b.id+'\')"></button>'}
+function cleanBtn(b){if(!b)return'<button class="clean-btn" disabled></button>';const s=b.Cleaning_Status||'None';if(s==='Dirty')return'<button class="clean-btn dirty" onclick="cycleCS(event,\''+b.id+'\')"></button>';if(s==='Clean')return'<button class="clean-btn clean" onclick="cycleCS(event,\''+b.id+'\')"></button>';return'<button class="clean-btn" onclick="cycleCS(event,\''+b.id+'\')"></button>'}
+function batCell(l){if(l==null)return'<span class="muted">\u2014</span>';if(l<30)return'<span class="pill danger">'+l+'</span>';if(l<60)return'<span class="pill warning">'+l+'</span>';return'<span>'+l+'</span>'}
+function datesCell(b){if(!b)return'<span class="empty-text">Empty</span>';const ci=formatDate(b.Check_In);const co=b.Check_Out?formatDate(b.Check_Out):'Open-ended';const today=new Date();today.setHours(0,0,0,0);const ind=new Date(b.Check_In);ind.setHours(0,0,0,0);const days=Math.round((ind-today)/864e5);let s='';if(b.Status==='Upcoming'||days>0){if(days>=0&&days<=4)s='color:#1D9E75;font-weight:500;';else if(days>4&&days<=30)s='color:#EF9F27;font-weight:500;'}return'<span style="'+s+'">'+ci+'</span> \u2014 '+co}
 
-// ============================================================
-// RENDERING
-// ============================================================
-function getBookingForRoom(roomNumber) {
-  // Prefer Active over Upcoming
-  const active = bookings.find(b => 
-    b.Room && b.Room.Title === roomNumber && b.Status === 'Active'
-  );
-  if (active) return active;
-  
-  return bookings.find(b => 
-    b.Room && b.Room.Title === roomNumber && b.Status === 'Upcoming'
-  );
-}
+function renderRow(room,booking){const n=booking?booking.Person_Name:'';const c=booking?(booking.Company||''):'';return'<tr onclick="showDetail(\''+room.id+'\')"><td>'+doorTagBtn(booking)+'</td><td>'+cleanBtn(booking)+'</td><td style="font-variant-numeric:tabular-nums;font-weight:500">'+room.Title+'</td><td>'+(n||'<span class="empty-text">\u2014</span>')+(booking&&booking.Notes?'<span class="note-dot"></span>':'')+'</td><td class="muted">'+c+'</td><td style="text-align:right;font-variant-numeric:tabular-nums">'+batCell(room.Door_Battery_Level)+'</td><td style="font-variant-numeric:tabular-nums">'+datesCell(booking)+'</td></tr>'}
 
-function formatDate(dateStr) {
-  if (!dateStr) return '';
-  const d = new Date(dateStr);
-  return `${String(d.getDate()).padStart(2,'0')}.${String(d.getMonth()+1).padStart(2,'0')}.${d.getFullYear()}`;
-}
+function renderFloors(){const bMap={};bookings.forEach(b=>{const rid=String(b.RoomLookupId||'');if(rid&&(!bMap[rid]||b.Status==='Active'))bMap[rid]=b});
+const f1=rooms.filter(r=>r.Floor===1).sort((a,b)=>(a.Title||'').localeCompare(b.Title||''));
+const f2=rooms.filter(r=>r.Floor===2).sort((a,b)=>(a.Title||'').localeCompare(b.Title||''));
+document.getElementById('floor1Body').innerHTML=f1.length?f1.map(r=>renderRow(r,bMap[r.id])).join(''):'<tr><td colspan="7" class="loading">No rooms on floor 1</td></tr>';
+document.getElementById('floor2Body').innerHTML=f2.length?f2.map(r=>renderRow(r,bMap[r.id])).join(''):'<tr><td colspan="7" class="loading">No rooms on floor 2</td></tr>';
+document.getElementById('floor1Sub').textContent=f1.length?'Rooms '+f1[0].Title+'\u2013'+f1[f1.length-1].Title:'';
+document.getElementById('floor2Sub').textContent=f2.length?'Rooms '+f2[0].Title+'\u2013'+f2[f2.length-1].Title:''}
 
-function doorTagButton(booking) {
-  if (!booking) return '<button class="status-btn" disabled></button>';
-  const status = booking.Door_Tag_Status || 'None';
-  if (status === 'Needs-print') return `<button class="status-btn needs-print" onclick="cycleDoorTag(event, ${booking.Id})">✕</button>`;
-  if (status === 'Printed') return `<button class="status-btn printed" onclick="cycleDoorTag(event, ${booking.Id})">✓</button>`;
-  return `<button class="status-btn" onclick="cycleDoorTag(event, ${booking.Id})"></button>`;
-}
+function updateStats(){const act=bookings.filter(b=>b.Status==='Active');const tr=rooms.length;document.getElementById('statCheckedIn').textContent=act.length+' / '+tr;document.getElementById('statEmpty').textContent=tr-act.length;document.getElementById('statDirty').textContent=bookings.filter(b=>b.Cleaning_Status==='Dirty').length;document.getElementById('statDoorTag').textContent=bookings.filter(b=>b.Door_Tag_Status==='Needs-print').length;document.getElementById('statBattery').textContent=rooms.filter(r=>r.Door_Battery_Level!=null&&r.Door_Battery_Level<30).length}
 
-function cleaningButton(booking) {
-  if (!booking) return '<button class="clean-btn" disabled></button>';
-  const status = booking.Cleaning_Status || 'None';
-  if (status === 'Dirty') return `<button class="clean-btn dirty" onclick="cycleCleaning(event, ${booking.Id})"></button>`;
-  if (status === 'Clean') return `<button class="clean-btn clean" onclick="cycleCleaning(event, ${booking.Id})"></button>`;
-  return `<button class="clean-btn" onclick="cycleCleaning(event, ${booking.Id})"></button>`;
-}
+function showDetail(roomId){const room=rooms.find(r=>r.id===roomId);if(!room)return;const bMap={};bookings.forEach(b=>{const rid=String(b.RoomLookupId||'');if(rid===roomId&&(!bMap[rid]||b.Status==='Active'))bMap[rid]=b});const booking=bMap[roomId]||null;selectedRoom=room;selectedBooking=booking;const p=document.getElementById('detailPanel');
+if(!booking){p.innerHTML='<div class="detail-grid"><div class="detail-main"><div class="detail-name">Room '+room.Title+'</div><div class="detail-sub">Empty</div></div><div class="detail-actions"><button class="primary" onclick="showNewBooking()">Create booking</button><button onclick="closeDetail()">Close</button></div></div>'}
+else{const dt={'None':'\u2014','Needs-print':'\u2715 Needs print','Printed':'\u2713 Printed'}[booking.Door_Tag_Status]||'\u2014';const cl={'None':'\u2014','Dirty':'\u25cf Needs cleaning','Clean':'\u25cf Clean'}[booking.Cleaning_Status]||'\u2014';
+p.innerHTML='<div class="detail-grid"><div class="detail-main"><div class="detail-name">'+booking.Person_Name+'</div><div class="detail-sub">Room '+room.Title+' \u00b7 '+(booking.Company||'')+'</div><table class="detail-info"><tr><td>Check-in</td><td>'+formatDate(booking.Check_In)+'</td></tr><tr><td>Check-out</td><td>'+(booking.Check_Out?formatDate(booking.Check_Out):'Open-ended')+'</td></tr><tr><td>Status</td><td>'+booking.Status+'</td></tr><tr><td>Door tag</td><td>'+dt+'</td></tr><tr><td>Cleaning</td><td>'+cl+'</td></tr>'+(booking.Notes?'<tr><td>Notes</td><td>'+booking.Notes+'</td></tr>':'')+'</table></div><div class="detail-actions"><button onclick="editBooking(\''+booking.id+'\')">Edit</button>'+(booking.Status==='Active'?'<button onclick="checkOut(\''+booking.id+'\')">Check out</button>':'')+'<button class="danger" onclick="cancelBooking(\''+booking.id+'\')">Cancel booking</button><button onclick="closeDetail()">Close</button></div></div>'}
+p.classList.add('open')}
+function closeDetail(){document.getElementById('detailPanel').classList.remove('open');selectedRoom=null;selectedBooking=null}
 
-function batteryCell(level) {
-  if (level === null || level === undefined) return '<span class="muted">—</span>';
-  if (level < 30) return `<span class="pill danger">${level}</span>`;
-  if (level < 60) return `<span class="pill warning">${level}</span>`;
-  return `<span>${level}</span>`;
-}
+async function cycleDT(e,id){e.stopPropagation();const b=bookings.find(x=>x.id===id);if(!b)return;const c={'None':'Needs-print','Needs-print':'Printed','Printed':'None'};const ns=c[b.Door_Tag_Status||'None'];try{await updateListItem('Bookings',id,{Door_Tag_Status:ns});b.Door_Tag_Status=ns;renderFloors();updateStats()}catch(er){console.error(er);alert('Failed to update')}}
+async function cycleCS(e,id){e.stopPropagation();const b=bookings.find(x=>x.id===id);if(!b)return;const c={'None':'Dirty','Dirty':'Clean','Clean':'None'};const ns=c[b.Cleaning_Status||'None'];try{await updateListItem('Bookings',id,{Cleaning_Status:ns});b.Cleaning_Status=ns;renderFloors();updateStats()}catch(er){console.error(er);alert('Failed to update')}}
+async function checkOut(id){if(!confirm('Check out this guest?'))return;try{await updateListItem('Bookings',id,{Status:'Completed',Cleaning_Status:'Dirty',Check_Out:new Date().toISOString()});await loadData();closeDetail()}catch(e){console.error(e);alert('Failed')}}
+async function cancelBooking(id){if(!confirm('Cancel this booking?'))return;try{await updateListItem('Bookings',id,{Status:'Cancelled'});await loadData();closeDetail()}catch(e){console.error(e);alert('Failed')}}
+function editBooking(id){alert('Edit form \u2014 coming soon!')}
+function showNewBooking(){alert('New booking form \u2014 coming soon!')}
+function showIncoming(){alert('Incoming list \u2014 coming soon!')}
 
-function datesCell(booking) {
-  if (!booking) return '<span class="empty-text">Empty</span>';
-  
-  const checkIn = formatDate(booking.Check_In);
-  const checkOut = booking.Check_Out ? formatDate(booking.Check_Out) : 'Open-ended';
-  
-  const today = new Date();
-  today.setHours(0,0,0,0);
-  const inDate = new Date(booking.Check_In);
-  inDate.setHours(0,0,0,0);
-  const daysUntil = Math.round((inDate - today) / (1000*60*60*24));
-  
-  let dateStyle = '';
-  if (booking.Status === 'Upcoming' || daysUntil > 0) {
-    if (daysUntil >= 0 && daysUntil <= 4) dateStyle = 'color: #1D9E75; font-weight: 500;';
-    else if (daysUntil > 4 && daysUntil <= 30) dateStyle = 'color: #EF9F27; font-weight: 500;';
-  }
-  
-  return `<span style="${dateStyle}">${checkIn}</span> — ${checkOut}`;
-}
-
-function renderRow(room) {
-  const booking = getBookingForRoom(room.Title);
-  const name = booking ? booking.Person_Name : '';
-  const company = booking ? (booking.Company || '') : '';
-  const battery = room.Door_Battery_Level;
-  
-  return `<tr onclick="showDetail('${room.Title}')">
-    <td>${doorTagButton(booking)}</td>
-    <td>${cleaningButton(booking)}</td>
-    <td style="font-variant-numeric: tabular-nums; font-weight: 500;">${room.Title}</td>
-    <td>${name || '<span class="empty-text">—</span>'}${booking && booking.Notes ? '<span class="note-dot"></span>' : ''}</td>
-    <td class="muted">${company}</td>
-    <td style="text-align: right; font-variant-numeric: tabular-nums;">${batteryCell(battery)}</td>
-    <td style="font-variant-numeric: tabular-nums;">${datesCell(booking)}</td>
-  </tr>`;
-}
-
-function renderFloors() {
-  const floor1Rooms = rooms.filter(r => r.Floor === 1).sort((a,b) => a.Title.localeCompare(b.Title));
-  const floor2Rooms = rooms.filter(r => r.Floor === 2).sort((a,b) => a.Title.localeCompare(b.Title));
-  
-  document.getElementById('floor1Body').innerHTML = floor1Rooms.map(r => renderRow(r)).join('');
-  document.getElementById('floor2Body').innerHTML = floor2Rooms.map(r => renderRow(r)).join('');
-  
-  const f1Min = floor1Rooms.length ? floor1Rooms[0].Title : '';
-  const f1Max = floor1Rooms.length ? floor1Rooms[floor1Rooms.length-1].Title : '';
-  const f2Min = floor2Rooms.length ? floor2Rooms[0].Title : '';
-  const f2Max = floor2Rooms.length ? floor2Rooms[floor2Rooms.length-1].Title : '';
-  
-  document.getElementById('floor1Title').textContent = '1st floor';
-  document.getElementById('floor1Sub').textContent = f1Min && f1Max ? `Rooms ${f1Min}–${f1Max}` : '';
-  document.getElementById('floor2Title').textContent = '2nd floor';
-  document.getElementById('floor2Sub').textContent = f2Min && f2Max ? `Rooms ${f2Min}–${f2Max}` : '';
-}
-
-function updateStats() {
-  const activeBookings = bookings.filter(b => b.Status === 'Active');
-  const totalRooms = rooms.length;
-  const occupiedRooms = activeBookings.length;
-  const emptyRooms = totalRooms - occupiedRooms;
-  const dirtyRooms = bookings.filter(b => b.Cleaning_Status === 'Dirty').length;
-  const needsPrint = bookings.filter(b => b.Door_Tag_Status === 'Needs-print').length;
-  const lowBattery = rooms.filter(r => r.Door_Battery_Level !== null && r.Door_Battery_Level < 30).length;
-  
-  document.getElementById('statCheckedIn').textContent = `${occupiedRooms} / ${totalRooms}`;
-  document.getElementById('statEmpty').textContent = emptyRooms;
-  document.getElementById('statDirty').textContent = dirtyRooms;
-  document.getElementById('statDoorTag').textContent = needsPrint;
-  document.getElementById('statBattery').textContent = lowBattery;
-}
-
-// ============================================================
-// DETAIL PANEL
-// ============================================================
-function showDetail(roomNumber) {
-  const room = rooms.find(r => r.Title === roomNumber);
-  const booking = getBookingForRoom(roomNumber);
-  const panel = document.getElementById('detailPanel');
-  
-  selectedRoom = room;
-  selectedBooking = booking;
-  
-  if (!booking) {
-    panel.innerHTML = `
-      <div class="detail-grid">
-        <div class="detail-main">
-          <div class="detail-name">Room ${roomNumber}</div>
-          <div class="detail-sub">Empty</div>
-        </div>
-        <div class="detail-actions">
-          <button class="primary" onclick="showNewBooking()">Create booking</button>
-          <button onclick="closeDetail()">Close</button>
-        </div>
-      </div>`;
-  } else {
-    const doorTagLabel = {'None':'—', 'Needs-print':'✕ Needs print', 'Printed':'✓ Printed'}[booking.Door_Tag_Status] || '—';
-    const cleaningLabel = {'None':'—', 'Dirty':'● Needs cleaning', 'Clean':'● Clean'}[booking.Cleaning_Status] || '—';
-    
-    panel.innerHTML = `
-      <div class="detail-grid">
-        <div class="detail-main">
-          <div class="detail-name">${booking.Person_Name}</div>
-          <div class="detail-sub">Room ${roomNumber} · ${booking.Company || ''}</div>
-          <table class="detail-info">
-            <tr><td>Check-in</td><td>${formatDate(booking.Check_In)}</td></tr>
-            <tr><td>Check-out</td><td>${booking.Check_Out ? formatDate(booking.Check_Out) : 'Open-ended'}</td></tr>
-            <tr><td>Status</td><td>${booking.Status}</td></tr>
-            <tr><td>Door tag</td><td>${doorTagLabel}</td></tr>
-            <tr><td>Cleaning</td><td>${cleaningLabel}</td></tr>
-            ${booking.Notes ? `<tr><td>Notes</td><td>${booking.Notes}</td></tr>` : ''}
-          </table>
-        </div>
-        <div class="detail-actions">
-          <button onclick="editBooking(${booking.Id})">Edit</button>
-          ${booking.Status === 'Active' ? `<button onclick="checkOut(${booking.Id})">Check out</button>` : ''}
-          <button class="danger" onclick="cancelBooking(${booking.Id})">Cancel booking</button>
-          <button onclick="closeDetail()">Close</button>
-        </div>
-      </div>`;
-  }
-  
-  panel.classList.add('open');
-}
-
-function closeDetail() {
-  document.getElementById('detailPanel').classList.remove('open');
-  selectedRoom = null;
-  selectedBooking = null;
-}
-
-// ============================================================
-// ACTIONS
-// ============================================================
-async function cycleDoorTag(event, bookingId) {
-  event.stopPropagation();
-  const booking = bookings.find(b => b.Id === bookingId);
-  if (!booking) return;
-  
-  const cycle = {'None':'Needs-print', 'Needs-print':'Printed', 'Printed':'None'};
-  const newStatus = cycle[booking.Door_Tag_Status || 'None'];
-  
-  try {
-    await spUpdate('Booking', bookingId, { Door_Tag_Status: newStatus });
-    booking.Door_Tag_Status = newStatus;
-    renderFloors();
-    updateStats();
-  } catch (e) {
-    console.error('Error updating door tag:', e);
-    alert('Failed to update door tag status');
-  }
-}
-
-async function cycleCleaning(event, bookingId) {
-  event.stopPropagation();
-  const booking = bookings.find(b => b.Id === bookingId);
-  if (!booking) return;
-  
-  const cycle = {'None':'Dirty', 'Dirty':'Clean', 'Clean':'None'};
-  const newStatus = cycle[booking.Cleaning_Status || 'None'];
-  
-  try {
-    await spUpdate('Booking', bookingId, { Cleaning_Status: newStatus });
-    booking.Cleaning_Status = newStatus;
-    renderFloors();
-    updateStats();
-  } catch (e) {
-    console.error('Error updating cleaning status:', e);
-    alert('Failed to update cleaning status');
-  }
-}
-
-async function checkOut(bookingId) {
-  if (!confirm('Check out this guest?')) return;
-  
-  try {
-    const today = new Date().toISOString();
-    await spUpdate('Booking', bookingId, { 
-      Status: 'Completed', 
-      Cleaning_Status: 'Dirty',
-      Check_Out: today
-    });
-    await loadData();
-    closeDetail();
-  } catch (e) {
-    console.error('Error checking out:', e);
-    alert('Failed to check out');
-  }
-}
-
-async function cancelBooking(bookingId) {
-  if (!confirm('Cancel this booking?')) return;
-  
-  try {
-    await spUpdate('Booking', bookingId, { Status: 'Cancelled' });
-    await loadData();
-    closeDetail();
-  } catch (e) {
-    console.error('Error cancelling:', e);
-    alert('Failed to cancel booking');
-  }
-}
-
-function editBooking(bookingId) {
-  alert('Edit booking form — coming soon!\nFor now, edit in SharePoint:\n' + SITE_URL + '/Lists/Booking/DispForm.aspx?ID=' + bookingId);
-}
-
-function showNewBooking() {
-  alert('New booking form — coming soon!\nFor now, create in SharePoint:\n' + SITE_URL + '/Lists/Booking/NewForm.aspx');
-}
-
-function showIncoming() {
-  alert('Incoming list — coming soon!');
-}
-
-// ============================================================
-// INIT
-// ============================================================
-async function init() {
-  document.getElementById('floor1Body').innerHTML = '<tr><td colspan="7" class="loading">Loading...</td></tr>';
-  document.getElementById('floor2Body').innerHTML = '<tr><td colspan="7" class="loading">Loading...</td></tr>';
-  
-  await loadProperties();
-  if (selectedProperty) {
-    await loadData();
-  }
-}
-
-init();
+msalInstance.initialize().then(()=>{const a=msalInstance.getAllAccounts();if(a.length>0){getToken().then(()=>{if(accessToken){showApp();loadProperties().then(()=>loadData())}})}});
 </script>
 </body>
 </html>
