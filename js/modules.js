@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v11.0 — modules.js
+// 2GM Booking v11.1 — modules.js
 // Hours, Archive, Import/Export, Admin (checkbox permissions)
 // ============================================================
 
@@ -366,6 +366,7 @@ function renderAdminUsers(){
     html+='<div><strong>'+(u.DisplayName||'—')+'</strong> <span class="muted" style="font-size:12px">'+(u.Epost||'')+'</span></div>';
     html+='<div style="display:flex;gap:8px;align-items:center">';
     html+='<label style="font-size:12px;display:flex;align-items:center;gap:4px"><input type="checkbox"'+(u.Active!==false?' checked':'')+(isSelf?' disabled':'')+' onchange="toggleUserActive(\''+u.id+'\',this.checked)"> Active</label>';
+    html+='<button onclick="sendInviteEmail(\''+u.id+'\')" style="padding:3px 10px;border:1px solid var(--accent);border-radius:4px;background:var(--bg-success);color:var(--text-success);cursor:pointer;font-size:11px;font-family:inherit" title="Send login invite email">✉ Invite</button>';
     if(!isSelf)html+='<button onclick="deleteUser(\''+u.id+'\')" style="border:0;background:0 0;color:var(--text-danger);cursor:pointer;font-size:12px">Delete</button>';
     else html+='<span style="font-size:11px;color:var(--text-tertiary)">You</span>';
     html+='</div></div>';
@@ -438,4 +439,58 @@ async function deleteUser(userId){
   const u=allUsers.find(x=>x.id===userId);if(!u)return;
   if(!confirm('Delete '+u.DisplayName+'?'))return;
   try{const s=await getSiteId();const lid=await getListId('Users');await graphDelete('/sites/'+s+'/lists/'+lid+'/items/'+userId);allUsers=allUsers.filter(x=>x.id!==userId);renderAdminUsers()}catch(e){alert('Failed')}
+}
+
+// --- INVITE EMAILS ---
+async function sendInviteEmail(userId){
+  const u=allUsers.find(x=>x.id===userId);
+  if(!u||!u.Epost){alert('No email for this user');return}
+  try{
+    await sendInviteEmailSilent(u);
+    alert('Invite sent to '+u.DisplayName+' ('+u.Epost+')');
+  }catch(e){
+    console.error('Send mail failed:',e);
+    alert('Failed to send invite: '+e.message);
+  }
+}
+
+async function sendAllInvites(){
+  const active=allUsers.filter(u=>u.Active!==false&&u.Epost);
+  if(!active.length){alert('No active users to invite');return}
+  if(!confirm('Send invite email to '+active.length+' users?\n\n'+active.map(u=>u.DisplayName+' ('+u.Epost+')').join('\n')))return;
+
+  let sent=0,failed=0;
+  for(const u of active){
+    try{
+      await sendInviteEmailSilent(u);
+      sent++;
+    }catch(e){failed++}
+    await new Promise(res=>setTimeout(res,500));
+  }
+  alert('Done! '+sent+' invites sent'+(failed?', '+failed+' failed':'')+'.');
+}
+
+async function sendInviteEmailSilent(u){
+  const appUrl='https://franknh-design.github.io/2gmbooking/';
+  const body=buildInviteHtml(u);
+  await getToken();
+  const r=await fetch('https://graph.microsoft.com/v1.0/me/sendMail',{
+    method:'POST',
+    headers:{Authorization:'Bearer '+accessToken,'Content-Type':'application/json'},
+    body:JSON.stringify({message:{subject:'2GM Booking — You have been invited',body:{contentType:'HTML',content:body},toRecipients:[{emailAddress:{address:u.Epost}}]},saveToSentItems:true})
+  });
+  if(!r.ok)throw new Error('Failed');
+}
+
+function buildInviteHtml(u){
+  const appUrl='https://franknh-design.github.io/2gmbooking/';
+  return'<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px">'
+    +'<h2 style="color:#2C2C2A;margin-bottom:4px">Welcome to 2GM Booking</h2>'
+    +'<p style="color:#5F5E5A">Hi '+(u.DisplayName||'')+',</p>'
+    +'<p>You have been given access to the 2GM Booking system. Click the button below to sign in with your Microsoft account.</p>'
+    +'<div style="margin:24px 0"><a href="'+appUrl+'" style="display:inline-block;padding:12px 32px;background:#1D9E75;color:#fff;text-decoration:none;border-radius:8px;font-size:16px;font-weight:500">Open 2GM Booking</a></div>'
+    +'<p style="font-size:13px;color:#888">Sign in using your email: <strong>'+(u.Epost||'')+'</strong></p>'
+    +'<p style="font-size:13px;color:#888">If you have any questions, contact Frank at frank@2gm.no or +47 99 10 10 41.</p>'
+    +'<hr style="border:none;border-top:1px solid #eee;margin:24px 0">'
+    +'<p style="font-size:11px;color:#aaa">This email was sent from the 2GM Booking system.</p></div>';
 }

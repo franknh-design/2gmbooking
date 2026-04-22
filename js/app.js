@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v11.0 — app.js (Core)
+// 2GM Booking v11.1 — app.js (Core)
 // Auth, Graph API, Data, Rendering, Bookings
 // ============================================================
 
@@ -42,7 +42,7 @@ let currentView='main'; // 'main' or 'hours'
 async function signIn(){
   if(!msalReady){alert('Please wait...');return}
   try{
-    await msalInstance.loginPopup({scopes:['Sites.ReadWrite.All']});
+    await msalInstance.loginPopup({scopes:['Sites.ReadWrite.All','Mail.Send']});
     await getToken();await loadCurrentUser();
     showApp();applyPermissions();
     await loadProperties();await loadData();
@@ -51,8 +51,8 @@ async function signIn(){
 }
 async function getToken(){
   const a=msalInstance.getAllAccounts();if(!a.length)return null;
-  try{const r=await msalInstance.acquireTokenSilent({scopes:['Sites.ReadWrite.All'],account:a[0]});accessToken=r.accessToken;return accessToken}
-  catch(e){const r=await msalInstance.acquireTokenPopup({scopes:['Sites.ReadWrite.All']});accessToken=r.accessToken;return accessToken}
+  try{const r=await msalInstance.acquireTokenSilent({scopes:['Sites.ReadWrite.All','Mail.Send'],account:a[0]});accessToken=r.accessToken;return accessToken}
+  catch(e){const r=await msalInstance.acquireTokenPopup({scopes:['Sites.ReadWrite.All','Mail.Send']});accessToken=r.accessToken;return accessToken}
 }
 function signOut(){msalInstance.logoutPopup();document.getElementById('app').style.display='none';document.getElementById('loginScreen').style.display='block'}
 function showApp(){document.getElementById('loginScreen').style.display='none';document.getElementById('app').style.display='block'}
