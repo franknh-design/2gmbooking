@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v11.7 — modules.js
+// 2GM Booking v11.8 — modules.js
 // Hours, Archive, Import/Export, Admin (checkbox permissions)
 // ============================================================
 
@@ -619,6 +619,13 @@ function renderRatesPanel(){
       return'<tr><td>'+p.Title+'</td><td><input type="number" value="'+(p.DailyRate||'')+'" onchange="updatePropertyRate(\''+p.id+'\',this.value)" style="width:100%;padding:4px 6px;border:1px solid var(--border-tertiary);border-radius:4px;font-size:13px;text-align:right" placeholder="0"></td></tr>';
     }).join('')+'</tbody></table>';
 
+  // Room property selector
+  const rpSel=document.getElementById('rRoomProperty');
+  if(!rpSel.children.length){
+    rpSel.innerHTML=properties.map(p=>'<option value="'+p.id+'">'+p.Title+'</option>').join('');
+  }
+  renderRoomRates();
+
   // Custom rates
   const customList=document.getElementById('ratesCustomList');
   if(!allRates.length){
@@ -636,11 +643,44 @@ function renderRatesPanel(){
   propSel.innerHTML='<option value="">All properties</option>'+properties.map(p=>'<option value="'+p.Title+'">'+p.Title+'</option>').join('');
 }
 
+function renderRoomRates(){
+  const propId=document.getElementById('rRoomProperty').value;
+  const propRooms=allRooms.filter(r=>String(r.PropertyLookupId)===String(propId))
+    .sort((a,b)=>(a.Title||'').localeCompare(b.Title||'',undefined,{numeric:true}));
+
+  // Only show rooms that have a rate set, or all if few rooms (<30)
+  const roomsWithRate=propRooms.filter(r=>r.DailyRate);
+  const showAll=propRooms.length<=30;
+  const displayRooms=showAll?propRooms:roomsWithRate;
+
+  const container=document.getElementById('ratesRoomList');
+  if(!displayRooms.length){
+    container.innerHTML='<div class="muted" style="font-size:13px;padding:8px">'+(showAll?'No rooms in this property':'No rooms with individual rates set')+'</div>';
+    return;
+  }
+
+  container.innerHTML='<table style="font-size:13px;width:100%"><thead><tr><th>Room</th><th>Floor</th><th style="width:120px">Daily rate (kr)</th></tr></thead><tbody>'
+    +displayRooms.map(r=>{
+      const hasRate=r.DailyRate?'':'color:var(--text-tertiary)';
+      return'<tr><td style="font-weight:500">'+r.Title+'</td><td class="muted">Floor '+(r.Floor||'?')+'</td>'
+        +'<td><input type="number" value="'+(r.DailyRate||'')+'" onchange="updateRoomRate(\''+r.id+'\',this.value)" style="width:100%;padding:4px 6px;border:1px solid var(--border-tertiary);border-radius:4px;font-size:13px;text-align:right;'+hasRate+'" placeholder="Use property default"></td></tr>';
+    }).join('')+'</tbody></table>'
+    +(!showAll&&propRooms.length>roomsWithRate.length?'<div style="font-size:11px;color:var(--text-tertiary);margin-top:4px">'+roomsWithRate.length+' of '+propRooms.length+' rooms have individual rates. Rooms without rate use property default.</div>':'');
+}
+
 async function updatePropertyRate(propId,value){
   const rate=parseFloat(value)||0;
   try{
     await updateListItem('Properties',propId,{DailyRate:rate});
     const p=properties.find(x=>x.id===propId);if(p)p.DailyRate=rate;
+  }catch(e){alert('Failed: '+e.message)}
+}
+
+async function updateRoomRate(roomId,value){
+  const rate=value?parseFloat(value):null;
+  try{
+    await updateListItem('Rooms',roomId,{DailyRate:rate||0});
+    const r=allRooms.find(x=>x.id===roomId);if(r)r.DailyRate=rate||0;
   }catch(e){alert('Failed: '+e.message)}
 }
 
