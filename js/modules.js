@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v10.4 — modules.js
+// 2GM Booking v10.5 — modules.js
 // Hours, Archive, Import/Export, Admin (checkbox permissions)
 // ============================================================
 
@@ -58,11 +58,24 @@ function renderArchive(){
   body.innerHTML=limited.map(b=>{
     const sc={Completed:'background:var(--bg-secondary);color:var(--text-secondary)',Cancelled:'background:var(--bg-danger);color:var(--text-danger)',Active:'background:var(--bg-success);color:var(--text-success)',Upcoming:'background:var(--bg-warning);color:var(--text-warning)'}[b.Status]||'';
     return'<tr><td style="font-weight:500">'+getRoomTitle(b)+'</td><td>'+(b.Person_Name||'—')+'</td><td class="muted">'+(b.Company||'')+'</td><td>'+formatDate(b.Check_In)+'</td><td>'+(b.Check_Out?formatDate(b.Check_Out):'Open-ended')+'</td><td><span class="pill" style="'+sc+'">'+b.Status+'</span></td>'
-      +'<td>'+(b.Status==='Completed'||b.Status==='Cancelled'?'<button onclick="reopenBooking(\''+b.id+'\')" style="border:0;background:0 0;cursor:pointer;font-size:11px;color:var(--accent);text-decoration:underline">Reopen</button>':'')+'</td></tr>';
+      +'<td>'+(b.Status==='Completed'||b.Status==='Cancelled'?'<button onclick="reopenBooking(\''+b.id+'\')" style="padding:3px 10px;border:1px solid var(--accent);border-radius:4px;background:var(--bg-success);color:var(--text-success);cursor:pointer;font-size:11px;font-family:inherit">Reopen</button>':'')+'</td></tr>';
   }).join('')+(archived.length>100?'<tr><td colspan="7" class="loading">Showing 100 of '+archived.length+'</td></tr>':'');
 }
 function getRoomTitle(b){const r=allRooms.find(rm=>rm.id===String(b.RoomLookupId));return r?r.Title:'?'}
-async function reopenBooking(id){if(!confirm('Reopen as Upcoming?'))return;try{await updateListItem('Bookings',id,{Status:'Upcoming',Cleaning_Status:'None',Door_Tag_Status:'Needs-print'});await loadData();renderArchive()}catch(e){alert('Failed: '+e.message)}}
+async function reopenBooking(id){
+  const b=allBookings.find(x=>x.id===id);
+  if(!b)return;
+  // If check-in is today or earlier → Active, otherwise Upcoming
+  const ci=new Date(b.Check_In);ci.setHours(0,0,0,0);
+  const today=new Date();today.setHours(0,0,0,0);
+  const newStatus=ci<=today?'Active':'Upcoming';
+  if(!confirm('Reopen as '+newStatus+'?\n\n'+b.Person_Name+'\nCheck-in: '+formatDate(b.Check_In)+(b.Check_Out?'\nCheck-out: '+formatDate(b.Check_Out):'\nOpen-ended')))return;
+  try{
+    // Keep original dates, just change status and reset cleaning/doortag
+    await updateListItem('Bookings',id,{Status:newStatus,Cleaning_Status:'None',Door_Tag_Status:'Needs-print'});
+    await loadData();renderArchive();
+  }catch(e){alert('Failed: '+e.message)}
+}
 
 // --- EXPORT ARCHIVE ---
 function exportArchiveExcel(){
