@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v11.8 — modules.js
+// 2GM Booking v11.9 — modules.js
 // Hours, Archive, Import/Export, Admin (checkbox permissions)
 // ============================================================
 
@@ -619,11 +619,11 @@ function renderRatesPanel(){
       return'<tr><td>'+p.Title+'</td><td><input type="number" value="'+(p.DailyRate||'')+'" onchange="updatePropertyRate(\''+p.id+'\',this.value)" style="width:100%;padding:4px 6px;border:1px solid var(--border-tertiary);border-radius:4px;font-size:13px;text-align:right" placeholder="0"></td></tr>';
     }).join('')+'</tbody></table>';
 
-  // Room property selector
+  // Room property selector — always populate
   const rpSel=document.getElementById('rRoomProperty');
-  if(!rpSel.children.length){
-    rpSel.innerHTML=properties.map(p=>'<option value="'+p.id+'">'+p.Title+'</option>').join('');
-  }
+  const prevVal=rpSel.value;
+  rpSel.innerHTML=properties.map(p=>'<option value="'+p.id+'">'+p.Title+'</option>').join('');
+  if(prevVal&&[...rpSel.options].some(o=>o.value===prevVal))rpSel.value=prevVal;
   renderRoomRates();
 
   // Custom rates
