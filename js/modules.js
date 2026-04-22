@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v11.4 — modules.js
+// 2GM Booking v11.5 — modules.js
 // Hours, Archive, Import/Export, Admin (checkbox permissions)
 // ============================================================
 
@@ -85,8 +85,16 @@ function exportArchiveExcel(){
   const statusFilter=document.getElementById('archiveStatus').value;
   const roomIds=new Set(rooms.map(r=>r.id));
   let archived=allBookings.filter(b=>{const rid=String(b.RoomLookupId||'');if(!roomIds.has(rid))return false;if(statusFilter!=='all'&&b.Status!==statusFilter)return false;if(search){if(!((b.Person_Name||'')+(b.Company||'')+getRoomTitle(b)).toLowerCase().includes(search))return false}return true}).sort((a,b)=>new Date(b.Check_In||0)-new Date(a.Check_In||0));
-  const headers=['Room','Name','Company','Check-in','Check-out','Status','Door Tag','Cleaning','Notes'];
-  const rows=archived.map(b=>[getRoomTitle(b),b.Person_Name||'',b.Company||'',formatDate(b.Check_In),b.Check_Out?formatDate(b.Check_Out):'Open-ended',b.Status||'',b.Door_Tag_Status||'',b.Cleaning_Status||'',(b.Notes||'').replace(/[\r\n]+/g,' ')]);
+  const showPrices=can('view_prices');
+  const headers=['Room','Name','Company','Check-in','Check-out','Nights','Status','Door Tag','Cleaning','Notes'];
+  if(showPrices)headers.push('Rate/night','Total','Rate source');
+  const rows=archived.map(b=>{
+    const propTitle=b.Property_Name||selectedProperty.Title||'';
+    const nights=calcBookingNights(b);
+    const row=[getRoomTitle(b),b.Person_Name||'',b.Company||'',formatDate(b.Check_In),b.Check_Out?formatDate(b.Check_Out):'Open-ended',nights,b.Status||'',b.Door_Tag_Status||'',b.Cleaning_Status||'',(b.Notes||'').replace(/[\r\n]+/g,' ')];
+    if(showPrices){const cost=calcBookingCost(b,propTitle);row.push(cost.rate,cost.total,cost.source)}
+    return row;
+  });
   downloadCSV('Archive_'+(selectedProperty?selectedProperty.Title:'2GM').replace(/\s+/g,'_')+'_'+new Date().toISOString().split('T')[0],headers,rows);
 }
 
@@ -594,4 +602,81 @@ function exportOccupancyReport(){
   }
   rows.push(['Total',tO,tP,tP>0?Math.round(tO/tP*100)+'%':'']);
   downloadCSV('Occupancy_'+propName.replace(/\s+/g,'_')+'_'+year,headers,rows);
+}
+
+// --- RATES MANAGEMENT ---
+function openRatesPanel(){
+  if(!can('manage_rates')&&!can('admin')){alert('Access denied');return}
+  renderRatesPanel();
+  document.getElementById('ratesModal').classList.add('open');
+}
+
+function renderRatesPanel(){
+  // Property default rates
+  const propList=document.getElementById('ratesPropertyList');
+  propList.innerHTML='<table style="font-size:13px;width:100%"><thead><tr><th>Property</th><th style="width:120px">Daily rate (kr)</th></tr></thead><tbody>'
+    +properties.map(p=>{
+      return'<tr><td>'+p.Title+'</td><td><input type="number" value="'+(p.DailyRate||'')+'" onchange="updatePropertyRate(\''+p.id+'\',this.value)" style="width:100%;padding:4px 6px;border:1px solid var(--border-tertiary);border-radius:4px;font-size:13px;text-align:right" placeholder="0"></td></tr>';
+    }).join('')+'</tbody></table>';
+
+  // Custom rates
+  const customList=document.getElementById('ratesCustomList');
+  if(!allRates.length){
+    customList.innerHTML='<div class="muted" style="font-size:13px;padding:8px">No custom rates set</div>';
+  }else{
+    customList.innerHTML='<table style="font-size:13px;width:100%"><thead><tr><th>Company</th><th>Person</th><th>Property</th><th style="width:80px">Rate</th><th style="width:30px"></th></tr></thead><tbody>'
+      +allRates.map(r=>{
+        return'<tr><td>'+(r.Company||'<span class="muted">—</span>')+'</td><td>'+(r.Person_Name||'<span class="muted">—</span>')+'</td><td>'+(r.PropertyName||'<span class="muted">All</span>')+'</td><td style="text-align:right">'+(r.DailyRate||0)+' kr</td>'
+          +'<td><button onclick="deleteRate(\''+r.id+'\')" style="width:20px;height:20px;border-radius:50%;border:1px solid var(--border-tertiary);background:var(--bg-primary);color:var(--text-danger);cursor:pointer;font-size:11px;padding:0">✕</button></td></tr>';
+      }).join('')+'</tbody></table>';
+  }
+
+  // Property select for new rate
+  const propSel=document.getElementById('rProperty');
+  propSel.innerHTML='<option value="">All properties</option>'+properties.map(p=>'<option value="'+p.Title+'">'+p.Title+'</option>').join('');
+}
+
+async function updatePropertyRate(propId,value){
+  const rate=parseFloat(value)||0;
+  try{
+    await updateListItem('Properties',propId,{DailyRate:rate});
+    const p=properties.find(x=>x.id===propId);if(p)p.DailyRate=rate;
+  }catch(e){alert('Failed: '+e.message)}
+}
+
+async function addCustomRate(){
+  const company=document.getElementById('rCompany').value.trim();
+  const person=document.getElementById('rPerson').value.trim();
+  const propName=document.getElementById('rProperty').value;
+  const rate=parseFloat(document.getElementById('rRate').value);
+
+  if(!company&&!person){alert('Company or person name required');return}
+  if(!rate||rate<=0){alert('Rate must be a positive number');return}
+
+  const fields={
+    Title:(person||company)+' — '+(propName||'All')+' — '+rate+'kr',
+    Company:company||'',
+    Person_Name:person||'',
+    PropertyName:propName||'',
+    DailyRate:rate
+  };
+
+  try{
+    const result=await createListItem('Rates',fields);
+    allRates.push({id:result.id||'new',...fields});
+    document.getElementById('rCompany').value='';
+    document.getElementById('rPerson').value='';
+    document.getElementById('rRate').value='';
+    renderRatesPanel();
+  }catch(e){alert('Failed: '+e.message)}
+}
+
+async function deleteRate(id){
+  if(!confirm('Delete this rate?'))return;
+  try{
+    const s=await getSiteId();const lid=await getListId('Rates');
+    await graphDelete('/sites/'+s+'/lists/'+lid+'/items/'+id);
+    allRates=allRates.filter(r=>r.id!==id);
+    renderRatesPanel();
+  }catch(e){alert('Failed')}
 }

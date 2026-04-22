@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v11.4 — app.js (Core)
+// 2GM Booking v11.5 — app.js (Core)
 // Auth, Graph API, Data, Rendering, Bookings
 // ============================================================
 
@@ -8,7 +8,7 @@ const msalConfig={auth:{clientId:'f8e2259d-c440-41d3-94e3-3a2dce095817',authorit
 const msalInstance=new msal.PublicClientApplication(msalConfig);
 const SITE_HOST='2gmeiendom.sharepoint.com';
 const SITE_PATH='/sites/2GMBooking';
-const LIST_IDS={Properties:'d842d574-f238-442a-be3d-77334727e89f',Rooms:'bfa962a0-5eb2-416c-abe8-adba06558c11',Bookings:'fe1dfe34-23df-4864-b0b1-b01bf60bfb75',Persons:'ebbe517d-83f8-4169-9423-70c63a3f8c07',Cleaning_Log:'6b1bd5f9-c54f-42ee-892f-d50c79481375',Hours:'9db53c54-70dd-483d-ad1d-565d0e4ac7ac',Users:'1b9b866f-0944-4f43-a80d-2a630e1e7c25'};
+const LIST_IDS={Properties:'d842d574-f238-442a-be3d-77334727e89f',Rooms:'bfa962a0-5eb2-416c-abe8-adba06558c11',Bookings:'fe1dfe34-23df-4864-b0b1-b01bf60bfb75',Persons:'ebbe517d-83f8-4169-9423-70c63a3f8c07',Cleaning_Log:'6b1bd5f9-c54f-42ee-892f-d50c79481375',Hours:'9db53c54-70dd-483d-ad1d-565d0e4ac7ac',Users:'1b9b866f-0944-4f43-a80d-2a630e1e7c25',Rates:'a604493f-e879-48a0-bcab-cdeb9ae2195e'};
 
 // --- PERMISSIONS LIST ---
 const ALL_PERMS=[
@@ -25,6 +25,8 @@ const ALL_PERMS=[
   {key:'view_all_hours',label:'View all workers\' hours'},
   {key:'archive',label:'View archive'},
   {key:'import_export',label:'Import/Export'},
+  {key:'view_prices',label:'View prices'},
+  {key:'manage_rates',label:'Manage rates'},
   {key:'hours_reminder',label:'Daily hours reminder'},
   {key:'admin',label:'User administration'}
 ];
@@ -32,7 +34,7 @@ const ALL_PERMS=[
 // --- STATE ---
 let accessToken=null,siteId=null;
 let currentUser={email:'',displayName:'',permissions:[]};
-let properties=[],rooms=[],allRooms=[],bookings=[],allBookings=[],allUsers=[],allPersons=[];
+let properties=[],rooms=[],allRooms=[],bookings=[],allBookings=[],allUsers=[],allPersons=[],allRates=[];
 let selectedProperty=null,selectedRoom=null,selectedBooking=null;
 let editingBookingId=null,checkoutBookingId=null;
 let activeFilter=null;
@@ -112,7 +114,9 @@ function applyPermissions(){
   show('btnArchive',can('archive')||can('view_bookings'));
   show('btnUpcoming',can('view_bookings'));
   show('btnHours',can('view_hours')||can('edit_hours'));
-  showBlock('adminBar',can('admin'));
+  showBlock('adminBar',can('admin')||can('manage_rates'));
+  // Rates button only if manage_rates
+  const rb=el('ratesBtn');if(rb)rb.style.display=can('manage_rates')||can('admin')?'':'none';
   // Property select
   const ps=el('propertySelect');if(ps)ps.style.display='';
   // Sign out label
@@ -153,6 +157,7 @@ async function loadData(){
     allRooms=await getListItems('Rooms');
     allBookings=await getListItems('Bookings');
     try{allPersons=await getListItems('Persons')}catch(e){allPersons=[]}
+    try{allRates=await getListItems('Rates')}catch(e){allRates=[]}
     rooms=allRooms.filter(r=>String(r.PropertyLookupId)===String(selectedProperty.id));
     if(rooms.length===0){rooms=allRooms.filter(r=>r.Active!==false)}
     filterBookingsForView();
@@ -233,6 +238,53 @@ function getNextWashDate(booking){
 function getBookingForRoom(roomId){
   return bookings.find(b=>String(b.RoomLookupId)===String(roomId)&&b.Status==='Active')
     ||bookings.find(b=>String(b.RoomLookupId)===String(roomId)&&b.Status==='Upcoming');
+}
+
+// --- PRICING ---
+function getDailyRate(personName,company,propertyTitle){
+  // Priority: 1) Person+Property  2) Person (any property)  3) Company+Property  4) Company (any)  5) Property default
+  const pn=(personName||'').toLowerCase();
+  const co=(company||'').toLowerCase();
+  const pt=(propertyTitle||'').toLowerCase();
+
+  // 1. Person + specific property
+  let rate=allRates.find(r=>(r.Person_Name||'').toLowerCase()===pn&&(r.PropertyName||'').toLowerCase()===pt&&r.DailyRate);
+  if(rate)return{rate:rate.DailyRate,source:'Person+Property'};
+
+  // 2. Person any property
+  rate=allRates.find(r=>(r.Person_Name||'').toLowerCase()===pn&&!(r.PropertyName)&&r.DailyRate);
+  if(rate)return{rate:rate.DailyRate,source:'Person'};
+
+  // 3. Company + specific property
+  if(co){
+    rate=allRates.find(r=>(r.Company||'').toLowerCase()===co&&(r.PropertyName||'').toLowerCase()===pt&&r.DailyRate);
+    if(rate)return{rate:rate.DailyRate,source:'Company+Property'};
+  }
+
+  // 4. Company any property
+  if(co){
+    rate=allRates.find(r=>(r.Company||'').toLowerCase()===co&&!(r.PropertyName)&&r.DailyRate);
+    if(rate)return{rate:rate.DailyRate,source:'Company'};
+  }
+
+  // 5. Property default
+  const prop=properties.find(p=>(p.Title||'').toLowerCase()===pt);
+  if(prop&&prop.DailyRate)return{rate:prop.DailyRate,source:'Property default'};
+
+  return{rate:0,source:'No rate set'};
+}
+
+function calcBookingNights(booking){
+  if(!booking||!booking.Check_In)return 0;
+  const ci=new Date(booking.Check_In);ci.setHours(0,0,0,0);
+  const co=booking.Check_Out?new Date(booking.Check_Out):new Date();co.setHours(0,0,0,0);
+  return Math.max(0,Math.round((co-ci)/864e5));
+}
+
+function calcBookingCost(booking,propertyTitle){
+  const nights=calcBookingNights(booking);
+  const rateInfo=getDailyRate(booking.Person_Name,booking.Company,propertyTitle);
+  return{nights,rate:rateInfo.rate,total:nights*rateInfo.rate,source:rateInfo.source};
 }
 
 function doorTagBtn(b){
@@ -390,7 +442,16 @@ function showDetail(roomId){
         +'<tr><td>Door tag</td><td>'+dt+'</td></tr>'
         +'<tr><td>Cleaning</td><td>'+cl+'</td></tr>'
         +(booking.Notes?'<tr><td>Notes</td><td>'+booking.Notes+'</td></tr>':'')
-        +'</table>'+washHtml;
+        +'</table>'
+        +(can('view_prices')?(function(){
+          const cost=calcBookingCost(booking,propName);
+          if(!cost.rate)return'';
+          return'<div style="margin-top:10px;padding:10px;background:var(--bg-secondary);border-radius:var(--radius-md);font-size:12px">'
+            +'<strong>Pricing</strong> <span class="muted">('+cost.source+')</span><br>'
+            +'Rate: <strong>'+cost.rate+' kr/night</strong> × '+cost.nights+' nights = <strong>'+cost.total.toLocaleString('nb-NO')+' kr</strong>'
+            +'</div>';
+        })():'')
+        +washHtml;
     }else{
       infoHtml='<div class="detail-name">Room '+room.Title+'</div><div class="detail-sub">'+cl+'</div>'+washHtml;
     }
