@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v11.9 — app.js (Core)
+// 2GM Booking v12.1 — app.js (Core)
 // Auth, Graph API, Data, Rendering, Bookings
 // ============================================================
 
@@ -546,6 +546,51 @@ function openEditBooking(bookingId){
   document.getElementById('bookingModal').classList.add('open');
 }
 function closeBookingModal(){document.getElementById('bookingModal').classList.remove('open');editingBookingId=null}
+
+function findAvailableRoom(){
+  const checkIn=document.getElementById('fCheckIn').value;
+  const checkOut=document.getElementById('fCheckOut').value;
+  const info=document.getElementById('fRoomInfo');
+
+  if(!checkIn){info.textContent='Set check-in date first';info.style.color='var(--text-danger)';return}
+
+  const newIn=new Date(checkIn);newIn.setHours(0,0,0,0);
+  const newOut=checkOut?new Date(checkOut):null;
+  if(newOut)newOut.setHours(0,0,0,0);
+
+  // Find rooms that are NOT occupied during the given dates
+  const sorted=[...rooms].sort((a,b)=>(a.Title||'').localeCompare(b.Title||'',undefined,{numeric:true}));
+
+  for(const room of sorted){
+    const hasConflict=allBookings.some(b=>{
+      if(b.Status==='Cancelled'||b.Status==='Completed')return false;
+      if(String(b.RoomLookupId)!==String(room.id))return false;
+
+      const bIn=new Date(b.Check_In);bIn.setHours(0,0,0,0);
+      const bOut=b.Check_Out?new Date(b.Check_Out):null;
+      if(bOut)bOut.setHours(0,0,0,0);
+
+      // Check overlap
+      if(!bOut){return newIn>=bIn||(newOut?newOut>bIn:true)}
+      if(!newOut){return bOut>newIn||bIn>=newIn}
+      return newIn<bOut&&newOut>bIn;
+    });
+
+    if(!hasConflict){
+      // Found available room — select it
+      document.getElementById('fRoom').value=room.id;
+      const rm=rooms.find(r=>r.id===room.id);
+      document.getElementById('fFloor').value=rm?rm.Floor:'';
+      info.textContent='✓ Room '+room.Title+' (Floor '+room.Floor+') is available';
+      info.style.color='var(--text-success)';
+      return;
+    }
+  }
+
+  // No room available
+  info.textContent='✕ No rooms available for these dates';
+  info.style.color='var(--text-danger)';
+}
 
 async function saveBooking(){
   const roomId=document.getElementById('fRoom').value;
