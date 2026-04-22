@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- 2GM Booking v10.2 — Created by Frank Haugan -->
+<!-- 2GM Booking v10.3 — Created by Frank Haugan -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -104,6 +104,7 @@
       <button class="header-btn" onclick="loadData()">Refresh</button>
       <button class="header-btn" onclick="toggleIncoming()">Upcoming</button>
       <button class="header-btn" onclick="toggleArchive()">Archive</button>
+      <button class="header-btn" onclick="toggleHours()" id="hoursBtn">Hours</button>
       <button class="header-btn primary" onclick="openNewBooking()">+ New booking</button>
       <button class="header-btn" id="adminBtn" onclick="openAdminPanel()" style="display:none">⚙ Admin</button>
       <button class="header-btn" onclick="signOut()" style="margin-left:12px">Sign out</button>
@@ -132,7 +133,7 @@
     </div>
   </div>
   <div class="detail" id="detailPanel"></div>
-  <div style="text-align:center;padding:12px;font-size:11px;color:var(--text-tertiary);margin-top:1rem" id="appFooter">v10.2 — Created by Frank Haugan</div>
+  <div style="text-align:center;padding:12px;font-size:11px;color:var(--text-tertiary);margin-top:1rem" id="appFooter">v10.3 — Created by Frank Haugan</div>
   <div class="incoming-panel" id="incomingPanel">
     <div class="incoming-head"><span class="title">Upcoming — next 30 days</span><button class="modal-close" onclick="toggleIncoming()">&times;</button></div>
     <table id="tableUpcoming"><colgroup><col style="width:50px"><col><col style="width:80px"><col style="width:100px"><col style="width:100px"><col style="width:80px"><col style="width:50px"></colgroup>
@@ -162,9 +163,30 @@
     <tbody id="archiveBody"></tbody></table>
     </div>
   </div>
+  <!-- Hours Panel -->
+  <div class="incoming-panel" id="hoursPanel">
+    <div class="incoming-head">
+      <span class="title" id="hoursTitle">Hours</span>
+      <div style="display:flex;gap:8px;align-items:center">
+        <select id="hoursMonth" onchange="renderHours()" style="padding:5px 8px;border:1px solid var(--border-tertiary);border-radius:var(--radius-md);font-size:13px;font-family:inherit">
+        </select>
+        <select id="hoursYear" onchange="renderHours()" style="padding:5px 8px;border:1px solid var(--border-tertiary);border-radius:var(--radius-md);font-size:13px;font-family:inherit">
+        </select>
+        <button onclick="openAddHours()" style="padding:5px 12px;border:1px solid var(--accent);border-radius:var(--radius-md);font-size:13px;font-family:inherit;background:var(--accent);color:#fff;cursor:pointer;white-space:nowrap">+ Add hours</button>
+        <button onclick="exportHoursExcel()" style="padding:5px 12px;border:1px solid var(--border-tertiary);border-radius:var(--radius-md);font-size:13px;font-family:inherit;background:var(--bg-secondary);cursor:pointer;white-space:nowrap">↓ Export</button>
+        <button onclick="archiveHours()" style="padding:5px 12px;border:1px solid var(--border-tertiary);border-radius:var(--radius-md);font-size:13px;font-family:inherit;background:var(--bg-secondary);cursor:pointer;white-space:nowrap">Archive month</button>
+        <button class="modal-close" onclick="toggleHours()">&times;</button>
+      </div>
+    </div>
+    <div style="max-height:500px;overflow-y:auto">
+    <table id="hoursTable" style="font-size:13px">
+      <thead><tr><th style="width:90px">Date</th><th>Location</th><th style="width:70px">From</th><th style="width:70px">To</th><th style="width:70px;text-align:right">Hours</th><th style="width:40px"></th></tr></thead>
+      <tbody id="hoursBody"></tbody>
+      <tfoot><tr style="font-weight:500;border-top:2px solid var(--border-secondary)"><td colspan="4">Total</td><td style="text-align:right" id="hoursTotal">0.00</td><td></td></tr></tfoot>
+    </table>
+    </div>
+  </div>
 </div>
-
-<!-- New/Edit Booking Modal -->
 <div class="modal-overlay" id="bookingModal">
   <div class="modal">
     <div class="modal-header"><h2 id="bookingModalTitle">New booking</h2><button class="modal-close" onclick="closeBookingModal()">&times;</button></div>
@@ -255,6 +277,28 @@
       <button onclick="closeImportModal()">Cancel</button>
       <button id="importParseBtn" onclick="parseImportFile()" style="background:var(--bg-secondary);border:1px solid var(--border-tertiary);border-radius:var(--radius-md);padding:8px 16px;cursor:pointer;font-family:inherit;font-size:13px">Preview</button>
       <button class="primary" id="importRunBtn" onclick="runImport()" disabled style="background:#EF9F27;border-color:#EF9F27">Import</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add Hours Modal -->
+<div class="modal-overlay" id="hoursModal">
+  <div class="modal" style="max-width:450px">
+    <div class="modal-header"><h2 id="hoursModalTitle">Add hours</h2><button class="modal-close" onclick="closeHoursModal()">&times;</button></div>
+    <div class="modal-body">
+      <div class="form-group"><label>Date</label><input id="hDate" type="date"></div>
+      <div class="form-group"><label>Location</label>
+        <select id="hLocation" style="width:100%;padding:8px 10px;border:1px solid var(--border-tertiary);border-radius:var(--radius-md);font-family:inherit;font-size:14px">
+        </select>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>From</label><input id="hFrom" type="time" value="08:00"></div>
+        <div class="form-group"><label>To</label><input id="hTo" type="time" value="16:00"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button onclick="closeHoursModal()">Cancel</button>
+      <button class="primary" id="hoursSaveBtn" onclick="saveHours()">Save</button>
     </div>
   </div>
 </div>
@@ -369,9 +413,9 @@ async function loadCurrentUser(){
 function can(action){
   const r=currentUser.role;
   const perms={
-    SuperAdmin:['view','edit','create','delete','checkin','checkout','cancel','cleaning','doortag','import','export','print','admin'],
-    Admin:['view','edit','create','delete','checkin','checkout','cancel','cleaning','doortag','import','export','print'],
-    Cleaner:['view_clean','cleaning'],
+    SuperAdmin:['view','edit','create','delete','checkin','checkout','cancel','cleaning','doortag','import','export','print','admin','hours'],
+    Admin:['view','edit','create','delete','checkin','checkout','cancel','cleaning','doortag','import','export','print','hours'],
+    Cleaner:['view_clean','cleaning','print','doortag','hours'],
     ReadOnly:['view']
   };
   return(perms[r]||[]).includes(action);
@@ -403,6 +447,7 @@ function applyRole(){
   document.querySelectorAll('.header-btn').forEach(btn=>{
     if(btn.textContent==='Archive')btn.style.display=can('view')?'':'none';
     if(btn.textContent==='Upcoming')btn.style.display=can('view')||can('view_clean')?'':'none';
+    if(btn.textContent==='Hours')btn.style.display=can('hours')?'':'none';
   });
 
   // Update sign out button to show user info
@@ -775,7 +820,7 @@ function showDetail(roomId){
     const washHtml=getWashScheduleHtml(booking);
 
     if(isCleaner){
-      // Cleaner sees: room, cleaning status, wash schedule, mark-as-cleaned button
+      // Cleaner sees: room, cleaning status, wash schedule, mark-as-cleaned + print door tag
       p.innerHTML='<div class="detail-grid"><div class="detail-main">'
         +'<div class="detail-name">Room '+room.Title+'</div>'
         +'<div class="detail-sub">'+cl+'</div>'
@@ -783,6 +828,7 @@ function showDetail(roomId){
         +'</div><div class="detail-actions">'
         +(booking.Cleaning_Status==='Dirty'?'<button class="primary" onclick="markClean(\''+booking.id+'\')">Mark as cleaned ✓</button>':'')
         +(booking.Cleaning_Status==='Clean'?'<button onclick="markDirty(\''+booking.id+'\')">Mark as dirty</button>':'')
+        +'<button onclick="printDoorTag(\''+booking.id+'\')">Print door tag</button>'
         +'<button onclick="closeDetail()">Close</button>'
         +'</div></div>';
     }else{
@@ -1541,6 +1587,211 @@ async function deleteUser(userId){
     allUsers=allUsers.filter(x=>x.id!==userId);
     renderAdminUsers();
   }catch(e){console.error(e);alert('Failed to delete: '+e.message)}
+}
+
+// ============================================================
+// HOURS / TIMELISTE
+// ============================================================
+let allHours=[],editingHoursId=null;
+
+function toggleHours(){
+  const p=document.getElementById('hoursPanel');
+  document.getElementById('incomingPanel').classList.remove('open');
+  document.getElementById('archivePanel').classList.remove('open');
+  p.classList.toggle('open');
+  if(p.classList.contains('open')){initHoursSelectors();loadHours()}
+}
+
+function initHoursSelectors(){
+  const now=new Date();
+  const monthSel=document.getElementById('hoursMonth');
+  const yearSel=document.getElementById('hoursYear');
+  const months=['January','February','March','April','May','June','July','August','September','October','November','December'];
+
+  if(!monthSel.children.length){
+    monthSel.innerHTML=months.map((m,i)=>'<option value="'+i+'"'+(i===now.getMonth()?' selected':'')+'>'+m+'</option>').join('');
+    const curYear=now.getFullYear();
+    yearSel.innerHTML=[curYear-1,curYear,curYear+1].map(y=>'<option value="'+y+'"'+(y===curYear?' selected':'')+'>'+y+'</option>').join('');
+  }
+
+  // Populate location select in add-hours modal
+  const locSel=document.getElementById('hLocation');
+  if(!locSel.children.length||locSel.children.length<=1){
+    locSel.innerHTML=properties.map(p=>'<option value="'+p.Title+'">'+p.Title+'</option>').join('');
+  }
+}
+
+async function loadHours(){
+  try{
+    allHours=await getListItems('Hours');
+    renderHours();
+  }catch(e){console.error('Failed to load hours:',e)}
+}
+
+function renderHours(){
+  const month=parseInt(document.getElementById('hoursMonth').value);
+  const year=parseInt(document.getElementById('hoursYear').value);
+  const months=['January','February','March','April','May','June','July','August','September','October','November','December'];
+
+  // Filter hours for current user (cleaners see only their own, admin sees all)
+  const isAdmin=can('admin');
+  const filtered=allHours.filter(h=>{
+    if(!h.Date)return false;
+    const d=new Date(h.Date);
+    if(d.getMonth()!==month||d.getFullYear()!==year)return false;
+    if(!isAdmin&&h.Worker&&h.Worker.toLowerCase()!==currentUser.email)return false;
+    return true;
+  }).sort((a,b)=>new Date(a.Date)-new Date(b.Date));
+
+  document.getElementById('hoursTitle').textContent='Hours — '+months[month]+' '+year+(isAdmin?' (all workers)':' ('+currentUser.displayName+')');
+
+  const body=document.getElementById('hoursBody');
+  if(!filtered.length){
+    body.innerHTML='<tr><td colspan="6" class="loading">No hours registered</td></tr>';
+    document.getElementById('hoursTotal').textContent='0.00';
+    return;
+  }
+
+  let total=0;
+  body.innerHTML=filtered.map(h=>{
+    const hrs=calcHoursDiff(h.Time_From,h.Time_To);
+    total+=hrs;
+    const dateStr=formatDate(h.Date);
+    const dayNames=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+    const day=dayNames[new Date(h.Date).getDay()];
+    return'<tr>'
+      +'<td>'+day+' '+dateStr+'</td>'
+      +'<td>'+(h.Location||'')+(isAdmin&&h.Worker?' <span class="muted" style="font-size:11px">('+h.Worker+')</span>':'')+'</td>'
+      +'<td>'+(h.Time_From||'')+'</td>'
+      +'<td>'+(h.Time_To||'')+'</td>'
+      +'<td style="text-align:right">'+hrs.toFixed(2)+'</td>'
+      +'<td><button onclick="deleteHoursEntry(\''+h.id+'\')" style="border:0;background:0 0;color:var(--text-danger);cursor:pointer;font-size:11px">✕</button></td>'
+      +'</tr>';
+  }).join('');
+
+  document.getElementById('hoursTotal').textContent=total.toFixed(2);
+}
+
+function calcHoursDiff(from,to){
+  if(!from||!to)return 0;
+  const [fh,fm]=(from||'00:00').split(':').map(Number);
+  const [th,tm]=(to||'00:00').split(':').map(Number);
+  let diff=(th*60+tm)-(fh*60+fm);
+  if(diff<0)diff+=24*60; // overnight
+  return diff/60;
+}
+
+function openAddHours(){
+  editingHoursId=null;
+  document.getElementById('hoursModalTitle').textContent='Add hours';
+  document.getElementById('hDate').value=new Date().toISOString().split('T')[0];
+  document.getElementById('hFrom').value='08:00';
+  document.getElementById('hTo').value='16:00';
+  document.getElementById('hoursModal').classList.add('open');
+}
+
+function closeHoursModal(){document.getElementById('hoursModal').classList.remove('open');editingHoursId=null}
+
+async function saveHours(){
+  const date=document.getElementById('hDate').value;
+  const location=document.getElementById('hLocation').value;
+  const from=document.getElementById('hFrom').value;
+  const to=document.getElementById('hTo').value;
+
+  if(!date){alert('Date is required');return}
+  if(!from||!to){alert('From and To times are required');return}
+
+  const btn=document.getElementById('hoursSaveBtn');
+  btn.disabled=true;btn.textContent='Saving...';
+
+  const fields={
+    Title:currentUser.displayName+' — '+location+' — '+date,
+    Date:date+'T00:00:00Z',
+    Location:location,
+    Time_From:from,
+    Time_To:to,
+    Worker:currentUser.email
+  };
+
+  try{
+    await createListItem('Hours',fields);
+    closeHoursModal();
+    await loadHours();
+  }catch(e){
+    console.error(e);alert('Failed to save: '+e.message);
+  }finally{btn.disabled=false;btn.textContent='Save'}
+}
+
+async function deleteHoursEntry(id){
+  if(!confirm('Delete this entry?'))return;
+  try{
+    const s=await getSiteId();const lid=await getListId('Hours');
+    await graphDelete('/sites/'+s+'/lists/'+lid+'/items/'+id);
+    allHours=allHours.filter(h=>h.id!==id);
+    renderHours();
+  }catch(e){console.error(e);alert('Failed to delete')}
+}
+
+function exportHoursExcel(){
+  const month=parseInt(document.getElementById('hoursMonth').value);
+  const year=parseInt(document.getElementById('hoursYear').value);
+  const months=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const isAdmin=can('admin');
+
+  const filtered=allHours.filter(h=>{
+    if(!h.Date)return false;
+    const d=new Date(h.Date);
+    if(d.getMonth()!==month||d.getFullYear()!==year)return false;
+    if(!isAdmin&&h.Worker&&h.Worker.toLowerCase()!==currentUser.email)return false;
+    return true;
+  }).sort((a,b)=>new Date(a.Date)-new Date(b.Date));
+
+  const headers=['Date','Day','Location','From','To','Hours'+(isAdmin?';Worker':'')];
+  const dayNames=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  let total=0;
+  const rows=filtered.map(h=>{
+    const hrs=calcHoursDiff(h.Time_From,h.Time_To);
+    total+=hrs;
+    const d=new Date(h.Date);
+    const r=[formatDate(h.Date),dayNames[d.getDay()],h.Location||'',h.Time_From||'',h.Time_To||'',hrs.toFixed(2)];
+    if(isAdmin)r.push(h.Worker||'');
+    return r;
+  });
+  rows.push(['','','','','Total',total.toFixed(2)]);
+
+  const escape=v=>{const s=String(v);if(s.includes(';')||s.includes('"'))return'"'+s.replace(/"/g,'""')+'"';return s};
+  const csv='\uFEFF'+headers.join(';')+'\n'+rows.map(r=>r.map(escape).join(';')).join('\n');
+  const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;a.download='Hours_'+months[month]+'_'+year+'.csv';a.click();
+  URL.revokeObjectURL(url);
+}
+
+async function archiveHours(){
+  const month=parseInt(document.getElementById('hoursMonth').value);
+  const year=parseInt(document.getElementById('hoursYear').value);
+  const months=['January','February','March','April','May','June','July','August','September','October','November','December'];
+
+  const filtered=allHours.filter(h=>{
+    if(!h.Date)return false;
+    const d=new Date(h.Date);
+    return d.getMonth()===month&&d.getFullYear()===year;
+  });
+
+  if(!filtered.length){alert('No hours to archive for '+months[month]+' '+year);return}
+  if(!confirm('Archive '+filtered.length+' entries for '+months[month]+' '+year+'?\n\nThis will mark them as archived. They will still appear in the Hours list but can be filtered out.'))return;
+
+  let done=0;
+  for(const h of filtered){
+    try{
+      await updateListItem('Hours',h.id,{Archived:'Yes'});
+      h.Archived='Yes';
+      done++;
+    }catch(e){console.error(e)}
+  }
+  alert(done+' entries archived.');
+  renderHours();
 }
 
 // ============================================================
