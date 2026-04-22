@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v11.5 — modules.js
+// 2GM Booking v11.6 — modules.js
 // Hours, Archive, Import/Export, Admin (checkbox permissions)
 // ============================================================
 
@@ -626,7 +626,7 @@ function renderRatesPanel(){
   }else{
     customList.innerHTML='<table style="font-size:13px;width:100%"><thead><tr><th>Company</th><th>Person</th><th>Property</th><th style="width:80px">Rate</th><th style="width:30px"></th></tr></thead><tbody>'
       +allRates.map(r=>{
-        return'<tr><td>'+(r.Company||'<span class="muted">—</span>')+'</td><td>'+(r.Person_Name||'<span class="muted">—</span>')+'</td><td>'+(r.PropertyName||'<span class="muted">All</span>')+'</td><td style="text-align:right">'+(r.DailyRate||0)+' kr</td>'
+        return'<tr><td>'+(r.Company||'<span class="muted">—</span>')+'</td><td>'+(r.Person_Name||'<span class="muted">—</span>')+'</td><td>'+(r.Property||'<span class="muted">All</span>')+'</td><td style="text-align:right">'+(r.DailyRate||0)+' kr</td>'
           +'<td><button onclick="deleteRate(\''+r.id+'\')" style="width:20px;height:20px;border-radius:50%;border:1px solid var(--border-tertiary);background:var(--bg-primary);color:var(--text-danger);cursor:pointer;font-size:11px;padding:0">✕</button></td></tr>';
       }).join('')+'</tbody></table>';
   }
@@ -657,7 +657,7 @@ async function addCustomRate(){
     Title:(person||company)+' — '+(propName||'All')+' — '+rate+'kr',
     Company:company||'',
     Person_Name:person||'',
-    PropertyName:propName||'',
+    Property:propName||'',
     DailyRate:rate
   };
 

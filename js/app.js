@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v11.5 — app.js (Core)
+// 2GM Booking v11.6 — app.js (Core)
 // Auth, Graph API, Data, Rendering, Bookings
 // ============================================================
 
@@ -248,22 +248,22 @@ function getDailyRate(personName,company,propertyTitle){
   const pt=(propertyTitle||'').toLowerCase();
 
   // 1. Person + specific property
-  let rate=allRates.find(r=>(r.Person_Name||'').toLowerCase()===pn&&(r.PropertyName||'').toLowerCase()===pt&&r.DailyRate);
+  let rate=allRates.find(r=>(r.Person_Name||'').toLowerCase()===pn&&(r.Property||'').toLowerCase()===pt&&r.DailyRate);
   if(rate)return{rate:rate.DailyRate,source:'Person+Property'};
 
   // 2. Person any property
-  rate=allRates.find(r=>(r.Person_Name||'').toLowerCase()===pn&&!(r.PropertyName)&&r.DailyRate);
+  rate=allRates.find(r=>(r.Person_Name||'').toLowerCase()===pn&&!(r.Property)&&r.DailyRate);
   if(rate)return{rate:rate.DailyRate,source:'Person'};
 
   // 3. Company + specific property
   if(co){
-    rate=allRates.find(r=>(r.Company||'').toLowerCase()===co&&(r.PropertyName||'').toLowerCase()===pt&&r.DailyRate);
+    rate=allRates.find(r=>(r.Company||'').toLowerCase()===co&&(r.Property||'').toLowerCase()===pt&&r.DailyRate);
     if(rate)return{rate:rate.DailyRate,source:'Company+Property'};
   }
 
   // 4. Company any property
   if(co){
-    rate=allRates.find(r=>(r.Company||'').toLowerCase()===co&&!(r.PropertyName)&&r.DailyRate);
+    rate=allRates.find(r=>(r.Company||'').toLowerCase()===co&&!(r.Property)&&r.DailyRate);
     if(rate)return{rate:rate.DailyRate,source:'Company'};
   }
 
