@@ -101,6 +101,7 @@
       <select id="propertySelect"></select>
       <button class="header-btn" onclick="loadData()">Refresh</button>
       <button class="header-btn" onclick="toggleIncoming()">Incoming List</button>
+      <button class="header-btn" onclick="toggleArchive()">Archive</button>
       <button class="header-btn primary" onclick="openNewBooking()">+ New booking</button>
       <button class="header-btn" onclick="signOut()" style="margin-left:12px">Sign out</button>
     </div>
@@ -133,6 +134,27 @@
     <table><colgroup><col style="width:50px"><col><col style="width:80px"><col style="width:100px"><col style="width:100px"><col style="width:80px"></colgroup>
     <thead><tr><th>Room</th><th>Name</th><th>Company</th><th>Check-in</th><th>Check-out</th><th>Status</th></tr></thead>
     <tbody id="incomingBody"></tbody></table>
+  </div>
+  <div class="incoming-panel" id="archivePanel">
+    <div class="incoming-head">
+      <span class="title" id="archiveTitle">Archive</span>
+      <div style="display:flex;gap:8px;align-items:center">
+        <input type="text" id="archiveSearch" placeholder="Search name, company, room..." oninput="renderArchive()" style="padding:5px 10px;border:1px solid var(--border-tertiary);border-radius:var(--radius-md);font-size:13px;font-family:inherit;width:200px">
+        <select id="archiveStatus" onchange="renderArchive()" style="padding:5px 8px;border:1px solid var(--border-tertiary);border-radius:var(--radius-md);font-size:13px;font-family:inherit">
+          <option value="all">All statuses</option>
+          <option value="Completed" selected>Completed</option>
+          <option value="Cancelled">Cancelled</option>
+          <option value="Active">Active</option>
+          <option value="Upcoming">Upcoming</option>
+        </select>
+        <button class="modal-close" onclick="toggleArchive()">&times;</button>
+      </div>
+    </div>
+    <div style="max-height:500px;overflow-y:auto">
+    <table><colgroup><col style="width:50px"><col><col style="width:80px"><col style="width:90px"><col style="width:90px"><col style="width:80px"><col style="width:60px"></colgroup>
+    <thead><tr><th>Room</th><th>Name</th><th>Company</th><th>Check-in</th><th>Check-out</th><th>Status</th><th></th></tr></thead>
+    <tbody id="archiveBody"></tbody></table>
+    </div>
   </div>
 </div>
 
@@ -553,6 +575,8 @@ async function saveBooking(){
 // ============================================================
 function toggleIncoming(){
   const p=document.getElementById('incomingPanel');
+  // Close archive if open
+  document.getElementById('archivePanel').classList.remove('open');
   p.classList.toggle('open');
   if(p.classList.contains('open'))renderIncoming();
 }
@@ -593,6 +617,79 @@ function renderIncoming(){
       +'<td><span class="pill" style="background:var(--bg-warning);color:var(--text-warning)">Upcoming</span></td>'
       +'</tr>';
   }).join('');
+}
+
+// ============================================================
+// ARCHIVE
+// ============================================================
+function toggleArchive(){
+  const p=document.getElementById('archivePanel');
+  // Close incoming if open
+  document.getElementById('incomingPanel').classList.remove('open');
+  p.classList.toggle('open');
+  if(p.classList.contains('open'))renderArchive();
+}
+
+function renderArchive(){
+  const search=(document.getElementById('archiveSearch').value||'').toLowerCase();
+  const statusFilter=document.getElementById('archiveStatus').value;
+  const roomIds=new Set(rooms.map(r=>r.id));
+
+  let archived=allBookings.filter(b=>{
+    const rid=String(b.RoomLookupId||'');
+    if(!roomIds.has(rid))return false;
+    if(statusFilter!=='all'&&b.Status!==statusFilter)return false;
+    if(search){
+      const haystack=((b.Person_Name||'')+(b.Company||'')+getRoomTitle(b)).toLowerCase();
+      if(!haystack.includes(search))return false;
+    }
+    return true;
+  });
+
+  // Sort by check-in descending (newest first)
+  archived.sort((a,b)=>new Date(b.Check_In||0)-new Date(a.Check_In||0));
+
+  // Limit to 100 for performance
+  const limited=archived.slice(0,100);
+  const total=archived.length;
+
+  document.getElementById('archiveTitle').textContent='Archive — '+total+' booking'+(total!==1?'s':'');
+
+  const body=document.getElementById('archiveBody');
+  if(!limited.length){
+    body.innerHTML='<tr><td colspan="7" class="loading">No bookings found</td></tr>';
+    return;
+  }
+
+  body.innerHTML=limited.map(b=>{
+    const roomTitle=getRoomTitle(b);
+    const statusColors={Completed:'background:var(--bg-secondary);color:var(--text-secondary)',Cancelled:'background:var(--bg-danger);color:var(--text-danger)',Active:'background:var(--bg-success);color:var(--text-success)',Upcoming:'background:var(--bg-warning);color:var(--text-warning)'};
+    const sc=statusColors[b.Status]||'';
+    return'<tr>'
+      +'<td style="font-weight:500">'+roomTitle+'</td>'
+      +'<td>'+( b.Person_Name||'—')+'</td>'
+      +'<td class="muted">'+(b.Company||'')+'</td>'
+      +'<td>'+formatDate(b.Check_In)+'</td>'
+      +'<td>'+(b.Check_Out?formatDate(b.Check_Out):'Open-ended')+'</td>'
+      +'<td><span class="pill" style="'+sc+'">'+b.Status+'</span></td>'
+      +'<td>'+(b.Status==='Completed'||b.Status==='Cancelled'?'<button style="border:0;background:0 0;cursor:pointer;font-size:11px;color:var(--accent);text-decoration:underline" onclick="reopenBooking(\''+b.id+'\')">Reopen</button>':'')+'</td>'
+      +'</tr>';
+  }).join('');
+  if(total>100)body.innerHTML+='<tr><td colspan="7" class="loading">Showing 100 of '+total+' — use search to narrow</td></tr>';
+}
+
+function getRoomTitle(booking){
+  const room=allRooms.find(r=>r.id===String(booking.RoomLookupId));
+  return room?room.Title:'?';
+}
+
+async function reopenBooking(id){
+  if(!confirm('Reopen this booking as Upcoming?'))return;
+  try{
+    await updateListItem('Bookings',id,{Status:'Upcoming',Cleaning_Status:'None',Door_Tag_Status:'Needs-print'});
+    await loadData();
+    renderArchive();
+  }catch(e){console.error(e);alert('Failed to reopen: '+e.message)}
 }
 
 // ============================================================
