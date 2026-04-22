@@ -282,12 +282,20 @@ async function loadData(){
       rooms=allRooms.filter(r=>r.Active!==false);
     }
 
-    // Filter bookings: match via RoomLookupId to rooms in this property, and status Active or Upcoming
+    // Filter bookings: match via RoomLookupId to rooms in this property
+    // Active bookings always show. Upcoming only if check-in is within 2 days.
     const roomIds=new Set(rooms.map(r=>r.id));
+    const now=new Date();now.setHours(0,0,0,0);
+    const cutoff=new Date(now);cutoff.setDate(cutoff.getDate()+2);
     bookings=allBookings.filter(b=>{
       const rid=String(b.RoomLookupId||'');
-      const statusOk=(b.Status==='Active'||b.Status==='Upcoming');
-      return roomIds.has(rid)&&statusOk;
+      if(!roomIds.has(rid))return false;
+      if(b.Status==='Active')return true;
+      if(b.Status==='Upcoming'){
+        const ci=new Date(b.Check_In);ci.setHours(0,0,0,0);
+        return ci<=cutoff;
+      }
+      return false;
     });
 
     renderFloors();
@@ -541,7 +549,15 @@ async function cancelBooking(id){
 // Refresh UI from local data without waiting for API
 function refreshLocal(){
   const roomIdSet=new Set(rooms.map(r=>r.id));
-  bookings=allBookings.filter(b=>{const rid=String(b.RoomLookupId||'');return roomIdSet.has(rid)&&(b.Status==='Active'||b.Status==='Upcoming')});
+  const now=new Date();now.setHours(0,0,0,0);
+  const cutoff=new Date(now);cutoff.setDate(cutoff.getDate()+2);
+  bookings=allBookings.filter(b=>{
+    const rid=String(b.RoomLookupId||'');
+    if(!roomIdSet.has(rid))return false;
+    if(b.Status==='Active')return true;
+    if(b.Status==='Upcoming'){const ci=new Date(b.Check_In);ci.setHours(0,0,0,0);return ci<=cutoff}
+    return false;
+  });
   renderFloors();updateStats();
 }
 
