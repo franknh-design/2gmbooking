@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v10.7 — app.js (Core)
+// 2GM Booking v10.8 — app.js (Core)
 // Auth, Graph API, Data, Rendering, Bookings
 // ============================================================
 
@@ -25,6 +25,7 @@ const ALL_PERMS=[
   {key:'view_all_hours',label:'View all workers\' hours'},
   {key:'archive',label:'View archive'},
   {key:'import_export',label:'Import/Export'},
+  {key:'hours_reminder',label:'Daily hours reminder'},
   {key:'admin',label:'User administration'}
 ];
 
@@ -45,6 +46,7 @@ async function signIn(){
     await getToken();await loadCurrentUser();
     showApp();applyPermissions();
     await loadProperties();await loadData();
+    checkHoursReminder();
   }catch(e){console.error('Login failed:',e)}
 }
 async function getToken(){
@@ -543,10 +545,51 @@ function initResize(){
   });
 }
 
+// --- HOURS REMINDER ---
+async function checkHoursReminder(){
+  if(!can('hours_reminder'))return;
+  try{
+    const hours=await getListItems('Hours');
+    // Check yesterday (or last workday if today is Monday)
+    const today=new Date();today.setHours(0,0,0,0);
+    let checkDate=new Date(today);
+    if(today.getDay()===1){
+      // Monday: check Friday
+      checkDate.setDate(checkDate.getDate()-3);
+    }else if(today.getDay()===0){
+      // Sunday: don't remind
+      return;
+    }else if(today.getDay()===6){
+      // Saturday: check Friday
+      checkDate.setDate(checkDate.getDate()-1);
+    }else{
+      // Tue-Fri: check yesterday
+      checkDate.setDate(checkDate.getDate()-1);
+    }
+
+    const checkDateStr=checkDate.toISOString().split('T')[0];
+    const hasHours=hours.some(h=>{
+      if(!h.Date)return false;
+      if((h.Worker||'').toLowerCase()!==currentUser.email)return false;
+      const hDate=new Date(h.Date);hDate.setHours(0,0,0,0);
+      return hDate.getTime()===checkDate.getTime();
+    });
+
+    if(!hasHours){
+      const days=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+      const dayName=days[checkDate.getDay()];
+      document.getElementById('hoursReminderText').textContent='⏰ You have not registered hours for '+dayName+' '+formatDate(checkDate)+'. Please add your hours.';
+      document.getElementById('hoursReminder').style.display='flex';
+    }
+  }catch(e){console.error('Reminder check failed:',e)}
+}
+
+function dismissReminder(){document.getElementById('hoursReminder').style.display='none'}
+
 // --- INIT ---
 let msalReady=false;
 msalInstance.initialize().then(()=>{
   msalReady=true;initResize();
   const a=msalInstance.getAllAccounts();
-  if(a.length>0){getToken().then(async()=>{if(accessToken){await loadCurrentUser();showApp();applyPermissions();await loadProperties();await loadData()}})}
+  if(a.length>0){getToken().then(async()=>{if(accessToken){await loadCurrentUser();showApp();applyPermissions();await loadProperties();await loadData();checkHoursReminder()}})}
 });

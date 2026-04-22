@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v10.7 — modules.js
+// 2GM Booking v10.8 — modules.js
 // Hours, Archive, Import/Export, Admin (checkbox permissions)
 // ============================================================
 
@@ -149,7 +149,7 @@ async function runImport(){
 }
 
 // --- HOURS ---
-let allHours=[];
+let allHours=[],editingHoursId=null;
 
 function toggleHours(){
   if(currentView==='hours'){showMainView();return}
@@ -212,9 +212,9 @@ function renderHours(){
     const d=new Date(h.Date);
     const workerUser=allUsers.find(u=>(u.Epost||'').toLowerCase()===(h.Worker||'').toLowerCase());
     const wName=workerUser?workerUser.DisplayName:(h.Worker||'');
-    return'<tr><td>'+days[d.getDay()]+' '+formatDate(h.Date)+'</td><td>'+(h.Location||'')+'</td><td>'+wName+'</td><td>'+(h.Time_From||'')+'</td><td>'+(h.Time_To||'')+'</td><td style="text-align:right">'+hrs.toFixed(2)+'</td>'
+    return'<tr onclick="openEditHours(\''+h.id+'\')" style="cursor:pointer"><td>'+days[d.getDay()]+' '+formatDate(h.Date)+'</td><td>'+(h.Location||'')+'</td><td>'+wName+'</td><td>'+(h.Time_From||'')+'</td><td>'+(h.Time_To||'')+'</td><td style="text-align:right">'+hrs.toFixed(2)+'</td>'
       +'<td class="muted" style="font-size:11px">'+(h.Notes||'')+'</td>'
-      +'<td style="text-align:right"><button onclick="deleteHoursEntry(\''+h.id+'\')" style="width:20px;height:20px;border-radius:50%;border:1px solid var(--border-tertiary);background:var(--bg-primary);color:var(--text-danger);cursor:pointer;font-size:11px;line-height:1;padding:0" title="Delete">✕</button></td></tr>';
+      +'<td style="text-align:right"><button onclick="event.stopPropagation();deleteHoursEntry(\''+h.id+'\')" style="width:20px;height:20px;border-radius:50%;border:1px solid var(--border-tertiary);background:var(--bg-primary);color:var(--text-danger);cursor:pointer;font-size:11px;line-height:1;padding:0" title="Delete">✕</button></td></tr>';
   }).join('');
   document.getElementById('hoursTotal').textContent=total.toFixed(2);
 }
@@ -225,7 +225,10 @@ function calcHoursDiff(from,to){
 }
 
 function openAddHours(){
-  // Default date: first day of selected month, or today if current month
+  editingHoursId=null;
+  document.getElementById('hoursModal').querySelector('h2').textContent='Add hours';
+  document.getElementById('hoursSaveBtn').textContent='Save';
+  // Default date: last day of selected month, or today if current month
   const selMonth=parseInt(document.getElementById('hoursMonth').value);
   const selYear=parseInt(document.getElementById('hoursYear').value);
   const now=new Date();
@@ -233,7 +236,6 @@ function openAddHours(){
   if(selMonth===now.getMonth()&&selYear===now.getFullYear()){
     defaultDate=now.toISOString().split('T')[0];
   }else{
-    // Last day of selected month (to start filling from end)
     const lastDay=new Date(selYear,selMonth+1,0).getDate();
     defaultDate=selYear+'-'+String(selMonth+1).padStart(2,'0')+'-'+String(lastDay).padStart(2,'0');
   }
@@ -241,19 +243,38 @@ function openAddHours(){
   document.getElementById('hFrom').value='08:00';document.getElementById('hTo').value='16:00';
   document.getElementById('hLocation').value='';
   document.getElementById('hNotes').value='';
-  // Worker selector
+  populateHoursWorkerSelect();
+  document.getElementById('hoursModal').classList.add('open');
+}
+
+function openEditHours(id){
+  const h=allHours.find(x=>x.id===id);if(!h)return;
+  editingHoursId=id;
+  document.getElementById('hoursModal').querySelector('h2').textContent='Edit hours';
+  document.getElementById('hoursSaveBtn').textContent='Save changes';
+  document.getElementById('hDate').value=h.Date?toISODate(h.Date):'';
+  document.getElementById('hFrom').value=h.Time_From||'08:00';
+  document.getElementById('hTo').value=h.Time_To||'16:00';
+  document.getElementById('hLocation').value=h.Location||'';
+  document.getElementById('hNotes').value=h.Notes||'';
+  populateHoursWorkerSelect(h.Worker);
+  document.getElementById('hoursModal').classList.add('open');
+}
+
+function populateHoursWorkerSelect(preselectedWorker){
   const ws=document.getElementById('hWorker');
+  const selected=(preselectedWorker||currentUser.email).toLowerCase();
   if(can('edit_others_hours')){
     const workers=allUsers.filter(u=>u.Active!==false);
-    ws.innerHTML=workers.map(u=>'<option value="'+(u.Epost||'')+'"'+(u.Epost&&u.Epost.toLowerCase()===currentUser.email?' selected':'')+'>'+u.DisplayName+'</option>').join('');
+    ws.innerHTML=workers.map(u=>'<option value="'+(u.Epost||'')+'"'+((u.Epost||'').toLowerCase()===selected?' selected':'')+'>'+u.DisplayName+'</option>').join('');
     document.getElementById('hWorkerGroup').style.display='';
   }else{
     ws.innerHTML='<option value="'+currentUser.email+'">'+currentUser.displayName+'</option>';
     document.getElementById('hWorkerGroup').style.display='none';
   }
-  document.getElementById('hoursModal').classList.add('open');
 }
-function closeHoursModal(){document.getElementById('hoursModal').classList.remove('open')}
+
+function closeHoursModal(){document.getElementById('hoursModal').classList.remove('open');editingHoursId=null}
 
 async function saveHours(){
   const date=document.getElementById('hDate').value;const location=document.getElementById('hLocation').value;
@@ -265,11 +286,17 @@ async function saveHours(){
   const workerName=workerUser?workerUser.DisplayName:worker;
   const btn=document.getElementById('hoursSaveBtn');btn.disabled=true;btn.textContent='Saving...';
   const fields={Title:workerName+' — '+location+' — '+date,Date:date+'T00:00:00Z',Location:location,Time_From:from,Time_To:to,Worker:worker};
-  if(notes)fields.Notes=notes;
+  if(notes)fields.Notes=notes;else fields.Notes='';
   try{
-    await createListItem('Hours',fields);
+    if(editingHoursId){
+      await updateListItem('Hours',editingHoursId,fields);
+      const local=allHours.find(x=>x.id===editingHoursId);
+      if(local)Object.assign(local,fields);
+    }else{
+      await createListItem('Hours',fields);
+    }
     closeHoursModal();await loadHoursData();
-  }catch(e){alert('Failed: '+e.message)}finally{btn.disabled=false;btn.textContent='Save'}
+  }catch(e){alert('Failed: '+e.message)}finally{btn.disabled=false;btn.textContent=editingHoursId?'Save changes':'Save'}
 }
 
 async function deleteHoursEntry(id){
