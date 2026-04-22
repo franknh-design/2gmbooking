@@ -103,6 +103,7 @@
       <button class="header-btn" onclick="toggleIncoming()">Upcoming</button>
       <button class="header-btn" onclick="toggleArchive()">Archive</button>
       <button class="header-btn primary" onclick="openNewBooking()">+ New booking</button>
+      <button class="header-btn" id="adminBtn" onclick="openAdminPanel()" style="display:none">⚙ Admin</button>
       <button class="header-btn" onclick="signOut()" style="margin-left:12px">Sign out</button>
     </div>
   </div>
@@ -255,6 +256,37 @@
   </div>
 </div>
 
+<!-- Admin Modal -->
+<div class="modal-overlay" id="adminModal">
+  <div class="modal" style="max-width:600px">
+    <div class="modal-header"><h2>User Administration</h2><button class="modal-close" onclick="closeAdminPanel()">&times;</button></div>
+    <div class="modal-body">
+      <div id="adminUserList" style="max-height:300px;overflow-y:auto;margin-bottom:16px">
+        <table style="font-size:13px;width:100%">
+          <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Active</th><th></th></tr></thead>
+          <tbody id="adminUserBody"></tbody>
+        </table>
+      </div>
+      <div style="border-top:1px solid var(--border-tertiary);padding-top:14px">
+        <div style="font-size:13px;font-weight:500;margin-bottom:8px">Add user</div>
+        <div class="form-row" style="grid-template-columns:1fr 1fr 1fr auto;gap:8px">
+          <input id="aName" type="text" placeholder="Display name" style="padding:6px 8px;border:1px solid var(--border-tertiary);border-radius:var(--radius-md);font-size:13px;font-family:inherit">
+          <input id="aEmail" type="email" placeholder="email@example.com" style="padding:6px 8px;border:1px solid var(--border-tertiary);border-radius:var(--radius-md);font-size:13px;font-family:inherit">
+          <select id="aRole" style="padding:6px 8px;border:1px solid var(--border-tertiary);border-radius:var(--radius-md);font-size:13px;font-family:inherit">
+            <option value="Admin">Admin</option>
+            <option value="Cleaner">Cleaner</option>
+            <option value="ReadOnly">ReadOnly</option>
+          </select>
+          <button onclick="addUser()" style="padding:6px 14px;background:var(--accent);color:#fff;border:none;border-radius:var(--radius-md);cursor:pointer;font-size:13px;white-space:nowrap">+ Add</button>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button onclick="closeAdminPanel()">Close</button>
+    </div>
+  </div>
+</div>
+
 <script>
 // ============================================================
 // AUTH
@@ -262,8 +294,9 @@
 const msalConfig={auth:{clientId:'f8e2259d-c440-41d3-94e3-3a2dce095817',authority:'https://login.microsoftonline.com/2b495272-f733-47a8-a771-bb744309fa17',redirectUri:'https://franknh-design.github.io/2gmbooking/'},cache:{cacheLocation:'localStorage'}};
 const msalInstance=new msal.PublicClientApplication(msalConfig);
 let accessToken=null;
+let currentUser={email:'',role:'ReadOnly',displayName:''};
 
-async function signIn(){if(!msalReady){alert('Please wait, loading...');return}try{await msalInstance.loginPopup({scopes:['Sites.ReadWrite.All']});await getToken();showApp();await loadProperties();await loadData()}catch(e){console.error('Login failed:',e)}}
+async function signIn(){if(!msalReady){alert('Please wait, loading...');return}try{await msalInstance.loginPopup({scopes:['Sites.ReadWrite.All']});await getToken();await loadCurrentUser();showApp();applyRole();await loadProperties();await loadData()}catch(e){console.error('Login failed:',e)}}
 async function getToken(){const a=msalInstance.getAllAccounts();if(!a.length)return null;try{const r=await msalInstance.acquireTokenSilent({scopes:['Sites.ReadWrite.All'],account:a[0]});accessToken=r.accessToken;return accessToken}catch(e){const r=await msalInstance.acquireTokenPopup({scopes:['Sites.ReadWrite.All']});accessToken=r.accessToken;return accessToken}}
 function signOut(){msalInstance.logoutPopup();document.getElementById('app').style.display='none';document.getElementById('loginScreen').style.display='block'}
 function showApp(){document.getElementById('loginScreen').style.display='none';document.getElementById('app').style.display='block'}
@@ -282,7 +315,7 @@ async function graphDelete(ep){await getToken();const r=await fetch('https://gra
 
 async function getSiteId(){if(siteId)return siteId;const r=await graphGet('/sites/'+SITE_HOST+':'+SITE_PATH);siteId=r.id;return siteId}
 
-const LIST_IDS={'Properties':'d842d574-f238-442a-be3d-77334727e89f','Rooms':'bfa962a0-5eb2-416c-abe8-adba06558c11','Bookings':'fe1dfe34-23df-4864-b0b1-b01bf60bfb75','Persons':'ebbe517d-83f8-4169-9423-70c63a3f8c07','Cleaning_Log':'6b1bd5f9-c54f-42ee-892f-d50c79481375','Hours':'9db53c54-70dd-483d-ad1d-565d0e4ac7ac'};
+const LIST_IDS={'Properties':'d842d574-f238-442a-be3d-77334727e89f','Rooms':'bfa962a0-5eb2-416c-abe8-adba06558c11','Bookings':'fe1dfe34-23df-4864-b0b1-b01bf60bfb75','Persons':'ebbe517d-83f8-4169-9423-70c63a3f8c07','Cleaning_Log':'6b1bd5f9-c54f-42ee-892f-d50c79481375','Hours':'9db53c54-70dd-483d-ad1d-565d0e4ac7ac','Users':'1b9b866f-0944-4f43-a80d-2a630e1e7c25'};
 async function getListId(name){if(LIST_IDS[name])return LIST_IDS[name];throw new Error('List not found: '+name)}
 
 async function getListItems(listName){const s=await getSiteId();const lid=await getListId(listName);let all=[];let url='/sites/'+s+'/lists/'+lid+'/items?$expand=fields&$top=500';while(url){const r=await graphGet(url);all=all.concat(r.value.map(i=>({id:i.id,...i.fields})));url=r['@odata.nextLink']?r['@odata.nextLink'].replace('https://graph.microsoft.com/v1.0',''):null}return all}
@@ -297,6 +330,91 @@ let properties=[],rooms=[],allRooms=[],bookings=[],allBookings=[];
 let selectedProperty=null,selectedRoom=null,selectedBooking=null;
 let editingBookingId=null;
 let checkoutBookingId=null;
+let allUsers=[];
+
+// ============================================================
+// ROLE MANAGEMENT
+// ============================================================
+async function loadCurrentUser(){
+  const accounts=msalInstance.getAllAccounts();
+  if(!accounts.length)return;
+  const email=(accounts[0].username||'').toLowerCase();
+  currentUser.email=email;
+  currentUser.displayName=accounts[0].name||email;
+
+  try{
+    allUsers=await getListItems('Users');
+    const match=allUsers.find(u=>(u.Email||'').toLowerCase()===email&&u.Active!==false);
+    if(match){
+      currentUser.role=match.Role||'ReadOnly';
+      currentUser.displayName=match.DisplayName||currentUser.displayName;
+      currentUser.userId=match.id;
+    }else{
+      // Unknown user — default ReadOnly
+      currentUser.role='ReadOnly';
+    }
+  }catch(e){
+    console.error('Failed to load user role:',e);
+    currentUser.role='ReadOnly';
+  }
+  console.log('User:',currentUser.email,'Role:',currentUser.role);
+}
+
+// Permission check
+function can(action){
+  const r=currentUser.role;
+  const perms={
+    SuperAdmin:['view','edit','create','delete','checkin','checkout','cancel','cleaning','doortag','import','export','print','admin'],
+    Admin:['view','edit','create','delete','checkin','checkout','cancel','cleaning','doortag','import','export','print'],
+    Cleaner:['view_clean','cleaning'],
+    ReadOnly:['view']
+  };
+  return(perms[r]||[]).includes(action);
+}
+
+function applyRole(){
+  const r=currentUser.role;
+
+  // Header buttons visibility
+  const els={
+    newBookingBtn:can('create'),
+    upcomingBtn:true,
+    archiveBtn:can('view'),
+    refreshBtn:true,
+    adminBtn:can('admin'),
+    propertySelect:true
+  };
+
+  // Show/hide new booking button
+  document.querySelectorAll('.header-btn.primary').forEach(btn=>{
+    if(btn.textContent.includes('New booking'))btn.style.display=can('create')?'':'none';
+  });
+
+  // Show/hide admin button
+  const adminBtn=document.getElementById('adminBtn');
+  if(adminBtn)adminBtn.style.display=can('admin')?'':'none';
+
+  // Show/hide archive and upcoming buttons
+  document.querySelectorAll('.header-btn').forEach(btn=>{
+    if(btn.textContent==='Archive')btn.style.display=can('view')?'':'none';
+    if(btn.textContent==='Upcoming')btn.style.display=can('view')||can('view_clean')?'':'none';
+  });
+
+  // Update sign out button to show user info
+  document.querySelectorAll('.header-btn').forEach(btn=>{
+    if(btn.onclick&&btn.getAttribute('onclick')==='signOut()')
+      btn.textContent=currentUser.displayName+' ('+r+') — Sign out';
+  });
+
+  // Cleaner: hide stats that don't apply
+  if(r==='Cleaner'){
+    document.querySelectorAll('.stat').forEach((el,i)=>{
+      // Only show "Needs cleaning"
+      if(i!==2)el.style.display='none';
+    });
+    document.querySelector('.stats').style.gridTemplateColumns='1fr';
+  }
+}
 
 // ============================================================
 // DATA LOADING
@@ -475,8 +593,19 @@ function datesCell(b){
 }
 
 function renderRow(room,booking){
+  const isCleaner=currentUser.role==='Cleaner';
   const n=booking?booking.Person_Name:'';
   const c=booking?(booking.Company||''):'';
+  if(isCleaner){
+    // Cleaner: only room, cleaning status, wash info
+    const washNext=booking?getNextWashDate(booking):'';
+    return'<tr onclick="showDetail(\''+room.id+'\')">'
+      +'<td>'+cleanBtn(booking)+'</td>'
+      +'<td style="font-variant-numeric:tabular-nums;font-weight:500">'+room.Title+'</td>'
+      +'<td>'+(booking?'Occupied':'<span class="empty-text">Empty</span>')+'</td>'
+      +'<td>'+washNext+'</td>'
+      +'</tr>';
+  }
   return'<tr onclick="showDetail(\''+room.id+'\')">'
     +'<td>'+doorTagBtn(booking)+'</td>'
     +'<td>'+cleanBtn(booking)+'</td>'
@@ -488,6 +617,17 @@ function renderRow(room,booking){
     +'</tr>';
 }
 
+function getNextWashDate(booking){
+  if(!booking||!booking.Check_In)return'';
+  if(booking.Status!=='Active')return'';
+  const washes=calcWashDates(booking.Check_In,booking.Check_Out);
+  const next=washes.find(w=>!w.isPast);
+  if(!next)return'<span class="muted">—</span>';
+  const dayNames=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  if(next.isToday)return'<span class="pill danger">Today — '+next.type+'</span>';
+  return dayNames[next.date.getDay()]+' '+formatDate(next.date)+' — '+next.type;
+}
+
 function renderFloors(){
   const bMap={};
   bookings.forEach(b=>{
@@ -495,13 +635,23 @@ function renderFloors(){
     if(rid&&(!bMap[rid]||b.Status==='Active'))bMap[rid]=b;
   });
 
+  const isCleaner=currentUser.role==='Cleaner';
+  const cols=isCleaner?4:7;
+
+  // Update table headers for cleaner view
+  if(isCleaner){
+    document.querySelectorAll('#table1 thead tr, #table2 thead tr').forEach(tr=>{
+      tr.innerHTML='<th>C</th><th>Room</th><th>Status</th><th>Next wash</th>';
+    });
+  }
+
   const f1=getFilteredRoomsForFloor(1).sort((a,b)=>(a.Title||'').localeCompare(b.Title||'',undefined,{numeric:true}));
   const f2=getFilteredRoomsForFloor(2).sort((a,b)=>(a.Title||'').localeCompare(b.Title||'',undefined,{numeric:true}));
 
   const allF1=rooms.filter(r=>r.Floor===1||String(r.Floor)==='1');
   const allF2=rooms.filter(r=>r.Floor===2||String(r.Floor)==='2');
 
-  const noMatch='<tr><td colspan="7" class="loading">No matching rooms</td></tr>';
+  const noMatch='<tr><td colspan="'+cols+'" class="loading">No matching rooms</td></tr>';
   document.getElementById('floor1Body').innerHTML=f1.length?f1.map(r=>renderRow(r,bMap[r.id])).join(''):noMatch;
   document.getElementById('floor2Body').innerHTML=f2.length?f2.map(r=>renderRow(r,bMap[r.id])).join(''):noMatch;
 
@@ -537,41 +687,79 @@ function showDetail(roomId){
   const booking=getBookingForRoom(roomId);
   selectedRoom=room;selectedBooking=booking;
   const p=document.getElementById('detailPanel');
+  const isCleaner=currentUser.role==='Cleaner';
 
   if(!booking){
-    p.innerHTML='<div class="detail-grid"><div class="detail-main">'
-      +'<div class="detail-name">Room '+room.Title+'</div>'
-      +'<div class="detail-sub">Empty — '+selectedProperty.Title+'</div>'
-      +'</div><div class="detail-actions">'
-      +'<button class="primary" onclick="openNewBooking(\''+room.id+'\')">Create booking</button>'
-      +'<button onclick="closeDetail()">Close</button>'
-      +'</div></div>';
+    if(isCleaner){
+      p.innerHTML='<div class="detail-grid"><div class="detail-main">'
+        +'<div class="detail-name">Room '+room.Title+'</div>'
+        +'<div class="detail-sub">Empty</div>'
+        +'</div><div class="detail-actions">'
+        +'<button onclick="closeDetail()">Close</button>'
+        +'</div></div>';
+    }else{
+      p.innerHTML='<div class="detail-grid"><div class="detail-main">'
+        +'<div class="detail-name">Room '+room.Title+'</div>'
+        +'<div class="detail-sub">Empty — '+selectedProperty.Title+'</div>'
+        +'</div><div class="detail-actions">'
+        +(can('create')?'<button class="primary" onclick="openNewBooking(\''+room.id+'\')">Create booking</button>':'')
+        +'<button onclick="closeDetail()">Close</button>'
+        +'</div></div>';
+    }
   }else{
     const dt={'None':'—','Needs-print':'✕ Needs print','Printed':'✓ Printed'}[booking.Door_Tag_Status]||'—';
     const cl={'None':'—','Dirty':'● Needs cleaning','Clean':'● Clean'}[booking.Cleaning_Status]||'—';
     const washHtml=getWashScheduleHtml(booking);
-    p.innerHTML='<div class="detail-grid"><div class="detail-main">'
-      +'<div class="detail-name">'+booking.Person_Name+'</div>'
-      +'<div class="detail-sub">Room '+room.Title+' · '+(booking.Company||'')+' · '+selectedProperty.Title+'</div>'
-      +'<table class="detail-info">'
-      +'<tr><td>Check-in</td><td>'+formatDate(booking.Check_In)+'</td></tr>'
-      +'<tr><td>Check-out</td><td>'+(booking.Check_Out?formatDate(booking.Check_Out):'Open-ended')+'</td></tr>'
-      +'<tr><td>Status</td><td>'+booking.Status+'</td></tr>'
-      +'<tr><td>Door tag</td><td>'+dt+'</td></tr>'
-      +'<tr><td>Cleaning</td><td>'+cl+'</td></tr>'
-      +(booking.Notes?'<tr><td>Notes</td><td>'+booking.Notes+'</td></tr>':'')
-      +'</table>'
-      +washHtml
-      +'</div><div class="detail-actions">'
-      +'<button onclick="openEditBooking(\''+booking.id+'\')">Edit booking</button>'
-      +'<button onclick="printDoorTag(\''+booking.id+'\')">Print door tag</button>'
-      +(booking.Status==='Upcoming'?'<button class="primary" onclick="checkIn(\''+booking.id+'\')">Check in</button>':'')
-      +(booking.Status==='Active'?'<button class="primary" style="background:#EF9F27;border-color:#EF9F27" onclick="checkOut(\''+booking.id+'\')">Check out</button>':'')
-      +'<button class="danger" onclick="cancelBooking(\''+booking.id+'\')">Cancel booking</button>'
-      +'<button onclick="closeDetail()">Close</button>'
-      +'</div></div>';
+
+    if(isCleaner){
+      // Cleaner sees: room, cleaning status, wash schedule, mark-as-cleaned button
+      p.innerHTML='<div class="detail-grid"><div class="detail-main">'
+        +'<div class="detail-name">Room '+room.Title+'</div>'
+        +'<div class="detail-sub">'+cl+'</div>'
+        +washHtml
+        +'</div><div class="detail-actions">'
+        +(booking.Cleaning_Status==='Dirty'?'<button class="primary" onclick="markClean(\''+booking.id+'\')">Mark as cleaned ✓</button>':'')
+        +(booking.Cleaning_Status==='Clean'?'<button onclick="markDirty(\''+booking.id+'\')">Mark as dirty</button>':'')
+        +'<button onclick="closeDetail()">Close</button>'
+        +'</div></div>';
+    }else{
+      p.innerHTML='<div class="detail-grid"><div class="detail-main">'
+        +'<div class="detail-name">'+booking.Person_Name+'</div>'
+        +'<div class="detail-sub">Room '+room.Title+' · '+(booking.Company||'')+' · '+selectedProperty.Title+'</div>'
+        +'<table class="detail-info">'
+        +'<tr><td>Check-in</td><td>'+formatDate(booking.Check_In)+'</td></tr>'
+        +'<tr><td>Check-out</td><td>'+(booking.Check_Out?formatDate(booking.Check_Out):'Open-ended')+'</td></tr>'
+        +'<tr><td>Status</td><td>'+booking.Status+'</td></tr>'
+        +'<tr><td>Door tag</td><td>'+dt+'</td></tr>'
+        +'<tr><td>Cleaning</td><td>'+cl+'</td></tr>'
+        +(booking.Notes?'<tr><td>Notes</td><td>'+booking.Notes+'</td></tr>':'')
+        +'</table>'
+        +washHtml
+        +'</div><div class="detail-actions">'
+        +(can('edit')?'<button onclick="openEditBooking(\''+booking.id+'\')">Edit booking</button>':'')
+        +(can('print')?'<button onclick="printDoorTag(\''+booking.id+'\')">Print door tag</button>':'')
+        +(booking.Status==='Upcoming'&&can('checkin')?'<button class="primary" onclick="checkIn(\''+booking.id+'\')">Check in</button>':'')
+        +(booking.Status==='Active'&&can('checkout')?'<button class="primary" style="background:#EF9F27;border-color:#EF9F27" onclick="checkOut(\''+booking.id+'\')">Check out</button>':'')
+        +(can('cancel')?'<button class="danger" onclick="cancelBooking(\''+booking.id+'\')">Cancel booking</button>':'')
+        +'<button onclick="closeDetail()">Close</button>'
+        +'</div></div>';
+    }
   }
   p.classList.add('open');
+}
+
+// Quick cleaning buttons for cleaners
+async function markClean(id){
+  try{await updateListItem('Bookings',id,{Cleaning_Status:'Clean'});
+    const local=allBookings.find(x=>x.id===id);if(local)local.Cleaning_Status='Clean';
+    closeDetail();refreshLocal();loadData();
+  }catch(e){console.error(e);alert('Failed')}
+}
+async function markDirty(id){
+  try{await updateListItem('Bookings',id,{Cleaning_Status:'Dirty'});
+    const local=allBookings.find(x=>x.id===id);if(local)local.Cleaning_Status='Dirty';
+    closeDetail();refreshLocal();loadData();
+  }catch(e){console.error(e);alert('Failed')}
 }
 function closeDetail(){document.getElementById('detailPanel').classList.remove('open');selectedRoom=null;selectedBooking=null}
 
@@ -1220,6 +1408,79 @@ async function cycleDTDirect(id,status){
 }
 
 // ============================================================
+// USER ADMIN
+// ============================================================
+function openAdminPanel(){
+  if(!can('admin')){alert('Access denied');return}
+  renderAdminUsers();
+  document.getElementById('adminModal').classList.add('open');
+}
+function closeAdminPanel(){document.getElementById('adminModal').classList.remove('open')}
+
+function renderAdminUsers(){
+  const body=document.getElementById('adminUserBody');
+  body.innerHTML=allUsers.map(u=>{
+    const isSelf=(u.Email||'').toLowerCase()===currentUser.email;
+    const roleOptions=['SuperAdmin','Admin','Cleaner','ReadOnly'].map(r=>
+      '<option value="'+r+'"'+(u.Role===r?' selected':'')+'>'+r+'</option>'
+    ).join('');
+    return'<tr>'
+      +'<td style="padding:4px 6px">'+(u.DisplayName||'—')+'</td>'
+      +'<td style="padding:4px 6px;font-size:12px;color:var(--text-secondary)">'+(u.Email||'')+'</td>'
+      +'<td style="padding:4px 6px"><select onchange="changeUserRole(\''+u.id+'\',this.value)"'+(isSelf?' disabled':'')+' style="padding:3px 6px;border:1px solid var(--border-tertiary);border-radius:4px;font-size:12px;font-family:inherit">'+roleOptions+'</select></td>'
+      +'<td style="padding:4px 6px;text-align:center"><input type="checkbox"'+(u.Active!==false?' checked':'')+(isSelf?' disabled':'')+' onchange="toggleUserActive(\''+u.id+'\',this.checked)"></td>'
+      +'<td style="padding:4px 6px">'+(isSelf?'<span style="font-size:11px;color:var(--text-tertiary)">You</span>':'<button onclick="deleteUser(\''+u.id+'\')" style="border:0;background:0 0;color:var(--text-danger);cursor:pointer;font-size:11px">Delete</button>')+'</td>'
+      +'</tr>';
+  }).join('');
+}
+
+async function changeUserRole(userId,newRole){
+  try{
+    await updateListItem('Users',userId,{Role:newRole});
+    const u=allUsers.find(x=>x.id===userId);
+    if(u)u.Role=newRole;
+    renderAdminUsers();
+  }catch(e){console.error(e);alert('Failed to update role')}
+}
+
+async function toggleUserActive(userId,active){
+  try{
+    await updateListItem('Users',userId,{Active:active});
+    const u=allUsers.find(x=>x.id===userId);
+    if(u)u.Active=active;
+  }catch(e){console.error(e);alert('Failed to update')}
+}
+
+async function addUser(){
+  const name=document.getElementById('aName').value.trim();
+  const email=document.getElementById('aEmail').value.trim().toLowerCase();
+  const role=document.getElementById('aRole').value;
+
+  if(!name||!email){alert('Name and email are required');return}
+  if(allUsers.find(u=>(u.Email||'').toLowerCase()===email)){alert('User already exists');return}
+
+  try{
+    const result=await createListItem('Users',{Title:name,DisplayName:name,Email:email,Role:role,Active:true});
+    allUsers.push({id:result.id||'new',Title:name,DisplayName:name,Email:email,Role:role,Active:true});
+    document.getElementById('aName').value='';
+    document.getElementById('aEmail').value='';
+    renderAdminUsers();
+  }catch(e){console.error(e);alert('Failed to add user: '+e.message)}
+}
+
+async function deleteUser(userId){
+  const u=allUsers.find(x=>x.id===userId);
+  if(!u)return;
+  if(!confirm('Delete user '+u.DisplayName+' ('+u.Email+')?'))return;
+  try{
+    const s=await getSiteId();const lid=await getListId('Users');
+    await graphDelete('/sites/'+s+'/lists/'+lid+'/items/'+userId);
+    allUsers=allUsers.filter(x=>x.id!==userId);
+    renderAdminUsers();
+  }catch(e){console.error(e);alert('Failed to delete: '+e.message)}
+}
+
+// ============================================================
 // STAT CARD FILTERING
 // ============================================================
 let activeFilter=null;
@@ -1318,8 +1579,14 @@ msalInstance.initialize().then(()=>{
   initResize();
   const a=msalInstance.getAllAccounts();
   if(a.length>0){
-    getToken().then(()=>{
-      if(accessToken){showApp();loadProperties().then(()=>loadData())}
+    getToken().then(async()=>{
+      if(accessToken){
+        await loadCurrentUser();
+        showApp();
+        applyRole();
+        await loadProperties();
+        await loadData();
+      }
     });
   }
 });
