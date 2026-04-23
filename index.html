@@ -1372,7 +1372,7 @@ function parseImportFile(){
     // Parse header and clean up non-breaking spaces
     const headerLine=lines[0].replace(/\xa0/g,' '); // Replace non-breaking spaces
     const sep=headerLine.includes(';')?';':',';
-    const headers=headerLine.split(sep).map(h=>h.trim().toLowerCase().replace(/['"]/g,''));
+    const headers=headerLine.split(sep).map(h=>h.trim().toLowerCase().replace(/['"]/g,'').replace(/\xa0/g,' ').replace(/�/g,' ').trim());
     console.log('Headers found:',headers);
 
     // Find column indices (flexible matching)
