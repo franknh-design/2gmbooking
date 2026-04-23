@@ -734,136 +734,69 @@ async function deleteRate(id){
 }
 
 
+// ===== v12.5 Full control system =====
 
-// ===== v12.2 Import/Export (UTF-8 safe, CSV + JSON) =====
-
-function downloadFile(filename, content, type='text/csv') {
-  const BOM = '\uFEFF';
-  const blob = new Blob([BOM + content], { type: type + ';charset=utf-8;' });
-  const link = document.createElement('a');
-  link.href = URL.createObjectURL(blob);
-  link.download = filename;
-  link.click();
+function toDateOnly(d) {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
 }
 
-// JSON export (safe)
-function exportJSON(data) {
-  downloadFile('archive.json', JSON.stringify(data, null, 2), 'application/json');
-}
+function categorizeBookings(data) {
+  const today = toDateOnly(new Date());
 
-// CSV export (safe)
-function exportCSV(data) {
-  if (!data || !data.length) return;
+  const upcoming = [];
+  const active = [];
+  const past = [];
 
-  const headers = Object.keys(data[0]).join(';');
-  const rows = data.map(obj =>
-    Object.values(obj)
-      .map(v => `"${String(v).replace(/"/g, '""')}"`)
-      .join(';')
-  );
+  data.forEach(item => {
+    const checkIn = toDateOnly(new Date(item.Check_In));
+    const checkOut = toDateOnly(new Date(item.Check_Out));
 
-  const csv = [headers, ...rows].join('\n');
-  downloadFile('archive.csv', csv, 'text/csv');
-}
+    if (!item.status) item.status = 'auto';
 
-// Import handler
-function importFile(file, callback) {
-  const reader = new FileReader();
-
-  reader.onload = function(e) {
-    const text = e.target.result;
-
-    if (file.name.endsWith('.json')) {
-      try {
-        const data = JSON.parse(text);
-        callback(data);
-      } catch (err) {
-        alert('Feil i JSON-fil');
-      }
+    if (item.status === 'active') {
+      active.push(item);
+      return;
     }
 
-    else if (file.name.endsWith('.csv')) {
-      const rows = text.split('\n').map(r => r.split(';'));
-      const headers = rows[0];
-      const data = rows.slice(1).filter(r => r.length > 1).map(r => {
-        let obj = {};
-        headers.forEach((h, i) => {
-          obj[h] = r[i]?.replace(/^"|"$/g, '').replace(/""/g, '"');
-        });
-        return obj;
-      });
-      callback(data);
+    if (item.status === 'upcoming') {
+      upcoming.push(item);
+      return;
     }
-  };
 
-  reader.readAsText(file, 'UTF-8');
-}
-
-// ===== End v12.2 =====
-
-
-
-// ===== v12.3 Import Preview System =====
-
-function showImportPreview(data) {
-  const container = document.getElementById('importPreview');
-  if (!container) return;
-
-  container.innerHTML = '';
-
-  if (!data || !data.length) {
-    container.innerHTML = '<p>Ingen data funnet</p>';
-    return;
-  }
-
-  const table = document.createElement('table');
-  table.style.width = '100%';
-  table.border = '1';
-
-  const headerRow = document.createElement('tr');
-  Object.keys(data[0]).forEach(key => {
-    const th = document.createElement('th');
-    th.innerText = key;
-    headerRow.appendChild(th);
-  });
-  table.appendChild(headerRow);
-
-  data.slice(0, 10).forEach(row => {
-    const tr = document.createElement('tr');
-    Object.values(row).forEach(val => {
-      const td = document.createElement('td');
-      td.innerText = val;
-      tr.appendChild(td);
-    });
-    table.appendChild(tr);
+    if (checkIn > today) {
+      upcoming.push(item);
+    } else if (checkIn <= today && checkOut >= today) {
+      active.push(item);
+    } else {
+      past.push(item);
+    }
   });
 
-  container.appendChild(table);
-
-  window._importBuffer = data;
-
-  const btn = document.getElementById('confirmImportBtn');
-  if (btn) btn.style.display = 'block';
+  return { upcoming, active, past };
 }
 
-function confirmImport() {
-  if (!window._importBuffer) return;
-
-  if (typeof saveData === 'function') {
-    saveData(window._importBuffer);
-  }
-
-  window._importBuffer = null;
-
-  alert('Import fullført');
-}
-
-// Hook into import
-const originalImportFile = importFile;
-importFile = function(file, callback) {
-  originalImportFile(file, function(data) {
-    showImportPreview(data);
+function moveToActive(id) {
+  window.bookings = window.bookings.map(b => {
+    if (b.id == id) b.status = 'active';
+    return b;
   });
-};
+  render();
+}
 
-// ===== End v12.3 =====
+function moveToUpcoming(id) {
+  window.bookings = window.bookings.map(b => {
+    if (b.id == id) b.status = 'upcoming';
+    return b;
+  });
+  render();
+}
+
+function clearStatus(id) {
+  window.bookings = window.bookings.map(b => {
+    if (b.id == id) delete b.status;
+    return b;
+  });
+  render();
+}
+
+// ===== End v12.5 =====
