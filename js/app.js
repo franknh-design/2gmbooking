@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v12.13 — app.js (Core)
+// 2GM Booking v12.14 — app.js (Core)
 // Auth, Graph API, Data, Rendering, Bookings
 // ============================================================
 
@@ -537,6 +537,21 @@ function showDetail(roomId){
     }
     let btns='';
     if(can('edit_bookings'))btns+='<button onclick="openEditBooking(\''+booking.id+'\')">Edit booking</button>';
+    // "Add to Guests" button — only if not already in Persons list (fuzzy match)
+    if(can('edit_bookings')&&booking.Person_Name){
+      const inList=allPersons.some(p=>{
+        const pn=(p.Name||p.Title||'').toLowerCase().trim();
+        const bn=(booking.Person_Name||'').toLowerCase().trim();
+        if(pn===bn)return true;
+        const wa=pn.split(/[\s,]+/).filter(w=>w.length>1);
+        const wb=bn.split(/[\s,]+/).filter(w=>w.length>1);
+        if(wa.length<2||wb.length<2)return false;
+        return wa.every(w=>bn.indexOf(w)>=0)||wb.every(w=>pn.indexOf(w)>=0);
+      });
+      if(!inList){
+        btns+='<button onclick="addBookingToGuests(\''+booking.id+'\')" style="background:var(--bg-success);color:var(--text-success);border-color:var(--accent)">+ Add to Guests</button>';
+      }
+    }
     if(can('print_doortag'))btns+='<button onclick="printDoorTag(\''+booking.id+'\')">Print door tag</button>';
     if(booking.Status==='Upcoming'&&can('checkin_out'))btns+='<button class="primary" onclick="checkIn(\''+booking.id+'\')">Check in</button>';
     if(booking.Status==='Active'&&can('checkin_out'))btns+='<button class="primary" style="background:#EF9F27;border-color:#EF9F27" onclick="checkOut(\''+booking.id+'\')">Check out</button>';

@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v12.13 — modules.js
+// 2GM Booking v12.14 — modules.js
 // Hours, Archive, Import/Export, Admin (checkbox permissions)
 // ============================================================
 
@@ -899,7 +899,7 @@ async function deleteRate(id){
 }
 
 // ============================================================
-// PERSONS / CUSTOMERS (v12.13)
+// PERSONS / CUSTOMERS (v12.14)
 // ============================================================
 let editingPersonId=null;
 
@@ -1106,7 +1106,7 @@ function onPersonNameInput(){
 }
 
 // ============================================================
-// CHARTS (v12.13) — pure SVG, no dependencies
+// CHARTS (v12.14) — pure SVG, no dependencies
 // ============================================================
 
 // Reusable bar chart: data = [{label, value, subtitle?}]
@@ -1415,7 +1415,7 @@ function renderHoursCharts(filtered){
 }
 
 // ============================================================
-// CLEANING EFFICIENCY ANALYSIS (v12.13)
+// CLEANING EFFICIENCY ANALYSIS (v12.14)
 // ============================================================
 // Compares cleaner hours against guest-nights per property, per week/month.
 // USE WITH CAUTION: Hours include breaks, transport, repairs — not just cleaning.
@@ -1768,7 +1768,7 @@ function _dateFromIsoWeek(year,week){
 }
 
 // ============================================================
-// MORE MENU (v12.13)
+// MORE MENU (v12.14)
 // ============================================================
 function toggleMoreMenu(e){
   if(e){e.stopPropagation();e.preventDefault()}
@@ -1795,7 +1795,7 @@ function closeMoreMenu(){
 }
 
 // ============================================================
-// FAKTURAGRUNNLAG / INVOICING (v12.13)
+// FAKTURAGRUNNLAG / INVOICING (v12.14)
 // ============================================================
 let invoicingInitialized=false;
 
@@ -1940,15 +1940,23 @@ function renderInvoicing(){
         +'<div><strong>'+escapeHtml(k)+'</strong> <span class="muted" style="font-size:11px;margin-left:8px">'+grp.length+' booking'+(grp.length!==1?'s':'')+'</span></div>'
         +'<div style="font-size:13px"><strong>'+gNights+'</strong> nights · <strong style="color:var(--text-success)">'+gTotal.toLocaleString('nb-NO')+' kr</strong></div>'
         +'</div>';
-      html+='<table style="width:100%;font-size:12px"><thead><tr style="background:var(--bg-tertiary)"><th style="padding:6px 10px;text-align:left">Guest</th><th style="padding:6px 10px;text-align:left">Room</th><th style="padding:6px 10px;text-align:left">Period</th><th style="padding:6px 10px;text-align:right">Nights</th><th style="padding:6px 10px;text-align:right">Rate</th><th style="padding:6px 10px;text-align:right">Total</th><th style="padding:6px 10px;text-align:left">Rate source</th></tr></thead><tbody>';
+      html+='<table style="width:100%;font-size:12px"><thead><tr style="background:var(--bg-tertiary)"><th style="padding:6px 10px;text-align:left">Guest</th><th style="padding:6px 10px;text-align:left">Company</th><th style="padding:6px 10px;text-align:left">Room</th><th style="padding:6px 10px;text-align:left">Period</th><th style="padding:6px 10px;text-align:right">Nights</th><th style="padding:6px 10px;text-align:right">Rate</th><th style="padding:6px 10px;text-align:right">Total</th><th style="padding:6px 10px;text-align:left">Rate source</th></tr></thead><tbody>';
       grp.forEach(i=>{
         const ci=formatDate(i.booking.Check_In);
         const co=i.booking.Check_Out?formatDate(i.booking.Check_Out):'Open';
         const rateCell=i.rate?i.rate.toLocaleString('nb-NO')+' kr':'<span style="color:var(--text-danger)">— missing</span>';
         const totalCell=i.total?i.total.toLocaleString('nb-NO')+' kr':'—';
         const sourceCell=i.nearMiss?'<span title="'+escapeHtml(i.nearMiss)+'" style="color:var(--text-warning)">⚠ '+escapeHtml(i.source)+'</span>':escapeHtml(i.source);
-        html+='<tr style="border-top:.5px solid var(--border-tertiary)">'
+        // Flag company mismatch when grouping by company: if company field differs from group key, highlight
+        const groupKey=k;
+        const actualCompany=i.company||'(no company)';
+        const companyMismatch=groupBy==='company'&&actualCompany!==groupKey;
+        const companyCell=companyMismatch
+          ?'<span style="color:var(--text-danger);font-weight:500" title="Mismatch with group">⚠ '+escapeHtml(actualCompany)+'</span>'
+          :escapeHtml(actualCompany);
+        html+='<tr onclick="openEditBooking(\''+i.booking.id+'\')" style="border-top:.5px solid var(--border-tertiary);cursor:pointer" onmouseover="this.style.background=\'var(--bg-secondary)\'" onmouseout="this.style.background=\'\'">'
           +'<td style="padding:6px 10px">'+escapeHtml(i.name)+'</td>'
+          +'<td style="padding:6px 10px">'+companyCell+'</td>'
           +'<td style="padding:6px 10px;font-weight:500">'+escapeHtml(i.room)+'</td>'
           +'<td style="padding:6px 10px">'+ci+' → '+co+'</td>'
           +'<td style="padding:6px 10px;text-align:right">'+i.nights+'</td>'
@@ -1982,7 +1990,7 @@ function _renderInvoicingFlat(items){
     const co=i.booking.Check_Out?formatDate(i.booking.Check_Out):'Open';
     const rateCell=i.rate?i.rate.toLocaleString('nb-NO')+' kr':'<span style="color:var(--text-danger)">— missing</span>';
     const totalCell=i.total?i.total.toLocaleString('nb-NO')+' kr':'—';
-    html+='<tr style="border-top:.5px solid var(--border-tertiary)">'
+    html+='<tr onclick="openEditBooking(\''+i.booking.id+'\')" style="border-top:.5px solid var(--border-tertiary);cursor:pointer" onmouseover="this.style.background=\'var(--bg-secondary)\'" onmouseout="this.style.background=\'\'">'
       +'<td style="padding:6px 10px">'+escapeHtml(i.name)+'</td>'
       +'<td style="padding:6px 10px">'+escapeHtml(i.company)+'</td>'
       +'<td style="padding:6px 10px;font-weight:500">'+escapeHtml(i.room)+'</td>'
@@ -2047,4 +2055,28 @@ function exportInvoicingCSV(){
   const headers=['Guest','Company','Room','Check-in','Check-out','Nights','Rate','Total','Rate source'];
   const propName=(selectedProperty?selectedProperty.Title:'').replace(/\s+/g,'_');
   downloadCSV('Fakturagrunnlag_'+propName+'_'+periodStr,headers,rows);
+}
+
+// ============================================================
+// ADD GUEST FROM BOOKING (v12.14)
+// ============================================================
+function addBookingToGuests(bookingId){
+  const b=allBookings.find(x=>x.id===bookingId);
+  if(!b){alert('Booking not found');return}
+  // Open Guest-editor with booking data pre-filled
+  editingPersonId=null;
+  document.getElementById('personModalTitle').textContent='New guest (from booking)';
+  document.getElementById('pName').value=b.Person_Name||'';
+  document.getElementById('pMobile').value='';
+  document.getElementById('pEmail').value='';
+  document.getElementById('pAddress').value='';
+  document.getElementById('pCompany').value=b.Company||'';
+  document.getElementById('pCompanyOrgNr').value='';
+  document.getElementById('pCompanyEmail').value='';
+  document.getElementById('pCompanyAddress').value='';
+  document.getElementById('pNotes').value='';
+  document.getElementById('pDeleteRow').style.display='none';
+  document.getElementById('personModal').classList.add('open');
+  // Focus on mobile field since name+company are already filled
+  setTimeout(()=>{const el=document.getElementById('pMobile');if(el)el.focus()},100);
 }
