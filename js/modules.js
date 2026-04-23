@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v12.9 — modules.js
+// 2GM Booking v12.10 — modules.js
 // Hours, Archive, Import/Export, Admin (checkbox permissions)
 // ============================================================
 
@@ -878,7 +878,7 @@ async function deleteRate(id){
 }
 
 // ============================================================
-// PERSONS / CUSTOMERS (v12.9)
+// PERSONS / CUSTOMERS (v12.10)
 // ============================================================
 let editingPersonId=null;
 
@@ -909,7 +909,7 @@ function renderPersons(){
     });
   }
   list.sort((a,b)=>_personName(a).localeCompare(_personName(b),'nb'));
-  if(!list.length){body.innerHTML='<tr><td colspan="7" class="loading">No persons found. Click "+ New person" to add one.</td></tr>';return}
+  if(!list.length){body.innerHTML='<tr><td colspan="8" class="loading">No persons found. Click "+ New person" to add one.</td></tr>';return}
   // Count bookings per person name (case-insensitive)
   const bookingCount={};
   allBookings.forEach(b=>{
@@ -922,8 +922,24 @@ function renderPersons(){
     const company=_personCompany(p);
     const bookings=bookingCount[name.toLowerCase()]||0;
     const addr=(p.Address||'').replace(/\n/g,', ');
+    // Find active booking for this person (fuzzy name match)
+    const active=findActiveBookingForPerson(name);
+    let activeCell='<span class="muted">—</span>';
+    if(active){
+      const room=allRooms.find(r=>r.id===String(active.RoomLookupId));
+      const roomTitle=room?room.Title:'?';
+      const propName=active.Property_Name||'';
+      activeCell='<span style="display:inline-flex;align-items:center;gap:4px"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--accent)"></span>'
+        +'<strong style="color:var(--text-success)">Room '+escapeHtml(roomTitle)+'</strong>'
+        +(propName?' <span class="muted" style="font-size:11px">('+escapeHtml(propName)+')</span>':'')
+        +'</span>';
+    }
+    const nameCell=active
+      ?'<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--accent);vertical-align:middle;margin-right:6px"></span>'+escapeHtml(name)
+      :escapeHtml(name);
     return '<tr>'
-      +'<td style="font-weight:500">'+escapeHtml(name)+'</td>'
+      +'<td style="font-weight:500">'+nameCell+'</td>'
+      +'<td>'+activeCell+'</td>'
       +'<td>'+escapeHtml(company)+'</td>'
       +'<td>'+(mobile?'<a href="tel:'+escapeHtml(mobile)+'" style="color:var(--accent)">'+escapeHtml(mobile)+'</a>':'<span class="muted">—</span>')+'</td>'
       +'<td>'+(p.Email?'<a href="mailto:'+escapeHtml(p.Email)+'" style="color:var(--accent)">'+escapeHtml(p.Email)+'</a>':'<span class="muted">—</span>')+'</td>'
@@ -932,6 +948,24 @@ function renderPersons(){
       +'<td><button onclick="openPersonEdit(\''+p.id+'\')" style="padding:3px 10px;border:1px solid var(--accent);border-radius:4px;background:var(--bg-success);color:var(--text-success);cursor:pointer;font-size:11px;font-family:inherit">Edit</button></td>'
       +'</tr>';
   }).join('');
+}
+
+// Find active booking matching person name (fuzzy: exact or reverse-order match)
+function findActiveBookingForPerson(name){
+  if(!name)return null;
+  const lower=name.toLowerCase().trim();
+  // First: exact case-insensitive match, Active status
+  let m=allBookings.find(b=>b.Status==='Active'&&(b.Person_Name||'').toLowerCase().trim()===lower);
+  if(m)return m;
+  // Second: match all words regardless of order (handles "Marek Filas" vs "Filas, Marek" etc.)
+  const words=lower.split(/[\s,]+/).filter(w=>w.length>1);
+  if(words.length<2)return null;
+  m=allBookings.find(b=>{
+    if(b.Status!=='Active')return false;
+    const bn=(b.Person_Name||'').toLowerCase();
+    return words.every(w=>bn.indexOf(w)>=0);
+  });
+  return m||null;
 }
 
 function escapeHtml(s){return String(s||'').replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]))}
@@ -1021,6 +1055,18 @@ function onPersonNameInput(){
   const info=document.getElementById('fNameInfo');
   if(!val){info.textContent='';return}
   const match=allPersons.find(p=>_personName(p).toLowerCase()===val.toLowerCase());
+  // Check for existing active booking with this name (independent of person-card match)
+  const activeBooking=findActiveBookingForPerson(val);
+  // If we're editing an existing booking, don't warn about that same booking
+  let activeWarning='';
+  if(activeBooking&&activeBooking.id!==editingBookingId){
+    const room=allRooms.find(r=>r.id===String(activeBooking.RoomLookupId));
+    const roomTitle=room?room.Title:'?';
+    const propName=activeBooking.Property_Name||'';
+    activeWarning='<div style="margin-top:4px;padding:6px 8px;background:var(--bg-warning);border:1px solid #EF9F27;border-radius:4px;color:var(--text-warning);font-size:11px">'
+      +'⚠ <strong>Already has an active booking</strong> in Room '+escapeHtml(roomTitle)+(propName?' ('+escapeHtml(propName)+')':'')
+      +' — check-in '+formatDate(activeBooking.Check_In)+'</div>';
+  }
   if(match){
     // Auto-fill company only if empty (don't overwrite user's manual entry)
     const compField=document.getElementById('fCompany');
@@ -1031,14 +1077,14 @@ function onPersonNameInput(){
     const parts=[];
     if(mobile)parts.push('📱 '+mobile);
     if(match.Email)parts.push('✉ '+match.Email);
-    info.innerHTML='<span style="color:var(--text-success)">✓ Existing person</span>'+(parts.length?' · '+escapeHtml(parts.join(' · ')):'');
+    info.innerHTML='<span style="color:var(--text-success)">✓ Existing person</span>'+(parts.length?' · '+escapeHtml(parts.join(' · ')):'')+activeWarning;
   }else{
-    info.innerHTML='<span class="muted">New name — will be saved as free text (create person card in Persons panel to enable autofill next time)</span>';
+    info.innerHTML='<span class="muted">New name — will be saved as free text (create person card in Persons panel to enable autofill next time)</span>'+activeWarning;
   }
 }
 
 // ============================================================
-// CHARTS (v12.9) — pure SVG, no dependencies
+// CHARTS (v12.10) — pure SVG, no dependencies
 // ============================================================
 
 // Reusable bar chart: data = [{label, value, subtitle?}]
@@ -1347,7 +1393,7 @@ function renderHoursCharts(filtered){
 }
 
 // ============================================================
-// CLEANING EFFICIENCY ANALYSIS (v12.9)
+// CLEANING EFFICIENCY ANALYSIS (v12.10)
 // ============================================================
 // Compares cleaner hours against guest-nights per property, per week/month.
 // USE WITH CAUTION: Hours include breaks, transport, repairs — not just cleaning.
