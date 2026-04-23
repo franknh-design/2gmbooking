@@ -212,13 +212,10 @@ tbody td{padding:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 </body>
 </html>
 
+<footer style="position:fixed;bottom:0;width:100%;text-align:center;font-size:12px;color:#666;">
+  <span id="appVersion"></span>
+</footer>
 
 <script>
-function addControlButtons(id) {
-  return `
-    <button onclick="moveToActive('${id}')">Aktiv</button>
-    <button onclick="moveToUpcoming('${id}')">Upcoming</button>
-    <button onclick="clearStatus('${id}')">Auto</button>
-  `;
-}
+document.getElementById('appVersion').innerText = 'v12.6 – DATE FIX';
 </script>
