@@ -18,14 +18,14 @@ function renderIncoming(){
   const upcoming=allBookings.filter(b=>{
     if(b.Status!=='Upcoming')return false;
     const rid=String(b.RoomLookupId||'');if(!roomIds.has(rid))return false;
-    const ci=new Date(b.Check_In);ci.setHours(0,0,0,0);
+    const ci=parseDateSafe(b.Check_In);ci.setHours(0,0,0,0);
     return ci>=tomorrow&&ci<=in30;
-  }).sort((a,b)=>new Date(a.Check_In)-new Date(b.Check_In));
+  }).sort((a,b)=>parseDateSafe(a.Check_In)-parseDateSafe(b.Check_In));
   const body=document.getElementById('incomingBody');
   if(!upcoming.length){body.innerHTML='<tr><td colspan="7" class="loading">No upcoming bookings</td></tr>';return}
   body.innerHTML=upcoming.map(b=>{
     const room=rooms.find(r=>r.id===String(b.RoomLookupId));const roomTitle=room?room.Title:'?';
-    const daysUntil=Math.round((new Date(b.Check_In)-today)/864e5);let badge='';
+    const daysUntil=Math.round((parseDateSafe(b.Check_In)-today)/864e5);let badge='';
     if(daysUntil<=3)badge='<span class="pill danger">'+daysUntil+'d</span>';
     else if(daysUntil<=7)badge='<span class="pill warning">'+daysUntil+'d</span>';
     return'<tr onclick="showDetail(\''+(room?room.id:'')+'\')">'
@@ -52,7 +52,7 @@ function renderArchive(){
     if(statusFilter!=='all'&&b.Status!==statusFilter)return false;
     if(search){if(!((b.Person_Name||'')+(b.Company||'')+getRoomTitle(b)).toLowerCase().includes(search))return false}
     return true;
-  }).sort((a,b)=>new Date(b.Check_In||0)-new Date(a.Check_In||0));
+  }).sort((a,b)=>parseDateSafe(b.Check_In||0)-parseDateSafe(a.Check_In||0));
   const limited=archived.slice(0,100);
   document.getElementById('archiveTitle').textContent='Archive — '+archived.length+' booking'+(archived.length!==1?'s':'');
   const body=document.getElementById('archiveBody');
@@ -68,7 +68,7 @@ async function reopenBooking(id){
   const b=allBookings.find(x=>x.id===id);
   if(!b)return;
   // If check-in is today or earlier → Active, otherwise Upcoming
-  const ci=new Date(b.Check_In);ci.setHours(0,0,0,0);
+  const ci=parseDateSafe(b.Check_In);ci.setHours(0,0,0,0);
   const today=new Date();today.setHours(0,0,0,0);
   const newStatus=ci<=today?'Active':'Upcoming';
   if(!confirm('Reopen as '+newStatus+'?\n\n'+b.Person_Name+'\nCheck-in: '+formatDate(b.Check_In)+(b.Check_Out?'\nCheck-out: '+formatDate(b.Check_Out):'\nOpen-ended')))return;
@@ -84,7 +84,7 @@ function exportArchiveExcel(){
   const search=(document.getElementById('archiveSearch').value||'').toLowerCase();
   const statusFilter=document.getElementById('archiveStatus').value;
   const roomIds=new Set(rooms.map(r=>r.id));
-  let archived=allBookings.filter(b=>{const rid=String(b.RoomLookupId||'');if(!roomIds.has(rid))return false;if(statusFilter!=='all'&&b.Status!==statusFilter)return false;if(search){if(!((b.Person_Name||'')+(b.Company||'')+getRoomTitle(b)).toLowerCase().includes(search))return false}return true}).sort((a,b)=>new Date(b.Check_In||0)-new Date(a.Check_In||0));
+  let archived=allBookings.filter(b=>{const rid=String(b.RoomLookupId||'');if(!roomIds.has(rid))return false;if(statusFilter!=='all'&&b.Status!==statusFilter)return false;if(search){if(!((b.Person_Name||'')+(b.Company||'')+getRoomTitle(b)).toLowerCase().includes(search))return false}return true}).sort((a,b)=>parseDateSafe(b.Check_In||0)-parseDateSafe(a.Check_In||0));
   const showPrices=can('view_prices');
   const headers=['Room','Name','Company','Check-in','Check-out','Nights','Status','Door Tag','Cleaning','Notes'];
   if(showPrices)headers.push('Rate/night','Total','Rate source');
@@ -202,11 +202,11 @@ function renderHours(){
   const months=['January','February','March','April','May','June','July','August','September','October','November','December'];
 
   const filtered=allHours.filter(h=>{
-    if(!h.Date)return false;const d=new Date(h.Date);
+    if(!h.Date)return false;const d=parseDateSafe(h.Date);
     if(d.getMonth()!==month||d.getFullYear()!==year)return false;
     if(workerFilter!=='all'&&(h.Worker||'').toLowerCase()!==workerFilter.toLowerCase())return false;
     return true;
-  }).sort((a,b)=>new Date(a.Date)-new Date(b.Date));
+  }).sort((a,b)=>parseDateSafe(a.Date)-parseDateSafe(b.Date));
 
   const workerName=workerFilter==='all'?'All workers':(allUsers.find(u=>(u.Epost||'').toLowerCase()===workerFilter.toLowerCase())||{}).DisplayName||workerFilter;
   document.getElementById('hoursTitle').textContent='Hours — '+months[month]+' '+year+' — '+workerName;
@@ -217,7 +217,7 @@ function renderHours(){
   const days=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];let total=0;
   body.innerHTML=filtered.map(h=>{
     const hrs=calcHoursDiff(h.Time_From,h.Time_To);total+=hrs;
-    const d=new Date(h.Date);
+    const d=parseDateSafe(h.Date);
     const workerUser=allUsers.find(u=>(u.Epost||'').toLowerCase()===(h.Worker||'').toLowerCase());
     const wName=workerUser?workerUser.DisplayName:(h.Worker||'');
     return'<tr data-hours-id="'+h.id+'" style="cursor:pointer"><td>'+days[d.getDay()]+' '+formatDate(h.Date)+'</td><td>'+(h.Location||'')+'</td><td>'+wName+'</td><td>'+(h.Time_From||'')+'</td><td>'+(h.Time_To||'')+'</td><td style="text-align:right">'+hrs.toFixed(2)+'</td>'
@@ -327,9 +327,9 @@ function exportHoursExcel(){
   const workerFilter=document.getElementById('hoursWorkerFilter').value;
   const months=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   const days=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-  const filtered=allHours.filter(h=>{if(!h.Date)return false;const d=new Date(h.Date);if(d.getMonth()!==month||d.getFullYear()!==year)return false;if(workerFilter!=='all'&&(h.Worker||'').toLowerCase()!==workerFilter.toLowerCase())return false;return true}).sort((a,b)=>new Date(a.Date)-new Date(b.Date));
+  const filtered=allHours.filter(h=>{if(!h.Date)return false;const d=parseDateSafe(h.Date);if(d.getMonth()!==month||d.getFullYear()!==year)return false;if(workerFilter!=='all'&&(h.Worker||'').toLowerCase()!==workerFilter.toLowerCase())return false;return true}).sort((a,b)=>parseDateSafe(a.Date)-parseDateSafe(b.Date));
   const headers=['Date','Day','Location','Worker','From','To','Hours','Notes'];let total=0;
-  const rows=filtered.map(h=>{const hrs=calcHoursDiff(h.Time_From,h.Time_To);total+=hrs;const d=new Date(h.Date);const wu=allUsers.find(u=>(u.Epost||'').toLowerCase()===(h.Worker||'').toLowerCase());return[formatDate(h.Date),days[d.getDay()],h.Location||'',wu?wu.DisplayName:h.Worker||'',h.Time_From||'',h.Time_To||'',hrs.toFixed(2),h.Notes||'']});
+  const rows=filtered.map(h=>{const hrs=calcHoursDiff(h.Time_From,h.Time_To);total+=hrs;const d=parseDateSafe(h.Date);const wu=allUsers.find(u=>(u.Epost||'').toLowerCase()===(h.Worker||'').toLowerCase());return[formatDate(h.Date),days[d.getDay()],h.Location||'',wu?wu.DisplayName:h.Worker||'',h.Time_From||'',h.Time_To||'',hrs.toFixed(2),h.Notes||'']});
   rows.push(['','','','','','','Total',total.toFixed(2)]);
   const workerName=workerFilter==='all'?'All':(allUsers.find(u=>(u.Epost||'').toLowerCase()===workerFilter.toLowerCase())||{}).DisplayName||workerFilter;
   downloadCSV('Hours_'+workerName.replace(/\s+/g,'_')+'_'+months[month]+'_'+year,headers,rows);
@@ -338,7 +338,7 @@ function exportHoursExcel(){
 async function archiveHoursMonth(){
   const month=parseInt(document.getElementById('hoursMonth').value);const year=parseInt(document.getElementById('hoursYear').value);
   const months=['January','February','March','April','May','June','July','August','September','October','November','December'];
-  const filtered=allHours.filter(h=>{if(!h.Date)return false;const d=new Date(h.Date);return d.getMonth()===month&&d.getFullYear()===year});
+  const filtered=allHours.filter(h=>{if(!h.Date)return false;const d=parseDateSafe(h.Date);return d.getMonth()===month&&d.getFullYear()===year});
   if(!filtered.length){alert('No hours for '+months[month]+' '+year);return}
   if(!confirm('Archive '+filtered.length+' entries for '+months[month]+' '+year+'?'))return;
   let done=0;for(const h of filtered){try{await updateListItem('Hours',h.id,{Archived:'Yes'});h.Archived='Yes';done++}catch(e){}}
@@ -511,7 +511,7 @@ function showOccupancyReport(){
   if(!yearSel.children.length){
     const curYear=now.getFullYear();
     const years=[];
-    allBookings.forEach(b=>{if(b.Check_In){const y=new Date(b.Check_In).getFullYear();if(!years.includes(y))years.push(y)}});
+    allBookings.forEach(b=>{if(b.Check_In){const y=parseDateSafe(b.Check_In).getFullYear();if(!years.includes(y))years.push(y)}});
     if(!years.includes(curYear))years.push(curYear);
     years.sort((a,b)=>b-a);
     yearSel.innerHTML=years.map(y=>'<option value="'+y+'"'+(y===curYear?' selected':'')+'>'+y+'</option>').join('');
@@ -537,7 +537,7 @@ function renderOccupancyReport(){
     if(b.Status!=='Active'&&b.Status!=='Completed')return false;
     const rid=String(b.RoomLookupId||'');if(!roomIds.has(rid))return false;
     if(!b.Check_In)return false;
-    const ci=new Date(b.Check_In);const co=b.Check_Out?new Date(b.Check_Out):now;
+    const ci=parseDateSafe(b.Check_In);const co=b.Check_Out?parseDateSafe(b.Check_Out):now;
     return ci.getFullYear()===year||co.getFullYear()===year||(ci.getFullYear()<year&&co.getFullYear()>year);
   });
 
@@ -558,7 +558,7 @@ function renderOccupancyReport(){
 
     let occupied=0;
     yearBookings.forEach(b=>{
-      const ci=new Date(b.Check_In);const co=b.Check_Out?new Date(b.Check_Out):now;
+      const ci=parseDateSafe(b.Check_In);const co=b.Check_Out?parseDateSafe(b.Check_Out):now;
       const start=ci>monthStart?ci:monthStart;
       const end=co<new Date(year,m,lastDay+1)?co:new Date(year,m,lastDay+1);
       const nights=Math.max(0,Math.round((end-start)/864e5));
@@ -589,14 +589,14 @@ function exportOccupancyReport(){
   const now=new Date();
   let reportRooms=propFilter==='all'?allRooms.filter(r=>{const pids=new Set(properties.map(p=>p.id));return pids.has(String(r.PropertyLookupId))}):allRooms.filter(r=>String(r.PropertyLookupId)===propFilter);
   const roomCount=reportRooms.length;const roomIds=new Set(reportRooms.map(r=>r.id));
-  const yearBookings=allBookings.filter(b=>{if(b.Status!=='Active'&&b.Status!=='Completed')return false;const rid=String(b.RoomLookupId||'');if(!roomIds.has(rid))return false;if(!b.Check_In)return false;const ci=new Date(b.Check_In);const co=b.Check_Out?new Date(b.Check_Out):now;return ci.getFullYear()===year||co.getFullYear()===year||(ci.getFullYear()<year&&co.getFullYear()>year)});
+  const yearBookings=allBookings.filter(b=>{if(b.Status!=='Active'&&b.Status!=='Completed')return false;const rid=String(b.RoomLookupId||'');if(!roomIds.has(rid))return false;if(!b.Check_In)return false;const ci=parseDateSafe(b.Check_In);const co=b.Check_Out?parseDateSafe(b.Check_Out):now;return ci.getFullYear()===year||co.getFullYear()===year||(ci.getFullYear()<year&&co.getFullYear()>year)});
   const headers=['Month','Room nights','Possible','Occupancy %'];
   const rows=[];let tO=0,tP=0;
   for(let m=0;m<12;m++){
     const monthStart=new Date(year,m,1);const monthEnd=new Date(year,m+1,0);const daysInMonth=monthEnd.getDate();
     if(monthStart>now){rows.push([months[m],'','','']);continue}
     const lastDay=monthEnd<now?daysInMonth:now.getDate();const possible=roomCount*lastDay;
-    let occupied=0;yearBookings.forEach(b=>{const ci=new Date(b.Check_In);const co=b.Check_Out?new Date(b.Check_Out):now;const start=ci>monthStart?ci:monthStart;const end=co<new Date(year,m,lastDay+1)?co:new Date(year,m,lastDay+1);occupied+=Math.max(0,Math.round((end-start)/864e5))});
+    let occupied=0;yearBookings.forEach(b=>{const ci=parseDateSafe(b.Check_In);const co=b.Check_Out?parseDateSafe(b.Check_Out):now;const start=ci>monthStart?ci:monthStart;const end=co<new Date(year,m,lastDay+1)?co:new Date(year,m,lastDay+1);occupied+=Math.max(0,Math.round((end-start)/864e5))});
     occupied=Math.min(occupied,possible);tO+=occupied;tP+=possible;
     rows.push([months[m],occupied,possible,possible>0?Math.round(occupied/possible*100)+'%':'']);
   }
@@ -751,14 +751,8 @@ function formatDateInput(dateStr) {
     String(d.getDate()).padStart(2,'0');
 }
 
-// Override common bug pattern (best effort)
-const _oldDate = Date;
-Date = function(...args) {
-  if (args.length === 1 && typeof args[0] === 'string' && args[0].match(/^\d{4}-\d{2}-\d{2}$/)) {
-    return parseDateLocal(args[0]);
-  }
-  return new _oldDate(...args);
-};
-Date.prototype = _oldDate.prototype;
+// NOTE:
+// Do not override global Date. It breaks third-party libraries (e.g. MSAL uses Date.now()).
+// Use parseDateLocal(...) explicitly where date-only strings need timezone-safe handling.
 
 // ===== End v12.6 =====
