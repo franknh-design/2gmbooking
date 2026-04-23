@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v12.2 — app.js (Core)
+// 2GM Booking v12.3 — app.js (Core)
 // Auth, Graph API, Data, Rendering, Bookings
 // ============================================================
 
@@ -162,6 +162,8 @@ async function loadData(){
     if(rooms.length===0){rooms=allRooms.filter(r=>r.Active!==false)}
     filterBookingsForView();
     renderFloors();updateStats();
+    // Re-render Upcoming if open (otherwise it shows bookings from previous property)
+    if(document.getElementById('incomingPanel').classList.contains('open'))renderIncoming();
   }catch(e){console.error('Error:',e);document.getElementById('floor1Body').innerHTML='<tr><td colspan="7" class="error">Error: '+e.message+'</td></tr>'}
 }
 
@@ -651,7 +653,7 @@ function printDoorTag(bookingId){
 
 // --- VIEW SWITCHING ---
 function showMainView(){currentView='main';document.getElementById('mainView').style.display='';document.getElementById('hoursView').style.display='none';document.getElementById('propertySelect').style.display='';if(selectedProperty)document.getElementById('headerTitle').textContent='2GM Booking — '+selectedProperty.Title}
-function showHoursView(){currentView='hours';document.getElementById('mainView').style.display='none';document.getElementById('hoursView').style.display='';document.getElementById('propertySelect').style.display='none';document.getElementById('headerTitle').textContent='2GM Booking — Hours'}
+function showHoursView(){currentView='hours';document.getElementById('mainView').style.display='none';document.getElementById('mainView').classList.remove('panel-mode');document.getElementById('incomingPanel').classList.remove('open');document.getElementById('archivePanel').classList.remove('open');document.getElementById('hoursView').style.display='';document.getElementById('propertySelect').style.display='none';document.getElementById('headerTitle').textContent='2GM Booking — Hours'}
 function ensureMainView(){if(currentView==='hours')showMainView()}
 
 // --- FILTER ---

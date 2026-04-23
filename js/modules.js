@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v12.2 — modules.js
+// 2GM Booking v12.3 — modules.js
 // Hours, Archive, Import/Export, Admin (checkbox permissions)
 // ============================================================
 
@@ -17,8 +17,11 @@ async function checkInFromUpcoming(id){
 function toggleIncoming(){
   ensureMainView();
   document.getElementById('archivePanel').classList.remove('open');
-  document.getElementById('incomingPanel').classList.toggle('open');
-  if(document.getElementById('incomingPanel').classList.contains('open'))renderIncoming();
+  const panel=document.getElementById('incomingPanel');
+  panel.classList.toggle('open');
+  const isOpen=panel.classList.contains('open');
+  document.getElementById('mainView').classList.toggle('panel-mode',isOpen);
+  if(isOpen)renderIncoming();
 }
 function renderIncoming(){
   const today=new Date();today.setHours(0,0,0,0);
@@ -51,8 +54,11 @@ function renderIncoming(){
 function toggleArchive(){
   ensureMainView();
   document.getElementById('incomingPanel').classList.remove('open');
-  document.getElementById('archivePanel').classList.toggle('open');
-  if(document.getElementById('archivePanel').classList.contains('open'))renderArchive();
+  const panel=document.getElementById('archivePanel');
+  panel.classList.toggle('open');
+  const isOpen=panel.classList.contains('open');
+  document.getElementById('mainView').classList.toggle('panel-mode',isOpen);
+  if(isOpen)renderArchive();
 }
 function renderArchive(){
   const search=(document.getElementById('archiveSearch').value||'').toLowerCase();
