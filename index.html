@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- 2GM Booking v12.14 — Created by Frank Haugan -->
+<!-- 2GM Booking v12.15 — Created by Frank Haugan -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -57,7 +57,7 @@ tbody td{padding:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .loading{text-align:center;padding:40px;color:var(--text-secondary)}.error{text-align:center;padding:40px;color:var(--text-danger)}
 .login-screen{text-align:center;padding:100px 20px}.login-screen h1{font-size:32px;color:#2C2C2A;margin-bottom:8px}.login-screen p{color:var(--text-secondary);margin-bottom:30px}
 .login-btn{padding:12px 32px;background:#2C2C2A;color:#fff;border:none;border-radius:var(--radius-md);font-size:16px;cursor:pointer;font-family:inherit}.login-btn:hover{background:#444}
-.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:1000;justify-content:center;align-items:flex-start;padding-top:80px}
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:1000;justify-content:center;align-items:flex-start;padding:20px 12px;overflow-y:auto}
 .modal-overlay.open{display:flex}
 .modal{background:var(--bg-primary);border-radius:var(--radius-lg);width:100%;max-width:520px;max-height:80vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.2)}
 .modal-header{padding:16px 20px;border-bottom:.5px solid var(--border-tertiary);display:flex;justify-content:space-between;align-items:center}
@@ -233,7 +233,7 @@ tbody td{padding:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
       </div>
     </div>
   </div>
-  <div style="text-align:center;padding:12px;font-size:11px;color:var(--text-tertiary);margin-top:1rem">v12.14 — Created by Frank Haugan</div>
+  <div style="text-align:center;padding:12px;font-size:11px;color:var(--text-tertiary);margin-top:1rem">v12.15 — Created by Frank Haugan</div>
 </div>
 <!-- Modals -->
 <div class="modal-overlay" id="bookingModal"><div class="modal"><div class="modal-header"><h2 id="bookingModalTitle">New booking</h2><button class="modal-close" onclick="closeBookingModal()">&times;</button></div><div class="modal-body"><div class="form-group"><label>Room</label><div style="display:flex;gap:8px"><select id="fRoom" style="flex:1"></select><button type="button" onclick="findAvailableRoom()" style="padding:6px 12px;background:var(--accent);color:#fff;border:none;border-radius:var(--radius-md);cursor:pointer;font-size:12px;white-space:nowrap;font-family:inherit">Find available</button></div><div id="fRoomInfo" style="font-size:11px;margin-top:4px;color:var(--text-tertiary)"></div></div><div class="form-group"><label>Guest name</label><input id="fName" type="text" placeholder="Start typing to find existing person..." list="fNameList" oninput="onPersonNameInput()"><datalist id="fNameList"></datalist><div id="fNameInfo" style="font-size:11px;margin-top:4px;color:var(--text-tertiary)"></div></div><div class="form-group"><label>Company</label><input id="fCompany" type="text" placeholder="Company name" list="fCompanyList"><datalist id="fCompanyList"></datalist></div><div class="form-row"><div class="form-group"><label>Check-in</label><input id="fCheckIn" type="date"></div><div class="form-group"><label>Check-out</label><input id="fCheckOut" type="date"><div style="font-size:11px;color:var(--text-tertiary);margin-top:2px">Leave empty for open-ended</div></div></div><div class="form-row"><div class="form-group"><label>Status</label><select id="fStatus"><option value="Upcoming">Upcoming</option><option value="Active">Active (checked in)</option></select></div><div class="form-group"><label>Floor</label><input id="fFloor" type="number" min="1" max="9" readonly></div></div><div class="form-group"><label>Notes</label><textarea id="fNotes" placeholder="Optional notes..."></textarea></div></div><div class="modal-footer"><button onclick="closeBookingModal()">Cancel</button><button class="primary" id="bookingSaveBtn" onclick="saveBooking()">Create booking</button></div></div></div>
