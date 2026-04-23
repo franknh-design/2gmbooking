@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v12.3 — modules.js
+// 2GM Booking v12.5 — modules.js
 // Hours, Archive, Import/Export, Admin (checkbox permissions)
 // ============================================================
 
@@ -17,6 +17,7 @@ async function checkInFromUpcoming(id){
 function toggleIncoming(){
   ensureMainView();
   document.getElementById('archivePanel').classList.remove('open');
+  const pp=document.getElementById('personsPanel');if(pp)pp.classList.remove('open');
   const panel=document.getElementById('incomingPanel');
   panel.classList.toggle('open');
   const isOpen=panel.classList.contains('open');
@@ -54,6 +55,7 @@ function renderIncoming(){
 function toggleArchive(){
   ensureMainView();
   document.getElementById('incomingPanel').classList.remove('open');
+  const pp=document.getElementById('personsPanel');if(pp)pp.classList.remove('open');
   const panel=document.getElementById('archivePanel');
   panel.classList.toggle('open');
   const isOpen=panel.classList.contains('open');
@@ -212,21 +214,51 @@ function initHoursSelectors(){
 
 async function loadHoursData(){try{allHours=await getListItems('Hours');renderHours()}catch(e){console.error('Failed to load hours:',e)}}
 
+function onHoursMonthChange(){
+  // Clear date range when user changes month/year
+  const from=document.getElementById('hoursFrom');const to=document.getElementById('hoursTo');
+  if(from)from.value='';if(to)to.value='';
+  renderHours();
+}
+function clearHoursDateRange(){
+  document.getElementById('hoursFrom').value='';document.getElementById('hoursTo').value='';
+  renderHours();
+}
+
 function renderHours(){
   const month=parseInt(document.getElementById('hoursMonth').value);
   const year=parseInt(document.getElementById('hoursYear').value);
   const workerFilter=document.getElementById('hoursWorkerFilter').value;
+  const fromVal=document.getElementById('hoursFrom').value;
+  const toVal=document.getElementById('hoursTo').value;
   const months=['January','February','March','April','May','June','July','August','September','October','November','December'];
+
+  // If either from or to is set, use date range. Otherwise use month/year.
+  const useRange=!!(fromVal||toVal);
+  const fromDate=fromVal?new Date(fromVal+'T00:00:00'):null;
+  const toDate=toVal?new Date(toVal+'T23:59:59'):null;
 
   const filtered=allHours.filter(h=>{
     if(!h.Date)return false;const d=new Date(h.Date);
-    if(d.getMonth()!==month||d.getFullYear()!==year)return false;
+    if(useRange){
+      if(fromDate&&d<fromDate)return false;
+      if(toDate&&d>toDate)return false;
+    }else{
+      if(d.getMonth()!==month||d.getFullYear()!==year)return false;
+    }
     if(workerFilter!=='all'&&(h.Worker||'').toLowerCase()!==workerFilter.toLowerCase())return false;
     return true;
   }).sort((a,b)=>new Date(a.Date)-new Date(b.Date));
 
   const workerName=workerFilter==='all'?'All workers':(allUsers.find(u=>(u.Epost||'').toLowerCase()===workerFilter.toLowerCase())||{}).DisplayName||workerFilter;
-  document.getElementById('hoursTitle').textContent='Hours — '+months[month]+' '+year+' — '+workerName;
+  let periodLabel;
+  if(useRange){
+    const f=fromVal?formatDate(fromVal):'…';const t=toVal?formatDate(toVal):'…';
+    periodLabel=f+' – '+t;
+  }else{
+    periodLabel=months[month]+' '+year;
+  }
+  document.getElementById('hoursTitle').textContent='Hours — '+periodLabel+' — '+workerName;
 
   const body=document.getElementById('hoursBody');
   if(!filtered.length){body.innerHTML='<tr><td colspan="8" class="loading">No hours registered</td></tr>';document.getElementById('hoursTotal').textContent='0.00';return}
@@ -748,4 +780,163 @@ async function deleteRate(id){
     allRates=allRates.filter(r=>r.id!==id);
     renderRatesPanel();
   }catch(e){alert('Failed')}
+}
+
+// ============================================================
+// PERSONS / CUSTOMERS (v12.5)
+// ============================================================
+let editingPersonId=null;
+
+function togglePersons(){
+  ensureMainView();
+  document.getElementById('incomingPanel').classList.remove('open');
+  document.getElementById('archivePanel').classList.remove('open');
+  const panel=document.getElementById('personsPanel');
+  panel.classList.toggle('open');
+  const isOpen=panel.classList.contains('open');
+  document.getElementById('mainView').classList.toggle('panel-mode',isOpen);
+  if(isOpen)renderPersons();
+}
+
+function _personName(p){return p.Name||p.Title||''}
+function _personCompany(p){return p.Company||''}
+
+function renderPersons(){
+  const body=document.getElementById('personsBody');
+  if(!body)return;
+  const q=(document.getElementById('personsSearch').value||'').toLowerCase().trim();
+  let list=allPersons.slice();
+  if(q){
+    list=list.filter(p=>{
+      const hay=[_personName(p),_personCompany(p),p.Email||'',p.Company_Email||'',p.Mobile||p.Phone||p.Telefon||'',p.Address||'',p.Company_OrgNr||''].join(' ').toLowerCase();
+      return hay.indexOf(q)>=0;
+    });
+  }
+  list.sort((a,b)=>_personName(a).localeCompare(_personName(b),'nb'));
+  if(!list.length){body.innerHTML='<tr><td colspan="7" class="loading">No persons found. Click "+ New person" to add one.</td></tr>';return}
+  // Count bookings per person name (case-insensitive)
+  const bookingCount={};
+  allBookings.forEach(b=>{
+    const n=(b.Person_Name||'').toLowerCase();
+    if(n)bookingCount[n]=(bookingCount[n]||0)+1;
+  });
+  body.innerHTML=list.map(p=>{
+    const name=_personName(p);
+    const mobile=p.Mobile||p.Phone||p.Telefon||'';
+    const company=_personCompany(p);
+    const bookings=bookingCount[name.toLowerCase()]||0;
+    const addr=(p.Address||'').replace(/\n/g,', ');
+    return '<tr>'
+      +'<td style="font-weight:500">'+escapeHtml(name)+'</td>'
+      +'<td>'+escapeHtml(company)+'</td>'
+      +'<td>'+(mobile?'<a href="tel:'+escapeHtml(mobile)+'" style="color:var(--accent)">'+escapeHtml(mobile)+'</a>':'<span class="muted">—</span>')+'</td>'
+      +'<td>'+(p.Email?'<a href="mailto:'+escapeHtml(p.Email)+'" style="color:var(--accent)">'+escapeHtml(p.Email)+'</a>':'<span class="muted">—</span>')+'</td>'
+      +'<td class="muted" style="font-size:11px">'+escapeHtml(addr)+'</td>'
+      +'<td>'+(bookings?'<span class="pill" style="background:var(--bg-success);color:var(--text-success)">'+bookings+'</span>':'<span class="muted">0</span>')+'</td>'
+      +'<td><button onclick="openPersonEdit(\''+p.id+'\')" style="padding:3px 10px;border:1px solid var(--accent);border-radius:4px;background:var(--bg-success);color:var(--text-success);cursor:pointer;font-size:11px;font-family:inherit">Edit</button></td>'
+      +'</tr>';
+  }).join('');
+}
+
+function escapeHtml(s){return String(s||'').replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]))}
+
+function openPersonEdit(personId){
+  editingPersonId=personId||null;
+  const p=personId?allPersons.find(x=>x.id===personId):null;
+  document.getElementById('personModalTitle').textContent=p?'Edit person':'New person';
+  document.getElementById('pName').value=p?_personName(p):'';
+  document.getElementById('pMobile').value=p?(p.Mobile||p.Phone||p.Telefon||''):'';
+  document.getElementById('pEmail').value=p?(p.Email||''):'';
+  document.getElementById('pAddress').value=p?(p.Address||''):'';
+  document.getElementById('pCompany').value=p?_personCompany(p):'';
+  document.getElementById('pCompanyOrgNr').value=p?(p.Company_OrgNr||''):'';
+  document.getElementById('pCompanyEmail').value=p?(p.Company_Email||''):'';
+  document.getElementById('pCompanyAddress').value=p?(p.Company_Address||''):'';
+  document.getElementById('pNotes').value=p?(p.Notes||''):'';
+  document.getElementById('pDeleteRow').style.display=p?'':'none';
+  document.getElementById('personModal').classList.add('open');
+}
+
+async function savePerson(){
+  const name=document.getElementById('pName').value.trim();
+  if(!name){alert('Name is required');return}
+  const fields={
+    Title:name,
+    Name:name,
+    Mobile:document.getElementById('pMobile').value.trim()||null,
+    Email:document.getElementById('pEmail').value.trim()||null,
+    Address:document.getElementById('pAddress').value.trim()||null,
+    Company:document.getElementById('pCompany').value.trim()||null,
+    Company_OrgNr:document.getElementById('pCompanyOrgNr').value.trim()||null,
+    Company_Email:document.getElementById('pCompanyEmail').value.trim()||null,
+    Company_Address:document.getElementById('pCompanyAddress').value.trim()||null,
+    Notes:document.getElementById('pNotes').value.trim()||null
+  };
+  const btn=document.getElementById('personSaveBtn');
+  btn.disabled=true;btn.textContent='Saving...';
+  try{
+    if(editingPersonId){
+      await updateListItem('Persons',editingPersonId,fields);
+      const l=allPersons.find(x=>x.id===editingPersonId);
+      if(l)Object.assign(l,fields);
+    }else{
+      const r=await createListItem('Persons',fields);
+      if(r&&r.id)allPersons.push({id:r.id,...fields});
+      else{try{allPersons=await getListItems('Persons')}catch(e){}}
+    }
+    document.getElementById('personModal').classList.remove('open');
+    renderPersons();
+    refreshPersonDatalists();
+  }catch(e){console.error(e);alert('Failed to save: '+e.message)}
+  finally{btn.disabled=false;btn.textContent='Save'}
+}
+
+async function deletePerson(){
+  if(!editingPersonId)return;
+  const p=allPersons.find(x=>x.id===editingPersonId);
+  if(!p)return;
+  if(!confirm('Delete '+_personName(p)+'?\n\nThis does NOT delete their bookings. The bookings will still show the name as free text.'))return;
+  try{
+    const s=await getSiteId();const lid=await getListId('Persons');
+    await graphDelete('/sites/'+s+'/lists/'+lid+'/items/'+editingPersonId);
+    allPersons=allPersons.filter(x=>x.id!==editingPersonId);
+    document.getElementById('personModal').classList.remove('open');
+    renderPersons();refreshPersonDatalists();
+  }catch(e){alert('Failed to delete: '+e.message)}
+}
+
+// --- Autocomplete integration in booking modal ---
+function refreshPersonDatalists(){
+  const nameList=document.getElementById('fNameList');
+  const compList=document.getElementById('fCompanyList');
+  if(nameList){
+    const names=[...new Set(allPersons.map(_personName).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'nb'));
+    nameList.innerHTML=names.map(n=>'<option value="'+escapeHtml(n)+'">').join('');
+  }
+  if(compList){
+    const companies=[...new Set(allPersons.map(_personCompany).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'nb'));
+    compList.innerHTML=companies.map(c=>'<option value="'+escapeHtml(c)+'">').join('');
+  }
+}
+
+// Called when user types/selects in the guest name field
+function onPersonNameInput(){
+  const val=(document.getElementById('fName').value||'').trim();
+  const info=document.getElementById('fNameInfo');
+  if(!val){info.textContent='';return}
+  const match=allPersons.find(p=>_personName(p).toLowerCase()===val.toLowerCase());
+  if(match){
+    // Auto-fill company only if empty (don't overwrite user's manual entry)
+    const compField=document.getElementById('fCompany');
+    if(!compField.value.trim()&&_personCompany(match)){
+      compField.value=_personCompany(match);
+    }
+    const mobile=match.Mobile||match.Phone||match.Telefon||'';
+    const parts=[];
+    if(mobile)parts.push('📱 '+mobile);
+    if(match.Email)parts.push('✉ '+match.Email);
+    info.innerHTML='<span style="color:var(--text-success)">✓ Existing person</span>'+(parts.length?' · '+escapeHtml(parts.join(' · ')):'');
+  }else{
+    info.innerHTML='<span class="muted">New name — will be saved as free text (create person card in Persons panel to enable autofill next time)</span>';
+  }
 }
