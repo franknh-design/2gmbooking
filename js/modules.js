@@ -734,69 +734,31 @@ async function deleteRate(id){
 }
 
 
-// ===== v12.5 Full control system =====
+// ===== v12.6 Date fix (timezone safe) =====
 
-function toDateOnly(d) {
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+function parseDateLocal(dateStr) {
+  if (!dateStr) return null;
+  const parts = dateStr.split('-');
+  if (parts.length !== 3) return new Date(dateStr);
+  return new Date(parts[0], parts[1]-1, parts[2]);
 }
 
-function categorizeBookings(data) {
-  const today = toDateOnly(new Date());
-
-  const upcoming = [];
-  const active = [];
-  const past = [];
-
-  data.forEach(item => {
-    const checkIn = toDateOnly(new Date(item.Check_In));
-    const checkOut = toDateOnly(new Date(item.Check_Out));
-
-    if (!item.status) item.status = 'auto';
-
-    if (item.status === 'active') {
-      active.push(item);
-      return;
-    }
-
-    if (item.status === 'upcoming') {
-      upcoming.push(item);
-      return;
-    }
-
-    if (checkIn > today) {
-      upcoming.push(item);
-    } else if (checkIn <= today && checkOut >= today) {
-      active.push(item);
-    } else {
-      past.push(item);
-    }
-  });
-
-  return { upcoming, active, past };
+function formatDateInput(dateStr) {
+  const d = parseDateLocal(dateStr);
+  if (!d) return '';
+  return d.getFullYear() + '-' +
+    String(d.getMonth()+1).padStart(2,'0') + '-' +
+    String(d.getDate()).padStart(2,'0');
 }
 
-function moveToActive(id) {
-  window.bookings = window.bookings.map(b => {
-    if (b.id == id) b.status = 'active';
-    return b;
-  });
-  render();
-}
+// Override common bug pattern (best effort)
+const _oldDate = Date;
+Date = function(...args) {
+  if (args.length === 1 && typeof args[0] === 'string' && args[0].match(/^\d{4}-\d{2}-\d{2}$/)) {
+    return parseDateLocal(args[0]);
+  }
+  return new _oldDate(...args);
+};
+Date.prototype = _oldDate.prototype;
 
-function moveToUpcoming(id) {
-  window.bookings = window.bookings.map(b => {
-    if (b.id == id) b.status = 'upcoming';
-    return b;
-  });
-  render();
-}
-
-function clearStatus(id) {
-  window.bookings = window.bookings.map(b => {
-    if (b.id == id) delete b.status;
-    return b;
-  });
-  render();
-}
-
-// ===== End v12.5 =====
+// ===== End v12.6 =====
