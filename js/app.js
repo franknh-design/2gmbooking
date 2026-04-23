@@ -173,7 +173,7 @@ function filterBookingsForView(){
     if(!roomIds.has(rid))return false;
     if(b.Status==='Active')return true;
     if(b.Status==='Upcoming'){
-      const ci=new Date(b.Check_In);ci.setHours(0,0,0,0);
+      const ci=parseDateSafe(b.Check_In);ci.setHours(0,0,0,0);
       const today=new Date();today.setHours(0,0,0,0);
       if(ci.getTime()<today.getTime())return true;
       if(ci.getTime()===today.getTime()&&now.getHours()>=12)return true;
@@ -188,14 +188,23 @@ function refreshLocal(){
 }
 
 // --- UTILS ---
-function formatDate(d){if(!d)return'';const dt=new Date(d);return String(dt.getDate()).padStart(2,'0')+'.'+String(dt.getMonth()+1).padStart(2,'0')+'.'+dt.getFullYear()}
-function toISODate(d){if(!d)return'';return new Date(d).toISOString().split('T')[0]}
+function parseDateSafe(v){
+  if(v==null||v==='')return new Date(v);
+  if(v instanceof Date)return new Date(v);
+  if(typeof v==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(v)){
+    const [y,m,d]=v.split('-').map(Number);
+    return new Date(y,m-1,d);
+  }
+  return new Date(v);
+}
+function formatDate(d){if(!d)return'';const dt=parseDateSafe(d);return String(dt.getDate()).padStart(2,'0')+'.'+String(dt.getMonth()+1).padStart(2,'0')+'.'+dt.getFullYear()}
+function toISODate(d){if(!d)return'';return parseDateSafe(d).toISOString().split('T')[0]}
 
-function getNextWeekday(date){const d=new Date(date);const day=d.getDay();if(day===0)d.setDate(d.getDate()+1);else if(day===6)d.setDate(d.getDate()+2);return d}
+function getNextWeekday(date){const d=parseDateSafe(date);const day=d.getDay();if(day===0)d.setDate(d.getDate()+1);else if(day===6)d.setDate(d.getDate()+2);return d}
 
 function calcWashDates(checkInDate,checkOutDate){
-  const ci=new Date(checkInDate);ci.setHours(0,0,0,0);
-  const co=checkOutDate?new Date(checkOutDate):null;if(co)co.setHours(0,0,0,0);
+  const ci=parseDateSafe(checkInDate);ci.setHours(0,0,0,0);
+  const co=checkOutDate?parseDateSafe(checkOutDate):null;if(co)co.setHours(0,0,0,0);
   const today=new Date();today.setHours(0,0,0,0);
   const washes=[];let week=1;
   while(week<=52){
@@ -282,8 +291,8 @@ function getDailyRate(personName,company,propertyTitle,roomId){
 
 function calcBookingNights(booking){
   if(!booking||!booking.Check_In)return 0;
-  const ci=new Date(booking.Check_In);ci.setHours(0,0,0,0);
-  const co=booking.Check_Out?new Date(booking.Check_Out):new Date();co.setHours(0,0,0,0);
+  const ci=parseDateSafe(booking.Check_In);ci.setHours(0,0,0,0);
+  const co=booking.Check_Out?parseDateSafe(booking.Check_Out):new Date();co.setHours(0,0,0,0);
   return Math.max(0,Math.round((co-ci)/864e5));
 }
 
@@ -311,7 +320,7 @@ function batCell(l){if(l==null)return'<span class="muted">—</span>';if(l<30)re
 function datesCell(b){
   if(!b)return'<span class="empty-text">Empty</span>';
   const ci=formatDate(b.Check_In);const co=b.Check_Out?formatDate(b.Check_Out):'Open-ended';
-  const today=new Date();today.setHours(0,0,0,0);const ind=new Date(b.Check_In);ind.setHours(0,0,0,0);
+  const today=new Date();today.setHours(0,0,0,0);const ind=parseDateSafe(b.Check_In);ind.setHours(0,0,0,0);
   const days=Math.round((ind-today)/864e5);let s='';
   if(b.Status==='Upcoming'||days>0){if(days>=0&&days<=4)s='color:var(--accent);font-weight:500;';else if(days>4&&days<=30)s='color:#EF9F27;font-weight:500;'}
   return'<span style="'+s+'">'+ci+'</span> — '+co;
@@ -401,7 +410,7 @@ function updateStats(){
   allBookings.forEach(b=>{
     if(b.Status!=='Active'&&b.Status!=='Completed')return;
     const rid=String(b.RoomLookupId||'');if(!propRoomIds.has(rid))return;
-    const ci=new Date(b.Check_In);const co=b.Check_Out?new Date(b.Check_Out):now;
+    const ci=parseDateSafe(b.Check_In);const co=b.Check_Out?parseDateSafe(b.Check_Out):now;
     const monthStart=new Date(curYear,curMonth,1);const monthEnd=new Date(curYear,curMonth,today+1);
     const start=ci>monthStart?ci:monthStart;const end=co<monthEnd?co:monthEnd;
     const nights=Math.max(0,Math.round((end-start)/864e5));
@@ -554,8 +563,8 @@ function findAvailableRoom(){
 
   if(!checkIn){info.textContent='Set check-in date first';info.style.color='var(--text-danger)';return}
 
-  const newIn=new Date(checkIn);newIn.setHours(0,0,0,0);
-  const newOut=checkOut?new Date(checkOut):null;
+  const newIn=parseDateSafe(checkIn);newIn.setHours(0,0,0,0);
+  const newOut=checkOut?parseDateSafe(checkOut):null;
   if(newOut)newOut.setHours(0,0,0,0);
 
   // Find rooms that are NOT occupied during the given dates
@@ -566,8 +575,8 @@ function findAvailableRoom(){
       if(b.Status==='Cancelled'||b.Status==='Completed')return false;
       if(String(b.RoomLookupId)!==String(room.id))return false;
 
-      const bIn=new Date(b.Check_In);bIn.setHours(0,0,0,0);
-      const bOut=b.Check_Out?new Date(b.Check_Out):null;
+      const bIn=parseDateSafe(b.Check_In);bIn.setHours(0,0,0,0);
+      const bOut=b.Check_Out?parseDateSafe(b.Check_Out):null;
       if(bOut)bOut.setHours(0,0,0,0);
 
       // Check overlap
@@ -605,13 +614,13 @@ async function saveBooking(){
   if(!checkIn){alert('Check-in date is required');return}
 
   // Collision check
-  const newIn=new Date(checkIn);newIn.setHours(0,0,0,0);
-  const newOut=checkOut?new Date(checkOut):null;if(newOut)newOut.setHours(0,0,0,0);
+  const newIn=parseDateSafe(checkIn);newIn.setHours(0,0,0,0);
+  const newOut=checkOut?parseDateSafe(checkOut):null;if(newOut)newOut.setHours(0,0,0,0);
   const conflicts=allBookings.filter(b=>{
     if(editingBookingId&&b.id===editingBookingId)return false;
     if(b.Status==='Cancelled'||b.Status==='Completed')return false;
     if(String(b.RoomLookupId)!==String(roomId))return false;
-    const bIn=new Date(b.Check_In);bIn.setHours(0,0,0,0);const bOut=b.Check_Out?new Date(b.Check_Out):null;if(bOut)bOut.setHours(0,0,0,0);
+    const bIn=parseDateSafe(b.Check_In);bIn.setHours(0,0,0,0);const bOut=b.Check_Out?parseDateSafe(b.Check_Out):null;if(bOut)bOut.setHours(0,0,0,0);
     if(!bOut)return newIn>=bIn||(newOut?newOut>bIn:true);
     if(!newOut)return bOut>newIn||bIn>=newIn;
     return newIn<bOut&&newOut>bIn;
