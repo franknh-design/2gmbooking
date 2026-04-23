@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v12.8 — app.js (Core)
+// 2GM Booking v12.9 — app.js (Core)
 // Auth, Graph API, Data, Rendering, Bookings
 // ============================================================
 
@@ -105,6 +105,20 @@ async function loadCurrentUser(){
 }
 
 function can(perm){return currentUser.permissions.includes(perm)}
+
+// Update which nav button is highlighted as active
+function updateNavActiveState(){
+  const btns={btnUpcoming:'incomingPanel',btnArchive:'archivePanel',btnPersons:'personsPanel'};
+  Object.keys(btns).forEach(bid=>{
+    const btn=document.getElementById(bid);if(!btn)return;
+    const panel=document.getElementById(btns[bid]);
+    const isActive=panel&&panel.classList.contains('open');
+    btn.classList.toggle('active-nav',isActive);
+  });
+  // Hours is special — it's a view, not a panel
+  const hBtn=document.getElementById('btnHours');
+  if(hBtn)hBtn.classList.toggle('active-nav',currentView==='hours');
+}
 
 function applyPermissions(){
   const el=id=>document.getElementById(id);
@@ -660,8 +674,8 @@ function printDoorTag(bookingId){
 }
 
 // --- VIEW SWITCHING ---
-function showMainView(){currentView='main';document.getElementById('mainView').style.display='';document.getElementById('hoursView').style.display='none';document.getElementById('propertySelect').style.display='';if(selectedProperty)document.getElementById('headerTitle').textContent='2GM Booking — '+selectedProperty.Title}
-function showHoursView(){currentView='hours';document.getElementById('mainView').style.display='none';document.getElementById('mainView').classList.remove('panel-mode');document.getElementById('incomingPanel').classList.remove('open');document.getElementById('archivePanel').classList.remove('open');const pp=document.getElementById('personsPanel');if(pp)pp.classList.remove('open');document.getElementById('hoursView').style.display='';document.getElementById('propertySelect').style.display='none';document.getElementById('headerTitle').textContent='2GM Booking — Hours'}
+function showMainView(){currentView='main';document.getElementById('mainView').style.display='';document.getElementById('hoursView').style.display='none';document.getElementById('propertySelect').style.display='';if(selectedProperty)document.getElementById('headerTitle').textContent='2GM Booking — '+selectedProperty.Title;updateNavActiveState()}
+function showHoursView(){currentView='hours';document.getElementById('mainView').style.display='none';document.getElementById('mainView').classList.remove('panel-mode');document.getElementById('incomingPanel').classList.remove('open');document.getElementById('archivePanel').classList.remove('open');const pp=document.getElementById('personsPanel');if(pp)pp.classList.remove('open');document.getElementById('hoursView').style.display='';document.getElementById('propertySelect').style.display='none';document.getElementById('headerTitle').textContent='2GM Booking — Hours';updateNavActiveState()}
 function ensureMainView(){if(currentView==='hours')showMainView()}
 
 // --- FILTER ---

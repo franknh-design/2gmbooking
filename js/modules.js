@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v12.8 — modules.js
+// 2GM Booking v12.9 — modules.js
 // Hours, Archive, Import/Export, Admin (checkbox permissions)
 // ============================================================
 
@@ -23,6 +23,7 @@ function toggleIncoming(){
   const isOpen=panel.classList.contains('open');
   document.getElementById('mainView').classList.toggle('panel-mode',isOpen);
   if(isOpen)renderIncoming();
+  updateNavActiveState();
 }
 function renderIncoming(){
   const today=new Date();today.setHours(0,0,0,0);
@@ -61,6 +62,7 @@ function toggleArchive(){
   const isOpen=panel.classList.contains('open');
   document.getElementById('mainView').classList.toggle('panel-mode',isOpen);
   if(isOpen)renderArchive();
+  updateNavActiveState();
 }
 let archivePage=0; // 0-indexed
 const ARCHIVE_PAGE_SIZE=50;
@@ -876,7 +878,7 @@ async function deleteRate(id){
 }
 
 // ============================================================
-// PERSONS / CUSTOMERS (v12.8)
+// PERSONS / CUSTOMERS (v12.9)
 // ============================================================
 let editingPersonId=null;
 
@@ -889,6 +891,7 @@ function togglePersons(){
   const isOpen=panel.classList.contains('open');
   document.getElementById('mainView').classList.toggle('panel-mode',isOpen);
   if(isOpen)renderPersons();
+  updateNavActiveState();
 }
 
 function _personName(p){return p.Name||p.Title||''}
@@ -1035,7 +1038,7 @@ function onPersonNameInput(){
 }
 
 // ============================================================
-// CHARTS (v12.8) — pure SVG, no dependencies
+// CHARTS (v12.9) — pure SVG, no dependencies
 // ============================================================
 
 // Reusable bar chart: data = [{label, value, subtitle?}]
@@ -1344,7 +1347,7 @@ function renderHoursCharts(filtered){
 }
 
 // ============================================================
-// CLEANING EFFICIENCY ANALYSIS (v12.8)
+// CLEANING EFFICIENCY ANALYSIS (v12.9)
 // ============================================================
 // Compares cleaner hours against guest-nights per property, per week/month.
 // USE WITH CAUTION: Hours include breaks, transport, repairs — not just cleaning.
