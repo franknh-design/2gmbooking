@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v12.6 — modules.js
+// 2GM Booking v12.8 — modules.js
 // Hours, Archive, Import/Export, Admin (checkbox permissions)
 // ============================================================
 
@@ -62,6 +62,9 @@ function toggleArchive(){
   document.getElementById('mainView').classList.toggle('panel-mode',isOpen);
   if(isOpen)renderArchive();
 }
+let archivePage=0; // 0-indexed
+const ARCHIVE_PAGE_SIZE=50;
+
 function renderArchive(){
   const search=(document.getElementById('archiveSearch').value||'').toLowerCase();
   const statusFilter=document.getElementById('archiveStatus').value;
@@ -82,23 +85,68 @@ function renderArchive(){
     if(search){if(!((b.Person_Name||'')+(b.Company||'')+getRoomTitle(b)).toLowerCase().includes(search))return false}
     return true;
   }).sort((a,b)=>new Date(b.Check_In||0)-new Date(a.Check_In||0));
-  const limited=archived.slice(0,100);
+
+  const totalPages=Math.max(1,Math.ceil(archived.length/ARCHIVE_PAGE_SIZE));
+  if(archivePage>=totalPages)archivePage=totalPages-1;
+  if(archivePage<0)archivePage=0;
+  const start=archivePage*ARCHIVE_PAGE_SIZE;
+  const pageItems=archived.slice(start,start+ARCHIVE_PAGE_SIZE);
+
   let titleSuffix='';
   if(fromVal||toVal){titleSuffix=' — '+(fromVal?formatDate(fromVal):'…')+' → '+(toVal?formatDate(toVal):'…')}
   document.getElementById('archiveTitle').textContent='Archive — '+archived.length+' booking'+(archived.length!==1?'s':'')+titleSuffix;
   const body=document.getElementById('archiveBody');
   // Re-render charts if open
   if(document.getElementById('archiveChartsContainer').style.display!=='none'){renderArchiveCharts(archived)}
-  if(!limited.length){body.innerHTML='<tr><td colspan="7" class="loading">No bookings found</td></tr>';return}
-  body.innerHTML=limited.map(b=>{
+  if(!pageItems.length){body.innerHTML='<tr><td colspan="7" class="loading">No bookings found</td></tr>';renderArchivePagination(0,1);return}
+  body.innerHTML=pageItems.map(b=>{
     const sc={Completed:'background:var(--bg-secondary);color:var(--text-secondary)',Cancelled:'background:var(--bg-danger);color:var(--text-danger)',Active:'background:var(--bg-success);color:var(--text-success)',Upcoming:'background:var(--bg-warning);color:var(--text-warning)'}[b.Status]||'';
     return'<tr><td style="font-weight:500">'+getRoomTitle(b)+'</td><td>'+(b.Person_Name||'—')+'</td><td class="muted">'+(b.Company||'')+'</td><td>'+formatDate(b.Check_In)+'</td><td>'+(b.Check_Out?formatDate(b.Check_Out):'Open-ended')+'</td><td><span class="pill" style="'+sc+'">'+b.Status+'</span></td>'
       +'<td>'+(b.Status==='Completed'||b.Status==='Cancelled'?'<button onclick="reopenBooking(\''+b.id+'\')" style="padding:3px 10px;border:1px solid var(--accent);border-radius:4px;background:var(--bg-success);color:var(--text-success);cursor:pointer;font-size:11px;font-family:inherit">Reopen</button>':'')+'</td></tr>';
-  }).join('')+(archived.length>100?'<tr><td colspan="7" class="loading">Showing 100 of '+archived.length+'</td></tr>':'');
+  }).join('');
+  renderArchivePagination(archived.length,totalPages);
 }
+
+function renderArchivePagination(totalItems,totalPages){
+  let pager=document.getElementById('archivePagination');
+  if(!pager){
+    pager=document.createElement('div');pager.id='archivePagination';
+    pager.style.cssText='display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border-top:1px solid var(--border-tertiary);background:var(--bg-secondary);font-size:12px';
+    const bodyWrap=document.getElementById('archiveBody').closest('div[style*="overflow-y:auto"]');
+    if(bodyWrap&&bodyWrap.parentNode)bodyWrap.parentNode.appendChild(pager);
+  }
+  if(totalItems<=ARCHIVE_PAGE_SIZE){pager.style.display='none';return}
+  pager.style.display='flex';
+  const start=archivePage*ARCHIVE_PAGE_SIZE+1;
+  const end=Math.min((archivePage+1)*ARCHIVE_PAGE_SIZE,totalItems);
+  // Build page numbers — show first, last, current +-2
+  const pageNums=new Set([0,totalPages-1,archivePage]);
+  for(let i=Math.max(0,archivePage-2);i<=Math.min(totalPages-1,archivePage+2);i++)pageNums.add(i);
+  const sortedPages=[...pageNums].sort((a,b)=>a-b);
+  let btns='';
+  sortedPages.forEach((p,i)=>{
+    if(i>0&&p-sortedPages[i-1]>1)btns+='<span style="color:var(--text-tertiary);margin:0 4px">…</span>';
+    const isActive=p===archivePage;
+    btns+='<button onclick="goArchivePage('+p+')" style="padding:4px 10px;margin:0 2px;border:1px solid var(--border-tertiary);border-radius:4px;background:'+(isActive?'var(--accent)':'var(--bg-primary)')+';color:'+(isActive?'#fff':'var(--text-primary)')+';cursor:pointer;font-size:12px;min-width:28px">'+(p+1)+'</button>';
+  });
+  pager.innerHTML='<div>Showing <strong>'+start+'–'+end+'</strong> of <strong>'+totalItems+'</strong></div>'
+    +'<div style="display:flex;align-items:center;gap:4px">'
+    +'<button onclick="goArchivePage('+(archivePage-1)+')" '+(archivePage===0?'disabled':'')+' style="padding:4px 10px;border:1px solid var(--border-tertiary);border-radius:4px;background:var(--bg-primary);cursor:pointer;font-size:12px;'+(archivePage===0?'opacity:.4;cursor:not-allowed':'')+'">← Prev</button>'
+    +btns
+    +'<button onclick="goArchivePage('+(archivePage+1)+')" '+(archivePage>=totalPages-1?'disabled':'')+' style="padding:4px 10px;border:1px solid var(--border-tertiary);border-radius:4px;background:var(--bg-primary);cursor:pointer;font-size:12px;'+(archivePage>=totalPages-1?'opacity:.4;cursor:not-allowed':'')+'">Next →</button>'
+    +'</div>';
+}
+
+function goArchivePage(p){archivePage=p;renderArchive();
+  // Scroll archive body to top so user sees new page
+  const bodyWrap=document.getElementById('archiveBody').closest('div[style*="overflow-y:auto"]');
+  if(bodyWrap)bodyWrap.scrollTop=0;
+}
+function resetArchivePage(){archivePage=0;renderArchive()}
 
 function clearArchiveDateRange(){
   document.getElementById('archiveFrom').value='';document.getElementById('archiveTo').value='';
+  archivePage=0;
   renderArchive();
 }
 function getRoomTitle(b){const r=allRooms.find(rm=>rm.id===String(b.RoomLookupId));return r?r.Title:'?'}
@@ -282,6 +330,9 @@ function renderHours(){
   // Update charts if visible
   const chartsContainer=document.getElementById('hoursChartsContainer');
   if(chartsContainer&&chartsContainer.style.display!=='none'){renderHoursCharts(filtered)}
+  // Update efficiency if visible
+  const effContainer=document.getElementById('efficiencyContainer');
+  if(effContainer&&effContainer.style.display!=='none'){renderEfficiency()}
 
   const body=document.getElementById('hoursBody');
   if(!filtered.length){body.innerHTML='<tr><td colspan="8" class="loading">No hours registered</td></tr>';document.getElementById('hoursTotal').textContent='0.00';return}
@@ -442,9 +493,14 @@ function renderAdminUsers(){
     const assigned=u.AssignedProperties?u.AssignedProperties.split(',').map(s=>s.trim()):[];
 
     let html='<div style="padding:12px;border-bottom:1px solid var(--border-tertiary)">';
-    html+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">';
+    html+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;flex-wrap:wrap;gap:8px">';
     html+='<div><strong>'+(u.DisplayName||'—')+'</strong> <span class="muted" style="font-size:12px">'+(u.Epost||'')+'</span></div>';
-    html+='<div style="display:flex;gap:8px;align-items:center">';
+    html+='<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">';
+    // Role dropdown
+    const roles=['SuperAdmin','Admin','Cleaner','ReadOnly','Custom'];
+    const currentRole=u.Role||'Custom';
+    html+='<label style="font-size:12px;display:flex;align-items:center;gap:4px">Role: <select onchange="setUserRole(\''+u.id+'\',this.value)" style="padding:3px 6px;border:1px solid var(--border-tertiary);border-radius:4px;font-size:12px;font-family:inherit"'+(isSelf?' disabled':'')+'>'
+      +roles.map(r=>'<option value="'+r+'"'+(r===currentRole?' selected':'')+'>'+r+'</option>').join('')+'</select></label>';
     html+='<label style="font-size:12px;display:flex;align-items:center;gap:4px"><input type="checkbox"'+(u.Active!==false?' checked':'')+(isSelf?' disabled':'')+' onchange="toggleUserActive(\''+u.id+'\',this.checked)"> Active</label>';
     html+='<button onclick="sendInviteEmail(\''+u.id+'\')" style="padding:3px 10px;border:1px solid var(--accent);border-radius:4px;background:var(--bg-success);color:var(--text-success);cursor:pointer;font-size:11px;font-family:inherit" title="Send login invite email">✉ Invite</button>';
     if(!isSelf)html+='<button onclick="deleteUser(\''+u.id+'\')" style="border:0;background:0 0;color:var(--text-danger);cursor:pointer;font-size:12px">Delete</button>';
@@ -488,6 +544,20 @@ async function toggleUserPerm(userId,perm,enabled){
 
 async function toggleUserActive(userId,active){
   try{await updateListItem('Users',userId,{Active:active});const u=allUsers.find(x=>x.id===userId);if(u)u.Active=active}catch(e){alert('Failed')}
+}
+
+async function setUserRole(userId,role){
+  const u=allUsers.find(x=>x.id===userId);if(!u)return;
+  const roleMap={SuperAdmin:ALL_PERMS.map(p=>p.key),Admin:ALL_PERMS.filter(p=>p.key!=='admin').map(p=>p.key),Cleaner:['cleaning','print_doortag','view_hours','edit_hours'],ReadOnly:['view_bookings']};
+  const fields={Role:role};
+  // If picking a real role, also set permissions. For "Custom", just save role and keep current perms.
+  if(roleMap[role]){fields.Permissions=roleMap[role].join(',')}
+  try{
+    await updateListItem('Users',userId,fields);
+    u.Role=role;
+    if(fields.Permissions)u.Permissions=fields.Permissions;
+    renderAdminUsers();
+  }catch(e){alert('Failed to update role: '+e.message);renderAdminUsers()}
 }
 
 async function toggleUserProperty(userId,propTitle,enabled){
@@ -806,7 +876,7 @@ async function deleteRate(id){
 }
 
 // ============================================================
-// PERSONS / CUSTOMERS (v12.6)
+// PERSONS / CUSTOMERS (v12.8)
 // ============================================================
 let editingPersonId=null;
 
@@ -965,7 +1035,7 @@ function onPersonNameInput(){
 }
 
 // ============================================================
-// CHARTS (v12.6) — pure SVG, no dependencies
+// CHARTS (v12.8) — pure SVG, no dependencies
 // ============================================================
 
 // Reusable bar chart: data = [{label, value, subtitle?}]
@@ -1171,7 +1241,16 @@ function toggleHoursCharts(){
   const btn=document.getElementById('hoursChartsBtn');
   btn.style.background=isOpen?'var(--bg-secondary)':'var(--accent)';
   btn.style.color=isOpen?'':'#fff';
-  if(!isOpen)renderHours();
+  // Close efficiency to avoid clash
+  if(!isOpen){
+    const ec=document.getElementById('efficiencyContainer');
+    if(ec&&ec.style.display!=='none'){
+      ec.style.display='none';
+      const eb=document.getElementById('efficiencyBtn');
+      if(eb){eb.style.background='var(--bg-secondary)';eb.style.color=''}
+    }
+    renderHours();
+  }
 }
 
 function renderHoursCharts(filtered){
@@ -1262,4 +1341,357 @@ function renderHoursCharts(filtered){
 
   html+='</div>';
   c.innerHTML=html;
+}
+
+// ============================================================
+// CLEANING EFFICIENCY ANALYSIS (v12.8)
+// ============================================================
+// Compares cleaner hours against guest-nights per property, per week/month.
+// USE WITH CAUTION: Hours include breaks, transport, repairs — not just cleaning.
+// Use this to spot trends and big deviations, not as absolute performance metric.
+
+let efficiencyMode='month'; // 'week' or 'month'
+
+function toggleEfficiency(){
+  if(!can('view_efficiency')){alert('You do not have permission to view efficiency analysis.');return}
+  const c=document.getElementById('efficiencyContainer');
+  const isOpen=c.style.display!=='none';
+  c.style.display=isOpen?'none':'block';
+  const btn=document.getElementById('efficiencyBtn');
+  btn.style.background=isOpen?'var(--bg-secondary)':'var(--accent)';
+  btn.style.color=isOpen?'':'#fff';
+  // Close charts view to avoid visual clash
+  if(!isOpen){
+    const cc=document.getElementById('hoursChartsContainer');
+    if(cc&&cc.style.display!=='none'){toggleHoursCharts()}
+    renderEfficiency();
+  }
+}
+
+function setEfficiencyMode(m){efficiencyMode=m;renderEfficiency()}
+
+// Find all users with Cleaner role (from SharePoint Users list)
+function _getCleanerEmails(){
+  return new Set(allUsers.filter(u=>u.Role==='Cleaner').map(u=>(u.Epost||'').toLowerCase()).filter(Boolean));
+}
+
+// ISO week number (Monday-start) for a date
+function _isoWeek(d){
+  const x=new Date(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate()));
+  const day=x.getUTCDay()||7;
+  x.setUTCDate(x.getUTCDate()+4-day);
+  const yearStart=new Date(Date.UTC(x.getUTCFullYear(),0,1));
+  const wk=Math.ceil(((x-yearStart)/864e5+1)/7);
+  return x.getUTCFullYear()+'-W'+String(wk).padStart(2,'0');
+}
+function _monthKey(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')}
+
+// Distribute a stay into day-buckets (returns {bucketKey: nights})
+function _distributeNights(checkIn,checkOut,bucketFn){
+  const buckets={};
+  if(!checkIn)return buckets;
+  const ci=new Date(checkIn);ci.setHours(0,0,0,0);
+  const co=checkOut?new Date(checkOut):new Date();co.setHours(0,0,0,0);
+  if(co<=ci)return buckets;
+  const cur=new Date(ci);
+  while(cur<co){
+    const k=bucketFn(cur);
+    buckets[k]=(buckets[k]||0)+1;
+    cur.setDate(cur.getDate()+1);
+  }
+  return buckets;
+}
+
+function renderEfficiency(){
+  const c=document.getElementById('efficiencyContainer');
+  if(!c)return;
+  const cleanerEmails=_getCleanerEmails();
+  if(!cleanerEmails.size){
+    c.innerHTML='<div style="padding:20px;text-align:center;color:var(--text-secondary);font-size:13px">'
+      +'<strong>No cleaners configured</strong><br>'
+      +'Efficiency analysis requires at least one user with role "Cleaner" in the admin panel.'
+      +'</div>';
+    return;
+  }
+
+  // Determine active period (from Hours filter)
+  const fromVal=document.getElementById('hoursFrom').value;
+  const toVal=document.getElementById('hoursTo').value;
+  const month=parseInt(document.getElementById('hoursMonth').value);
+  const year=parseInt(document.getElementById('hoursYear').value);
+  const useRange=!!(fromVal||toVal);
+  const fromDate=useRange?(fromVal?new Date(fromVal+'T00:00:00'):new Date(1970,0,1)):new Date(year,month,1);
+  const toDate=useRange?(toVal?new Date(toVal+'T23:59:59'):new Date(2100,0,1)):new Date(year,month+1,0,23,59,59);
+
+  const bucketFn=efficiencyMode==='week'?_isoWeek:_monthKey;
+
+  // --- Collect cleaner hours by property + bucket ---
+  // hoursByPropBucket[propertyTitle][bucketKey] = hours
+  const hoursByPropBucket={};
+  const totalCleanerHours={}; // per bucket, across all properties
+  allHours.forEach(h=>{
+    if(!h.Date||!h.Time_From||!h.Time_To)return;
+    if(!cleanerEmails.has((h.Worker||'').toLowerCase()))return;
+    const d=new Date(h.Date);
+    if(d<fromDate||d>toDate)return;
+    const loc=h.Location||'(unknown)';
+    const hrs=calcHoursDiff(h.Time_From,h.Time_To);
+    if(!hrs)return;
+    const bk=bucketFn(d);
+    if(!hoursByPropBucket[loc])hoursByPropBucket[loc]={};
+    hoursByPropBucket[loc][bk]=(hoursByPropBucket[loc][bk]||0)+hrs;
+    totalCleanerHours[bk]=(totalCleanerHours[bk]||0)+hrs;
+  });
+
+  // --- Collect guest-nights by property + bucket ---
+  // nightsByPropBucket[propertyTitle][bucketKey] = nights
+  const nightsByPropBucket={};
+  const totalNights={};
+  allBookings.forEach(b=>{
+    if(!b.Check_In)return;
+    const propName=b.Property_Name;
+    if(!propName)return;
+    const buckets=_distributeNights(b.Check_In,b.Check_Out,bucketFn);
+    Object.entries(buckets).forEach(([bk,n])=>{
+      // Filter by date window — only count buckets that overlap our period
+      // Parse bucket back to rough date for filtering
+      let bucketDate;
+      if(efficiencyMode==='week'){const [y,w]=bk.split('-W');bucketDate=_dateFromIsoWeek(parseInt(y),parseInt(w))}
+      else{const [y,m]=bk.split('-');bucketDate=new Date(parseInt(y),parseInt(m)-1,15)}
+      if(bucketDate<fromDate||bucketDate>toDate)return;
+      if(!nightsByPropBucket[propName])nightsByPropBucket[propName]={};
+      nightsByPropBucket[propName][bk]=(nightsByPropBucket[propName][bk]||0)+n;
+      totalNights[bk]=(totalNights[bk]||0)+n;
+    });
+  });
+
+  // --- Build property list (union of both sources, sorted) ---
+  const propNames=[...new Set([...Object.keys(hoursByPropBucket),...Object.keys(nightsByPropBucket)])].sort();
+  const allBuckets=[...new Set([...Object.keys(totalCleanerHours),...Object.keys(totalNights)])].sort();
+
+  // --- Render ---
+  let html='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px">'
+    +'<div><strong style="font-size:14px">🧹 Cleaning efficiency</strong>'
+    +'<div style="font-size:11px;color:var(--text-tertiary);margin-top:2px">Only counts hours from users with role "Cleaner". Period follows Hours filter above.</div></div>'
+    +'<div style="display:flex;gap:4px">'
+    +'<button onclick="setEfficiencyMode(\'week\')" style="padding:5px 12px;border:1px solid var(--border-tertiary);border-radius:var(--radius-md);font-size:12px;background:'+(efficiencyMode==='week'?'var(--accent)':'var(--bg-primary)')+';color:'+(efficiencyMode==='week'?'#fff':'var(--text-primary)')+';cursor:pointer">Per week</button>'
+    +'<button onclick="setEfficiencyMode(\'month\')" style="padding:5px 12px;border:1px solid var(--border-tertiary);border-radius:var(--radius-md);font-size:12px;background:'+(efficiencyMode==='month'?'var(--accent)':'var(--bg-primary)')+';color:'+(efficiencyMode==='month'?'#fff':'var(--text-primary)')+';cursor:pointer">Per month</button>'
+    +'</div></div>';
+
+  if(!allBuckets.length){
+    html+='<div style="padding:20px;text-align:center;color:var(--text-secondary);font-size:13px">No cleaner hours or guest-nights found in this period.</div>';
+    c.innerHTML=html;return;
+  }
+
+  // --- Summary cards ---
+  const totH=Object.values(totalCleanerHours).reduce((a,b)=>a+b,0);
+  const totN=Object.values(totalNights).reduce((a,b)=>a+b,0);
+  const overallMinPerNight=totN?Math.round(totH*60/totN):0;
+  html+='<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:14px">'
+    +'<div style="background:#fff;padding:10px;border-radius:8px;border:.5px solid var(--border-tertiary)"><div style="font-size:11px;color:var(--text-tertiary)">Cleaner hours</div><div style="font-size:20px;font-weight:500">'+Math.round(totH*10)/10+'</div></div>'
+    +'<div style="background:#fff;padding:10px;border-radius:8px;border:.5px solid var(--border-tertiary)"><div style="font-size:11px;color:var(--text-tertiary)">Guest-nights</div><div style="font-size:20px;font-weight:500">'+totN+'</div></div>'
+    +'<div style="background:#fff;padding:10px;border-radius:8px;border:.5px solid var(--border-tertiary)"><div style="font-size:11px;color:var(--text-tertiary)">Minutes / guest-night</div><div style="font-size:20px;font-weight:500">'+overallMinPerNight+'</div></div>'
+    +'</div>';
+
+  // --- Combined bar chart: hours vs nights per bucket (across all properties) ---
+  // Show as overlapping bars so user sees correlation
+  html+='<div style="background:#fff;padding:12px;border-radius:8px;border:.5px solid var(--border-tertiary);margin-bottom:14px">'
+    +'<div style="font-size:12px;font-weight:500;margin-bottom:10px;color:var(--text-secondary)">Overall — hours vs guest-nights '+(efficiencyMode==='week'?'(per week)':'(per month)')+'</div>';
+  // Render dual-axis chart manually
+  const chartW=800,chartH=180,padL=45,padR=45,padT=10,padB=28;
+  const innerW=chartW-padL-padR,innerH=chartH-padT-padB;
+  const maxH=Math.max(1,...Object.values(totalCleanerHours));
+  const maxN=Math.max(1,...Object.values(totalNights));
+  let svg='<svg width="100%" viewBox="0 0 '+chartW+' '+chartH+'" xmlns="http://www.w3.org/2000/svg" style="font-family:-apple-system,Segoe UI,sans-serif;font-size:10px">';
+  // Grid
+  for(let i=0;i<=4;i++){
+    const y=padT+(innerH/4)*i;
+    svg+='<line x1="'+padL+'" y1="'+y+'" x2="'+(chartW-padR)+'" y2="'+y+'" stroke="#e5e4df" stroke-width="1"/>';
+    svg+='<text x="'+(padL-6)+'" y="'+(y+3)+'" text-anchor="end" fill="#1D9E75">'+Math.round(maxH*(1-i/4)*10)/10+'</text>';
+    svg+='<text x="'+(chartW-padR+6)+'" y="'+(y+3)+'" text-anchor="start" fill="#EF9F27">'+Math.round(maxN*(1-i/4))+'</text>';
+  }
+  const step=innerW/allBuckets.length;
+  const barW=step*0.35;
+  allBuckets.forEach((bk,i)=>{
+    const h=totalCleanerHours[bk]||0;
+    const n=totalNights[bk]||0;
+    const xCenter=padL+i*step+step/2;
+    // Left bar: hours
+    const barHH=(h/maxH)*innerH;
+    svg+='<rect x="'+(xCenter-barW-1)+'" y="'+(padT+innerH-barHH)+'" width="'+barW+'" height="'+barHH+'" fill="#1D9E75" rx="2"><title>'+bk+': '+Math.round(h*10)/10+' h</title></rect>';
+    // Right bar: nights
+    const barNH=(n/maxN)*innerH;
+    svg+='<rect x="'+(xCenter+1)+'" y="'+(padT+innerH-barNH)+'" width="'+barW+'" height="'+barNH+'" fill="#EF9F27" rx="2"><title>'+bk+': '+n+' nights</title></rect>';
+    // X label
+    if(allBuckets.length<=12||i%Math.ceil(allBuckets.length/10)===0){
+      const shortLbl=efficiencyMode==='week'?bk.slice(5):bk.slice(5);
+      svg+='<text x="'+xCenter+'" y="'+(chartH-10)+'" text-anchor="middle" fill="#5F5E5A">'+shortLbl+'</text>';
+    }
+  });
+  svg+='</svg>';
+  html+=svg
+    +'<div style="display:flex;gap:16px;font-size:11px;margin-top:6px;color:var(--text-secondary)"><span><span style="display:inline-block;width:10px;height:10px;background:#1D9E75;border-radius:2px;vertical-align:middle"></span> Cleaner hours (left axis)</span><span><span style="display:inline-block;width:10px;height:10px;background:#EF9F27;border-radius:2px;vertical-align:middle"></span> Guest-nights (right axis)</span></div>'
+    +'</div>';
+
+  // --- Per-property table: nights, hours, minutes per night per bucket ---
+  html+='<div style="background:#fff;padding:12px;border-radius:8px;border:.5px solid var(--border-tertiary);margin-bottom:14px">'
+    +'<div style="font-size:12px;font-weight:500;margin-bottom:10px;color:var(--text-secondary)">Per property — minutes cleaning per guest-night</div>'
+    +'<div style="overflow-x:auto"><table style="font-size:12px;min-width:500px"><thead><tr>'
+    +'<th style="text-align:left;padding:6px 10px 6px 0">Property</th>'
+    +'<th style="text-align:right;padding:6px 10px">Cleaner hours</th>'
+    +'<th style="text-align:right;padding:6px 10px">Guest-nights</th>'
+    +'<th style="text-align:right;padding:6px 10px">Min/night</th>'
+    +'<th style="text-align:left;padding:6px 10px">Trend</th>'
+    +'</tr></thead><tbody>';
+  propNames.forEach(pn=>{
+    const hSum=Object.values(hoursByPropBucket[pn]||{}).reduce((a,b)=>a+b,0);
+    const nSum=Object.values(nightsByPropBucket[pn]||{}).reduce((a,b)=>a+b,0);
+    const mpn=nSum?Math.round(hSum*60/nSum):0;
+    // Inline sparkline of min/night per bucket
+    const sparkVals=allBuckets.map(bk=>{
+      const h=(hoursByPropBucket[pn]||{})[bk]||0;
+      const n=(nightsByPropBucket[pn]||{})[bk]||0;
+      return n?(h*60/n):0;
+    });
+    const maxSpark=Math.max(1,...sparkVals);
+    const sparkW=200,sparkH=24;
+    const barW2=Math.max(2,sparkW/sparkVals.length-1);
+    let spark='<svg width="'+sparkW+'" height="'+sparkH+'" xmlns="http://www.w3.org/2000/svg">';
+    sparkVals.forEach((v,i)=>{
+      if(v===0)return;
+      const bh=(v/maxSpark)*sparkH;
+      const x=i*(sparkW/sparkVals.length);
+      spark+='<rect x="'+x+'" y="'+(sparkH-bh)+'" width="'+barW2+'" height="'+bh+'" fill="#5B8AC4" rx="1"><title>'+allBuckets[i]+': '+Math.round(v)+' min/night</title></rect>';
+    });
+    spark+='</svg>';
+    // Color-code min/night — a rough flag, but warn for suspicious values
+    let mpnStyle='';
+    if(mpn>0){
+      if(mpn>90)mpnStyle='color:var(--text-danger);font-weight:500';
+      else if(mpn>60)mpnStyle='color:var(--text-warning);font-weight:500';
+      else mpnStyle='color:var(--text-success);font-weight:500';
+    }
+    html+='<tr style="border-top:.5px solid var(--border-tertiary)">'
+      +'<td style="padding:8px 10px 8px 0;font-weight:500">'+escapeHtml(pn)+'</td>'
+      +'<td style="text-align:right;padding:8px 10px">'+Math.round(hSum*10)/10+'</td>'
+      +'<td style="text-align:right;padding:8px 10px">'+nSum+'</td>'
+      +'<td style="text-align:right;padding:8px 10px;'+mpnStyle+'">'+(nSum?mpn:'—')+'</td>'
+      +'<td style="padding:4px 10px">'+spark+'</td>'
+      +'</tr>';
+  });
+  html+='</tbody></table></div></div>';
+
+  // --- Share of time spent on room cleaning (vs other work) ---
+  // Standard: assume MIN_PER_TURNOVER minutes per room turnover. Compare expected vs actual.
+  const MIN_PER_TURNOVER=30; // default assumption
+  // Count turnovers (check-ins) in period per property
+  const turnoversByProp={};
+  let totalTurnovers=0;
+  allBookings.forEach(b=>{
+    if(!b.Check_In)return;
+    const ci=new Date(b.Check_In);
+    if(ci<fromDate||ci>toDate)return;
+    const pn=b.Property_Name;if(!pn)return;
+    turnoversByProp[pn]=(turnoversByProp[pn]||0)+1;
+    totalTurnovers++;
+  });
+  const expectedRoomCleanHours=totalTurnovers*MIN_PER_TURNOVER/60;
+  const shareRoomCleaning=totH>0?Math.round(expectedRoomCleanHours/totH*100):0;
+  html+='<div style="background:#fff;padding:12px;border-radius:8px;border:.5px solid var(--border-tertiary);margin-bottom:14px">'
+    +'<div style="font-size:12px;font-weight:500;margin-bottom:10px;color:var(--text-secondary)">Share of cleaner time on room cleaning</div>'
+    +'<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px">'
+    +'<div><div style="font-size:11px;color:var(--text-tertiary)">Check-ins (turnovers)</div><div style="font-size:18px;font-weight:500">'+totalTurnovers+'</div></div>'
+    +'<div><div style="font-size:11px;color:var(--text-tertiary)">Expected room cleaning</div><div style="font-size:18px;font-weight:500">'+Math.round(expectedRoomCleanHours*10)/10+' h</div><div style="font-size:10px;color:var(--text-tertiary)">at '+MIN_PER_TURNOVER+' min/turnover</div></div>'
+    +'<div><div style="font-size:11px;color:var(--text-tertiary)">Actual cleaner hours</div><div style="font-size:18px;font-weight:500">'+Math.round(totH*10)/10+' h</div></div>'
+    +'<div><div style="font-size:11px;color:var(--text-tertiary)">Room-cleaning share</div><div style="font-size:24px;font-weight:500;color:'+(shareRoomCleaning>100?'var(--text-warning)':shareRoomCleaning<50?'var(--text-danger)':'var(--text-success)')+'">'+shareRoomCleaning+'%</div></div>'
+    +'</div>'
+    +'<div style="font-size:11px;color:var(--text-tertiary);margin-top:8px">Over 100% = cleaners worked faster than standard (or quality slipped). Under 50% = much time went to other work (maintenance, transport, deep cleaning).</div>'
+    +'</div>';
+
+  // --- Per-cleaner breakdown ---
+  const cleanerUsers=allUsers.filter(u=>u.Role==='Cleaner'&&u.Epost);
+  if(cleanerUsers.length){
+    // For each cleaner: hours worked in period, and their own per-bucket data
+    // Estimated room cleaning per cleaner: split total turnovers proportionally by hours
+    html+='<div style="background:#fff;padding:12px;border-radius:8px;border:.5px solid var(--border-tertiary);margin-bottom:14px">'
+      +'<div style="font-size:12px;font-weight:500;margin-bottom:10px;color:var(--text-secondary)">Per cleaner</div>'
+      +'<div style="overflow-x:auto"><table style="font-size:12px;min-width:550px"><thead><tr>'
+      +'<th style="text-align:left;padding:6px 10px 6px 0">Cleaner</th>'
+      +'<th style="text-align:right;padding:6px 10px">Hours</th>'
+      +'<th style="text-align:right;padding:6px 10px">Est. turnovers</th>'
+      +'<th style="text-align:right;padding:6px 10px">Room-clean share</th>'
+      +'<th style="text-align:left;padding:6px 10px">Hours trend ('+(efficiencyMode==='week'?'per week':'per month')+')</th>'
+      +'</tr></thead><tbody>';
+    // Compute per-cleaner hours per bucket
+    const hoursByCleanerBucket={};
+    allHours.forEach(h=>{
+      if(!h.Date||!h.Time_From||!h.Time_To)return;
+      const email=(h.Worker||'').toLowerCase();
+      if(!cleanerEmails.has(email))return;
+      const d=new Date(h.Date);
+      if(d<fromDate||d>toDate)return;
+      const hrs=calcHoursDiff(h.Time_From,h.Time_To);
+      if(!hrs)return;
+      const bk=bucketFn(d);
+      if(!hoursByCleanerBucket[email])hoursByCleanerBucket[email]={};
+      hoursByCleanerBucket[email][bk]=(hoursByCleanerBucket[email][bk]||0)+hrs;
+    });
+    cleanerUsers.forEach(u=>{
+      const email=u.Epost.toLowerCase();
+      const perBucket=hoursByCleanerBucket[email]||{};
+      const cleanerHours=Object.values(perBucket).reduce((a,b)=>a+b,0);
+      // Split turnovers proportionally to hours
+      const estTurnovers=totH>0?Math.round(totalTurnovers*cleanerHours/totH):0;
+      const expectedHours=estTurnovers*MIN_PER_TURNOVER/60;
+      const shareCleaner=cleanerHours>0?Math.round(expectedHours/cleanerHours*100):0;
+      // Sparkline of hours per bucket
+      const sparkVals=allBuckets.map(bk=>perBucket[bk]||0);
+      const maxSpark=Math.max(1,...sparkVals);
+      const sparkW=220,sparkH=24;
+      const barW2=Math.max(2,sparkW/Math.max(sparkVals.length,1)-1);
+      let spark='<svg width="'+sparkW+'" height="'+sparkH+'" xmlns="http://www.w3.org/2000/svg">';
+      sparkVals.forEach((v,i)=>{
+        if(v===0)return;
+        const bh=(v/maxSpark)*sparkH;
+        const x=i*(sparkW/sparkVals.length);
+        spark+='<rect x="'+x+'" y="'+(sparkH-bh)+'" width="'+barW2+'" height="'+bh+'" fill="#1D9E75" rx="1"><title>'+allBuckets[i]+': '+Math.round(v*10)/10+' h</title></rect>';
+      });
+      spark+='</svg>';
+      let shareStyle='';
+      if(cleanerHours>0){
+        if(shareCleaner>100)shareStyle='color:var(--text-warning);font-weight:500';
+        else if(shareCleaner<50)shareStyle='color:var(--text-danger);font-weight:500';
+        else shareStyle='color:var(--text-success);font-weight:500';
+      }
+      html+='<tr style="border-top:.5px solid var(--border-tertiary)">'
+        +'<td style="padding:8px 10px 8px 0;font-weight:500">'+escapeHtml(u.DisplayName||u.Epost)+'</td>'
+        +'<td style="text-align:right;padding:8px 10px">'+Math.round(cleanerHours*10)/10+'</td>'
+        +'<td style="text-align:right;padding:8px 10px">'+estTurnovers+'</td>'
+        +'<td style="text-align:right;padding:8px 10px;'+shareStyle+'">'+(cleanerHours>0?shareCleaner+'%':'—')+'</td>'
+        +'<td style="padding:4px 10px">'+spark+'</td>'
+        +'</tr>';
+    });
+    html+='</tbody></table></div>'
+      +'<div style="font-size:11px;color:var(--text-tertiary);margin-top:8px">Turnovers are split across cleaners proportionally to hours worked (we cannot tell who cleaned which room). "Room-clean share" uses '+MIN_PER_TURNOVER+' min/turnover as standard.</div>'
+      +'</div>';
+  }
+
+  // --- Interpretation guide ---
+  html+='<div style="background:#FAEEDA;border:1px solid #EF9F27;border-radius:8px;padding:10px 14px;font-size:12px;color:var(--text-warning)">'
+    +'<strong>⚠ How to interpret</strong><br>'
+    +'Cleaner hours include breaks, transport between rigs, and small repairs — not just room cleaning. '
+    +'Low guest-nights (e.g. empty month) will inflate "min/night" disproportionately. '
+    +'Use trend sparklines to spot <strong>deviations within the same property over time</strong>, not to compare properties directly. '
+    +'A sudden jump of 40%+ in one rig is worth a conversation — not a conclusion.'
+    +'</div>';
+
+  c.innerHTML=html;
+}
+
+// Helper: approximate date from ISO week
+function _dateFromIsoWeek(year,week){
+  const jan4=new Date(year,0,4);
+  const day=jan4.getDay()||7;
+  const mondayOfWeek1=new Date(year,0,4-day+1);
+  return new Date(mondayOfWeek1.getFullYear(),mondayOfWeek1.getMonth(),mondayOfWeek1.getDate()+(week-1)*7);
 }

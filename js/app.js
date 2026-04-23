@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v12.6 — app.js (Core)
+// 2GM Booking v12.8 — app.js (Core)
 // Auth, Graph API, Data, Rendering, Bookings
 // ============================================================
 
@@ -28,6 +28,7 @@ const ALL_PERMS=[
   {key:'view_prices',label:'View prices'},
   {key:'manage_rates',label:'Manage rates'},
   {key:'hours_reminder',label:'Daily hours reminder'},
+  {key:'view_efficiency',label:'View cleaning efficiency analysis'},
   {key:'admin',label:'User administration'}
 ];
 
@@ -114,6 +115,7 @@ function applyPermissions(){
   show('btnArchive',can('archive')||can('view_bookings'));
   show('btnUpcoming',can('view_bookings'));
   show('btnHours',can('view_hours')||can('edit_hours'));
+  show('efficiencyBtn',can('view_efficiency'));
   showBlock('adminBar',can('admin')||can('manage_rates'));
   // Rates button only if manage_rates
   const rb=el('ratesBtn');if(rb)rb.style.display=can('manage_rates')||can('admin')?'':'none';
