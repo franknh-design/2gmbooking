@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v12.3 — app.js (Core)
+// 2GM Booking v12.4 — app.js (Core)
 // Auth, Graph API, Data, Rendering, Bookings
 // ============================================================
 
@@ -162,8 +162,10 @@ async function loadData(){
     if(rooms.length===0){rooms=allRooms.filter(r=>r.Active!==false)}
     filterBookingsForView();
     renderFloors();updateStats();
+    refreshPersonDatalists();
     // Re-render Upcoming if open (otherwise it shows bookings from previous property)
     if(document.getElementById('incomingPanel').classList.contains('open'))renderIncoming();
+    if(document.getElementById('personsPanel').classList.contains('open'))renderPersons();
   }catch(e){console.error('Error:',e);document.getElementById('floor1Body').innerHTML='<tr><td colspan="7" class="error">Error: '+e.message+'</td></tr>'}
 }
 
@@ -436,14 +438,18 @@ function showDetail(roomId){
     const washHtml=getWashScheduleHtml(booking);
     let infoHtml='';
     if(can('view_bookings')){
-      // Look up phone from Persons list
+      // Look up contact info from Persons list
       const person=allPersons.find(p=>(p.Title||'').toLowerCase()===(booking.Person_Name||'').toLowerCase()
         ||(p.Name||'').toLowerCase()===(booking.Person_Name||'').toLowerCase());
-      const phone=person?(person.Phone||person.Telefon||''):'';
+      const phone=person?(person.Mobile||person.Phone||person.Telefon||''):'';
+      const email=person?(person.Email||''):'';
+      const addr=person?(person.Address||''):'';
       infoHtml='<div class="detail-name">'+booking.Person_Name+'</div>'
         +'<div class="detail-sub">Room '+room.Title+' · '+(booking.Company||'')+' · '+propName+'</div>'
         +'<table class="detail-info">'
-        +(phone?'<tr><td>Phone</td><td><a href="tel:'+phone+'" style="color:var(--accent)">'+phone+'</a></td></tr>':'')
+        +(phone?'<tr><td>Mobile</td><td><a href="tel:'+phone+'" style="color:var(--accent)">'+phone+'</a></td></tr>':'')
+        +(email?'<tr><td>Email</td><td><a href="mailto:'+email+'" style="color:var(--accent)">'+email+'</a></td></tr>':'')
+        +(addr?'<tr><td>Address</td><td style="white-space:pre-line">'+addr+'</td></tr>':'')
         +'<tr><td>Check-in</td><td>'+formatDate(booking.Check_In)+'</td></tr>'
         +'<tr><td>Check-out</td><td>'+(booking.Check_Out?formatDate(booking.Check_Out):'Open-ended')+'</td></tr>'
         +'<tr><td>Status</td><td>'+booking.Status+'</td></tr>'
@@ -653,7 +659,7 @@ function printDoorTag(bookingId){
 
 // --- VIEW SWITCHING ---
 function showMainView(){currentView='main';document.getElementById('mainView').style.display='';document.getElementById('hoursView').style.display='none';document.getElementById('propertySelect').style.display='';if(selectedProperty)document.getElementById('headerTitle').textContent='2GM Booking — '+selectedProperty.Title}
-function showHoursView(){currentView='hours';document.getElementById('mainView').style.display='none';document.getElementById('mainView').classList.remove('panel-mode');document.getElementById('incomingPanel').classList.remove('open');document.getElementById('archivePanel').classList.remove('open');document.getElementById('hoursView').style.display='';document.getElementById('propertySelect').style.display='none';document.getElementById('headerTitle').textContent='2GM Booking — Hours'}
+function showHoursView(){currentView='hours';document.getElementById('mainView').style.display='none';document.getElementById('mainView').classList.remove('panel-mode');document.getElementById('incomingPanel').classList.remove('open');document.getElementById('archivePanel').classList.remove('open');const pp=document.getElementById('personsPanel');if(pp)pp.classList.remove('open');document.getElementById('hoursView').style.display='';document.getElementById('propertySelect').style.display='none';document.getElementById('headerTitle').textContent='2GM Booking — Hours'}
 function ensureMainView(){if(currentView==='hours')showMainView()}
 
 // --- FILTER ---
