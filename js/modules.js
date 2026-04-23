@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v12.11 — modules.js
+// 2GM Booking v12.13 — modules.js
 // Hours, Archive, Import/Export, Admin (checkbox permissions)
 // ============================================================
 
@@ -18,6 +18,7 @@ function toggleIncoming(){
   ensureMainView();
   document.getElementById('archivePanel').classList.remove('open');
   const pp=document.getElementById('personsPanel');if(pp)pp.classList.remove('open');
+  const ip=document.getElementById('invoicingPanel');if(ip)ip.classList.remove('open');
   const panel=document.getElementById('incomingPanel');
   panel.classList.toggle('open');
   const isOpen=panel.classList.contains('open');
@@ -57,6 +58,7 @@ function toggleArchive(){
   ensureMainView();
   document.getElementById('incomingPanel').classList.remove('open');
   const pp=document.getElementById('personsPanel');if(pp)pp.classList.remove('open');
+  const ip=document.getElementById('invoicingPanel');if(ip)ip.classList.remove('open');
   const panel=document.getElementById('archivePanel');
   panel.classList.toggle('open');
   const isOpen=panel.classList.contains('open');
@@ -346,7 +348,7 @@ function renderHours(){
     const workerUser=allUsers.find(u=>(u.Epost||'').toLowerCase()===(h.Worker||'').toLowerCase());
     const wName=workerUser?workerUser.DisplayName:(h.Worker||'');
     return'<tr data-hours-id="'+h.id+'" style="cursor:pointer"><td>'+days[d.getDay()]+' '+formatDate(h.Date)+'</td><td>'+(h.Location||'')+'</td><td>'+wName+'</td><td>'+(h.Time_From||'')+'</td><td>'+(h.Time_To||'')+'</td><td style="text-align:right">'+hrs.toFixed(2)+'</td>'
-      +'<td class="muted" style="font-size:11px">'+(h.Notes||'')+'</td>'
+      +'<td class="muted" style="font-size:11px">'+_hoursNotes(h)+'</td>'
       +'<td style="text-align:right"><button data-hours-delete="'+h.id+'" style="width:20px;height:20px;border-radius:50%;border:1px solid var(--border-tertiary);background:var(--bg-primary);color:var(--text-danger);cursor:pointer;font-size:11px;line-height:1;padding:0" title="Delete">✕</button></td></tr>';
   }).join('');
   document.getElementById('hoursTotal').textContent=total.toFixed(2);
@@ -399,7 +401,7 @@ function openEditHours(id){
   document.getElementById('hFrom').value=h.Time_From||'08:00';
   document.getElementById('hTo').value=h.Time_To||'16:00';
   document.getElementById('hLocation').value=h.Location||'';
-  document.getElementById('hNotes').value=h.Notes||'';
+  document.getElementById('hNotes').value=_hoursNotes(h);
   populateHoursWorkerSelect(h.Worker);
   document.getElementById('hoursModal').classList.add('open');
 }
@@ -447,17 +449,36 @@ async function deleteHoursEntry(id){
   try{const s=await getSiteId();const lid=await getListId('Hours');await graphDelete('/sites/'+s+'/lists/'+lid+'/items/'+id);allHours=allHours.filter(h=>h.id!==id);renderHours()}catch(e){alert('Failed')}
 }
 
+function _hoursNotes(h){return h.Notes||h.Note||h.Merknad||h.Comments||''}
+
 function exportHoursExcel(){
   const month=parseInt(document.getElementById('hoursMonth').value);const year=parseInt(document.getElementById('hoursYear').value);
   const workerFilter=document.getElementById('hoursWorkerFilter').value;
+  const fromVal=document.getElementById('hoursFrom').value;const toVal=document.getElementById('hoursTo').value;
+  const useRange=!!(fromVal||toVal);
+  const fromDate=fromVal?new Date(fromVal+'T00:00:00'):null;
+  const toDate=toVal?new Date(toVal+'T23:59:59'):null;
   const months=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   const days=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-  const filtered=allHours.filter(h=>{if(!h.Date)return false;const d=new Date(h.Date);if(d.getMonth()!==month||d.getFullYear()!==year)return false;if(workerFilter!=='all'&&(h.Worker||'').toLowerCase()!==workerFilter.toLowerCase())return false;return true}).sort((a,b)=>new Date(a.Date)-new Date(b.Date));
+  const filtered=allHours.filter(h=>{
+    if(!h.Date)return false;const d=new Date(h.Date);
+    if(useRange){if(fromDate&&d<fromDate)return false;if(toDate&&d>toDate)return false}
+    else{if(d.getMonth()!==month||d.getFullYear()!==year)return false}
+    if(workerFilter!=='all'&&(h.Worker||'').toLowerCase()!==workerFilter.toLowerCase())return false;
+    return true;
+  }).sort((a,b)=>new Date(a.Date)-new Date(b.Date));
   const headers=['Date','Day','Location','Worker','From','To','Hours','Notes'];let total=0;
-  const rows=filtered.map(h=>{const hrs=calcHoursDiff(h.Time_From,h.Time_To);total+=hrs;const d=new Date(h.Date);const wu=allUsers.find(u=>(u.Epost||'').toLowerCase()===(h.Worker||'').toLowerCase());return[formatDate(h.Date),days[d.getDay()],h.Location||'',wu?wu.DisplayName:h.Worker||'',h.Time_From||'',h.Time_To||'',hrs.toFixed(2),h.Notes||'']});
-  rows.push(['','','','','','','Total',total.toFixed(2)]);
+  const rows=filtered.map(h=>{
+    const hrs=calcHoursDiff(h.Time_From,h.Time_To);total+=hrs;
+    const d=new Date(h.Date);
+    const wu=allUsers.find(u=>(u.Epost||'').toLowerCase()===(h.Worker||'').toLowerCase());
+    return[formatDate(h.Date),days[d.getDay()],h.Location||'',wu?wu.DisplayName:h.Worker||'',h.Time_From||'',h.Time_To||'',hrs.toFixed(2),_hoursNotes(h)];
+  });
+  // Total row: push to Hours column only, leave Notes empty
+  rows.push(['','','','','','Total',total.toFixed(2),'']);
   const workerName=workerFilter==='all'?'All':(allUsers.find(u=>(u.Epost||'').toLowerCase()===workerFilter.toLowerCase())||{}).DisplayName||workerFilter;
-  downloadCSV('Hours_'+workerName.replace(/\s+/g,'_')+'_'+months[month]+'_'+year,headers,rows);
+  const periodStr=useRange?((fromVal||'start')+'_to_'+(toVal||'end')):(months[month]+'_'+year);
+  downloadCSV('Hours_'+workerName.replace(/\s+/g,'_')+'_'+periodStr,headers,rows);
 }
 
 async function archiveHoursMonth(){
@@ -878,7 +899,7 @@ async function deleteRate(id){
 }
 
 // ============================================================
-// PERSONS / CUSTOMERS (v12.11)
+// PERSONS / CUSTOMERS (v12.13)
 // ============================================================
 let editingPersonId=null;
 
@@ -886,6 +907,7 @@ function togglePersons(){
   ensureMainView();
   document.getElementById('incomingPanel').classList.remove('open');
   document.getElementById('archivePanel').classList.remove('open');
+  const ip=document.getElementById('invoicingPanel');if(ip)ip.classList.remove('open');
   const panel=document.getElementById('personsPanel');
   panel.classList.toggle('open');
   const isOpen=panel.classList.contains('open');
@@ -909,7 +931,7 @@ function renderPersons(){
     });
   }
   list.sort((a,b)=>_personName(a).localeCompare(_personName(b),'nb'));
-  if(!list.length){body.innerHTML='<tr><td colspan="8" class="loading">No persons found. Click "+ New person" to add one.</td></tr>';return}
+  if(!list.length){body.innerHTML='<tr><td colspan="8" class="loading">No guests found. Click "+ New guest" to add one.</td></tr>';return}
   // Count bookings per person name (case-insensitive)
   const bookingCount={};
   allBookings.forEach(b=>{
@@ -973,7 +995,7 @@ function escapeHtml(s){return String(s||'').replace(/[&<>"']/g,c=>({"&":"&amp;",
 function openPersonEdit(personId){
   editingPersonId=personId||null;
   const p=personId?allPersons.find(x=>x.id===personId):null;
-  document.getElementById('personModalTitle').textContent=p?'Edit person':'New person';
+  document.getElementById('personModalTitle').textContent=p?'Edit guest':'New guest';
   document.getElementById('pName').value=p?_personName(p):'';
   document.getElementById('pMobile').value=p?(p.Mobile||p.Phone||p.Telefon||''):'';
   document.getElementById('pEmail').value=p?(p.Email||''):'';
@@ -1084,7 +1106,7 @@ function onPersonNameInput(){
 }
 
 // ============================================================
-// CHARTS (v12.11) — pure SVG, no dependencies
+// CHARTS (v12.13) — pure SVG, no dependencies
 // ============================================================
 
 // Reusable bar chart: data = [{label, value, subtitle?}]
@@ -1393,7 +1415,7 @@ function renderHoursCharts(filtered){
 }
 
 // ============================================================
-// CLEANING EFFICIENCY ANALYSIS (v12.11)
+// CLEANING EFFICIENCY ANALYSIS (v12.13)
 // ============================================================
 // Compares cleaner hours against guest-nights per property, per week/month.
 // USE WITH CAUTION: Hours include breaks, transport, repairs — not just cleaning.
@@ -1743,4 +1765,286 @@ function _dateFromIsoWeek(year,week){
   const day=jan4.getDay()||7;
   const mondayOfWeek1=new Date(year,0,4-day+1);
   return new Date(mondayOfWeek1.getFullYear(),mondayOfWeek1.getMonth(),mondayOfWeek1.getDate()+(week-1)*7);
+}
+
+// ============================================================
+// MORE MENU (v12.13)
+// ============================================================
+function toggleMoreMenu(e){
+  if(e){e.stopPropagation();e.preventDefault()}
+  const m=document.getElementById('moreMenu');
+  const wasOpen=m.style.display!=='none'&&m.style.display!=='';
+  // Close first (reset state)
+  m.style.display='none';
+  if(!wasOpen){
+    m.style.display='block';
+    // Install outside-click closer AFTER this click completes
+    requestAnimationFrame(()=>{document.addEventListener('mousedown',_moreMenuOutsideClick)});
+  }
+}
+function _moreMenuOutsideClick(e){
+  const wrap=document.getElementById('moreMenuWrap');
+  if(wrap&&!wrap.contains(e.target)){
+    closeMoreMenu();
+  }
+}
+function closeMoreMenu(){
+  const m=document.getElementById('moreMenu');
+  if(m)m.style.display='none';
+  document.removeEventListener('mousedown',_moreMenuOutsideClick);
+}
+
+// ============================================================
+// FAKTURAGRUNNLAG / INVOICING (v12.13)
+// ============================================================
+let invoicingInitialized=false;
+
+function toggleInvoicing(){
+  ensureMainView();
+  // Close other panels
+  document.getElementById('incomingPanel').classList.remove('open');
+  document.getElementById('archivePanel').classList.remove('open');
+  const pp=document.getElementById('personsPanel');if(pp)pp.classList.remove('open');
+  const panel=document.getElementById('invoicingPanel');
+  panel.classList.toggle('open');
+  const isOpen=panel.classList.contains('open');
+  document.getElementById('mainView').classList.toggle('panel-mode',isOpen);
+  if(isOpen){
+    initInvoicingSelectors();
+    renderInvoicing();
+    // Highlight menu item
+    const mi=document.getElementById('menuBtnInvoicing');if(mi)mi.classList.add('active-nav');
+  }else{
+    const mi=document.getElementById('menuBtnInvoicing');if(mi)mi.classList.remove('active-nav');
+  }
+  updateNavActiveState();
+}
+
+function initInvoicingSelectors(){
+  if(invoicingInitialized)return;
+  const now=new Date();
+  const monthSel=document.getElementById('invMonth');const yearSel=document.getElementById('invYear');
+  const months=['January','February','March','April','May','June','July','August','September','October','November','December'];
+  monthSel.innerHTML=months.map((m,i)=>'<option value="'+i+'"'+(i===now.getMonth()?' selected':'')+'>'+m+'</option>').join('');
+  const y=now.getFullYear();yearSel.innerHTML=[y-2,y-1,y,y+1].map(yr=>'<option value="'+yr+'"'+(yr===y?' selected':'')+'>'+yr+'</option>').join('');
+  invoicingInitialized=true;
+}
+
+function clearInvoicingDateRange(){
+  document.getElementById('invFrom').value='';document.getElementById('invTo').value='';
+  renderInvoicing();
+}
+
+// Compute nights that fall WITHIN the given period (pro-rata for bookings that span across)
+function _nightsInPeriod(booking,fromDate,toDate){
+  if(!booking.Check_In)return 0;
+  const ci=new Date(booking.Check_In);ci.setHours(0,0,0,0);
+  const co=booking.Check_Out?new Date(booking.Check_Out):new Date();co.setHours(0,0,0,0);
+  const start=ci>fromDate?ci:fromDate;
+  const end=co<toDate?co:toDate;
+  return Math.max(0,Math.round((end-start)/864e5));
+}
+
+function renderInvoicing(){
+  const body=document.getElementById('invoicingBody');if(!body)return;
+  const monthVal=document.getElementById('invMonth').value;
+  const yearVal=document.getElementById('invYear').value;
+  const fromVal=document.getElementById('invFrom').value;
+  const toVal=document.getElementById('invTo').value;
+  const groupBy=document.getElementById('invGroupBy').value;
+  const useRange=!!(fromVal||toVal);
+  let fromDate,toDate,periodLabel;
+  if(useRange){
+    fromDate=fromVal?new Date(fromVal+'T00:00:00'):new Date(1970,0,1);
+    toDate=toVal?new Date(toVal+'T23:59:59'):new Date(2100,0,1);
+    periodLabel=(fromVal?formatDate(fromVal):'…')+' → '+(toVal?formatDate(toVal):'…');
+  }else{
+    const m=parseInt(monthVal),y=parseInt(yearVal);
+    fromDate=new Date(y,m,1);
+    toDate=new Date(y,m+1,0,23,59,59);
+    const months=['January','February','March','April','May','June','July','August','September','October','November','December'];
+    periodLabel=months[m]+' '+y;
+  }
+
+  document.getElementById('invoicingTitle').textContent='Fakturagrunnlag — '+periodLabel+' — '+(selectedProperty?selectedProperty.Title:'');
+
+  // Filter bookings that overlap with the period, on current property
+  const currentRoomIds=new Set(rooms.map(r=>r.id));
+  const items=[];
+  allBookings.forEach(b=>{
+    const rid=String(b.RoomLookupId||'');
+    if(!currentRoomIds.has(rid))return;
+    if(!b.Check_In)return;
+    // Only bookings that have been active at any point during period
+    if(b.Status==='Cancelled')return;
+    const ci=new Date(b.Check_In);ci.setHours(0,0,0,0);
+    const co=b.Check_Out?new Date(b.Check_Out):new Date();co.setHours(0,0,0,0);
+    // Check overlap
+    if(co<fromDate||ci>toDate)return;
+    const nights=_nightsInPeriod(b,fromDate,toDate);
+    if(nights<=0)return;
+    const cost=calcBookingCost(b,selectedProperty?selectedProperty.Title:'');
+    const room=allRooms.find(r=>r.id===rid);
+    items.push({
+      booking:b,
+      room:room?room.Title:'?',
+      name:b.Person_Name||'',
+      company:b.Company||'',
+      nights,
+      rate:cost.rate,
+      total:nights*cost.rate,
+      source:cost.source,
+      nearMiss:cost.nearMiss
+    });
+  });
+
+  // Warnings for missing rates
+  const missingRate=items.filter(i=>!i.rate);
+  const warnings=missingRate.length?'<div style="margin-bottom:12px;padding:8px 12px;background:var(--bg-warning);border:1px solid #EF9F27;border-radius:6px;font-size:12px;color:var(--text-warning)">⚠ '+missingRate.length+' booking'+(missingRate.length!==1?'s':'')+' without rates — these are not included in totals. Check rate configuration.</div>':'';
+
+  if(!items.length){
+    body.innerHTML='<div style="text-align:center;padding:40px;color:var(--text-secondary)">No bookings in this period on '+(selectedProperty?selectedProperty.Title:'selected property')+'.</div>';
+    return;
+  }
+
+  let html=warnings;
+
+  // Grand totals
+  const totalNights=items.reduce((a,i)=>a+i.nights,0);
+  const totalRevenue=items.reduce((a,i)=>a+i.total,0);
+  const totalBookings=items.length;
+  html+='<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:14px">'
+    +'<div style="background:#fff;padding:10px;border-radius:8px;border:.5px solid var(--border-tertiary)"><div style="font-size:11px;color:var(--text-tertiary)">Bookings</div><div style="font-size:20px;font-weight:500">'+totalBookings+'</div></div>'
+    +'<div style="background:#fff;padding:10px;border-radius:8px;border:.5px solid var(--border-tertiary)"><div style="font-size:11px;color:var(--text-tertiary)">Guest-nights</div><div style="font-size:20px;font-weight:500">'+totalNights+'</div></div>'
+    +'<div style="background:#fff;padding:10px;border-radius:8px;border:.5px solid var(--border-tertiary)"><div style="font-size:11px;color:var(--text-tertiary)">Total revenue</div><div style="font-size:20px;font-weight:500;color:var(--text-success)">'+totalRevenue.toLocaleString('nb-NO')+' kr</div></div>'
+    +'</div>';
+
+  // Grouped rendering
+  if(groupBy==='none'){
+    html+=_renderInvoicingFlat(items);
+  }else{
+    const keyFn=groupBy==='company'?(i=>i.company||'(no company)'):(i=>i.name||'(no name)');
+    const groups={};
+    items.forEach(i=>{const k=keyFn(i);if(!groups[k])groups[k]=[];groups[k].push(i)});
+    const sortedKeys=Object.keys(groups).sort((a,b)=>{
+      const tA=groups[a].reduce((s,i)=>s+i.total,0);
+      const tB=groups[b].reduce((s,i)=>s+i.total,0);
+      return tB-tA;
+    });
+    html+='<div style="background:#fff;border-radius:8px;border:.5px solid var(--border-tertiary);overflow:hidden">';
+    sortedKeys.forEach(k=>{
+      const grp=groups[k];
+      const gNights=grp.reduce((s,i)=>s+i.nights,0);
+      const gTotal=grp.reduce((s,i)=>s+i.total,0);
+      html+='<div style="padding:10px 14px;background:var(--bg-secondary);border-bottom:1px solid var(--border-tertiary);display:flex;justify-content:space-between;align-items:center">'
+        +'<div><strong>'+escapeHtml(k)+'</strong> <span class="muted" style="font-size:11px;margin-left:8px">'+grp.length+' booking'+(grp.length!==1?'s':'')+'</span></div>'
+        +'<div style="font-size:13px"><strong>'+gNights+'</strong> nights · <strong style="color:var(--text-success)">'+gTotal.toLocaleString('nb-NO')+' kr</strong></div>'
+        +'</div>';
+      html+='<table style="width:100%;font-size:12px"><thead><tr style="background:var(--bg-tertiary)"><th style="padding:6px 10px;text-align:left">Guest</th><th style="padding:6px 10px;text-align:left">Room</th><th style="padding:6px 10px;text-align:left">Period</th><th style="padding:6px 10px;text-align:right">Nights</th><th style="padding:6px 10px;text-align:right">Rate</th><th style="padding:6px 10px;text-align:right">Total</th><th style="padding:6px 10px;text-align:left">Rate source</th></tr></thead><tbody>';
+      grp.forEach(i=>{
+        const ci=formatDate(i.booking.Check_In);
+        const co=i.booking.Check_Out?formatDate(i.booking.Check_Out):'Open';
+        const rateCell=i.rate?i.rate.toLocaleString('nb-NO')+' kr':'<span style="color:var(--text-danger)">— missing</span>';
+        const totalCell=i.total?i.total.toLocaleString('nb-NO')+' kr':'—';
+        const sourceCell=i.nearMiss?'<span title="'+escapeHtml(i.nearMiss)+'" style="color:var(--text-warning)">⚠ '+escapeHtml(i.source)+'</span>':escapeHtml(i.source);
+        html+='<tr style="border-top:.5px solid var(--border-tertiary)">'
+          +'<td style="padding:6px 10px">'+escapeHtml(i.name)+'</td>'
+          +'<td style="padding:6px 10px;font-weight:500">'+escapeHtml(i.room)+'</td>'
+          +'<td style="padding:6px 10px">'+ci+' → '+co+'</td>'
+          +'<td style="padding:6px 10px;text-align:right">'+i.nights+'</td>'
+          +'<td style="padding:6px 10px;text-align:right">'+rateCell+'</td>'
+          +'<td style="padding:6px 10px;text-align:right;font-weight:500">'+totalCell+'</td>'
+          +'<td style="padding:6px 10px;font-size:11px;color:var(--text-tertiary)">'+sourceCell+'</td>'
+          +'</tr>';
+      });
+      html+='</tbody></table>';
+    });
+    html+='</div>';
+  }
+
+  body.innerHTML=html;
+}
+
+function _renderInvoicingFlat(items){
+  let html='<div style="background:#fff;border-radius:8px;border:.5px solid var(--border-tertiary);overflow:hidden">';
+  html+='<table style="width:100%;font-size:12px"><thead><tr style="background:var(--bg-secondary)">'
+    +'<th style="padding:8px 10px;text-align:left">Guest</th>'
+    +'<th style="padding:8px 10px;text-align:left">Company</th>'
+    +'<th style="padding:8px 10px;text-align:left">Room</th>'
+    +'<th style="padding:8px 10px;text-align:left">Period</th>'
+    +'<th style="padding:8px 10px;text-align:right">Nights</th>'
+    +'<th style="padding:8px 10px;text-align:right">Rate</th>'
+    +'<th style="padding:8px 10px;text-align:right">Total</th>'
+    +'</tr></thead><tbody>';
+  items.sort((a,b)=>new Date(a.booking.Check_In)-new Date(b.booking.Check_In));
+  items.forEach(i=>{
+    const ci=formatDate(i.booking.Check_In);
+    const co=i.booking.Check_Out?formatDate(i.booking.Check_Out):'Open';
+    const rateCell=i.rate?i.rate.toLocaleString('nb-NO')+' kr':'<span style="color:var(--text-danger)">— missing</span>';
+    const totalCell=i.total?i.total.toLocaleString('nb-NO')+' kr':'—';
+    html+='<tr style="border-top:.5px solid var(--border-tertiary)">'
+      +'<td style="padding:6px 10px">'+escapeHtml(i.name)+'</td>'
+      +'<td style="padding:6px 10px">'+escapeHtml(i.company)+'</td>'
+      +'<td style="padding:6px 10px;font-weight:500">'+escapeHtml(i.room)+'</td>'
+      +'<td style="padding:6px 10px">'+ci+' → '+co+'</td>'
+      +'<td style="padding:6px 10px;text-align:right">'+i.nights+'</td>'
+      +'<td style="padding:6px 10px;text-align:right">'+rateCell+'</td>'
+      +'<td style="padding:6px 10px;text-align:right;font-weight:500">'+totalCell+'</td>'
+      +'</tr>';
+  });
+  html+='</tbody></table></div>';
+  return html;
+}
+
+function exportInvoicingCSV(){
+  const monthVal=document.getElementById('invMonth').value;
+  const yearVal=document.getElementById('invYear').value;
+  const fromVal=document.getElementById('invFrom').value;
+  const toVal=document.getElementById('invTo').value;
+  const useRange=!!(fromVal||toVal);
+  let fromDate,toDate,periodStr;
+  if(useRange){
+    fromDate=fromVal?new Date(fromVal+'T00:00:00'):new Date(1970,0,1);
+    toDate=toVal?new Date(toVal+'T23:59:59'):new Date(2100,0,1);
+    periodStr=(fromVal||'start')+'_to_'+(toVal||'end');
+  }else{
+    const m=parseInt(monthVal),y=parseInt(yearVal);
+    fromDate=new Date(y,m,1);
+    toDate=new Date(y,m+1,0,23,59,59);
+    periodStr=y+'_'+String(m+1).padStart(2,'0');
+  }
+  const currentRoomIds=new Set(rooms.map(r=>r.id));
+  const rows=[];
+  allBookings.forEach(b=>{
+    const rid=String(b.RoomLookupId||'');
+    if(!currentRoomIds.has(rid))return;
+    if(!b.Check_In)return;
+    if(b.Status==='Cancelled')return;
+    const ci=new Date(b.Check_In);ci.setHours(0,0,0,0);
+    const co=b.Check_Out?new Date(b.Check_Out):new Date();co.setHours(0,0,0,0);
+    if(co<fromDate||ci>toDate)return;
+    const nights=_nightsInPeriod(b,fromDate,toDate);
+    if(nights<=0)return;
+    const cost=calcBookingCost(b,selectedProperty?selectedProperty.Title:'');
+    const room=allRooms.find(r=>r.id===rid);
+    rows.push([
+      b.Person_Name||'',
+      b.Company||'',
+      room?room.Title:'',
+      formatDate(b.Check_In),
+      b.Check_Out?formatDate(b.Check_Out):'Open',
+      nights,
+      cost.rate||0,
+      nights*(cost.rate||0),
+      cost.source||''
+    ]);
+  });
+  rows.sort((a,b)=>a[1].localeCompare(b[1],'nb')||a[0].localeCompare(b[0],'nb'));
+  // Totals
+  const totalN=rows.reduce((s,r)=>s+r[5],0);
+  const totalT=rows.reduce((s,r)=>s+r[7],0);
+  rows.push(['','','','','Total',totalN,'',totalT,'']);
+  const headers=['Guest','Company','Room','Check-in','Check-out','Nights','Rate','Total','Rate source'];
+  const propName=(selectedProperty?selectedProperty.Title:'').replace(/\s+/g,'_');
+  downloadCSV('Fakturagrunnlag_'+propName+'_'+periodStr,headers,rows);
 }
