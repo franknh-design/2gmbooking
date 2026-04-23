@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v12.1 — app.js (Core)
+// 2GM Booking v12.2 — app.js (Core)
 // Auth, Graph API, Data, Rendering, Bookings
 // ============================================================
 
@@ -189,7 +189,7 @@ function refreshLocal(){
 
 // --- UTILS ---
 function formatDate(d){if(!d)return'';const dt=new Date(d);return String(dt.getDate()).padStart(2,'0')+'.'+String(dt.getMonth()+1).padStart(2,'0')+'.'+dt.getFullYear()}
-function toISODate(d){if(!d)return'';return new Date(d).toISOString().split('T')[0]}
+function toISODate(d){if(!d)return'';const dt=new Date(d);return dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0')+'-'+String(dt.getDate()).padStart(2,'0')}
 
 function getNextWeekday(date){const d=new Date(date);const day=d.getDay();if(day===0)d.setDate(d.getDate()+1);else if(day===6)d.setDate(d.getDate()+2);return d}
 

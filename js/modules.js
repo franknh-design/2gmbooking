@@ -1,9 +1,19 @@
 // ============================================================
-// 2GM Booking v12.1 — modules.js
+// 2GM Booking v12.2 — modules.js
 // Hours, Archive, Import/Export, Admin (checkbox permissions)
 // ============================================================
 
 // --- UPCOMING ---
+async function checkInFromUpcoming(id){
+  const b=allBookings.find(x=>x.id===id);if(!b)return;
+  if(!confirm('Check in '+b.Person_Name+' now?\n\nThis will mark the booking as Active with today\'s date.'))return;
+  try{
+    const now=new Date().toISOString();
+    await updateListItem('Bookings',id,{Status:'Active',Check_In:now});
+    b.Status='Active';b.Check_In=now;
+    refreshLocal();renderIncoming();loadData();
+  }catch(e){console.error(e);alert('Failed to check in: '+e.message)}
+}
 function toggleIncoming(){
   ensureMainView();
   document.getElementById('archivePanel').classList.remove('open');
@@ -32,7 +42,8 @@ function renderIncoming(){
       +'<td style="font-weight:500">'+roomTitle+'</td><td>'+b.Person_Name+'</td><td class="muted">'+(b.Company||'')+'</td>'
       +'<td>'+formatDate(b.Check_In)+' '+badge+'</td><td>'+(b.Check_Out?formatDate(b.Check_Out):'Open-ended')+'</td>'
       +'<td><span class="pill" style="background:var(--bg-warning);color:var(--text-warning)">Upcoming</span></td>'
-      +'<td><button onclick="event.stopPropagation();openEditBooking(\''+b.id+'\')" style="padding:3px 10px;border:1px solid var(--accent);border-radius:4px;background:var(--bg-success);color:var(--text-success);cursor:pointer;font-size:11px;font-family:inherit">Edit</button></td></tr>';
+      +'<td><button onclick="event.stopPropagation();checkInFromUpcoming(\''+b.id+'\')" style="padding:3px 10px;border:1px solid var(--accent);border-radius:4px;background:var(--accent);color:#fff;cursor:pointer;font-size:11px;font-family:inherit;margin-right:4px" title="Check in now">Check in</button>'
+      +'<button onclick="event.stopPropagation();openEditBooking(\''+b.id+'\')" style="padding:3px 10px;border:1px solid var(--accent);border-radius:4px;background:var(--bg-success);color:var(--text-success);cursor:pointer;font-size:11px;font-family:inherit">Edit</button></td></tr>';
   }).join('');
 }
 
