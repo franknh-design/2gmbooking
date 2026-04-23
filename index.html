@@ -217,5 +217,8 @@ tbody td{padding:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 </footer>
 
 <script>
-document.getElementById('appVersion').innerText = 'v12.6 – DATE FIX';
+document.addEventListener('DOMContentLoaded', function(){
+  var el = document.getElementById('appVersion');
+  if (el) el.innerText = 'v12.9 – SMART UI';
+});
 </script>
