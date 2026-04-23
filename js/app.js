@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v12.10 — app.js (Core)
+// 2GM Booking v12.11 — app.js (Core)
 // Auth, Graph API, Data, Rendering, Bookings
 // ============================================================
 
@@ -261,19 +261,32 @@ function getBookingForRoom(roomId){
 }
 
 // --- PRICING ---
+function _nameMatch(a,b){
+  // Exact case-insensitive
+  const la=(a||'').toLowerCase().trim();const lb=(b||'').toLowerCase().trim();
+  if(!la||!lb)return false;
+  if(la===lb)return true;
+  // All words match (regardless of order) — handles "Marek Filas" vs "Filas, Marek"
+  const wa=la.split(/[\s,]+/).filter(w=>w.length>1);
+  const wb=lb.split(/[\s,]+/).filter(w=>w.length>1);
+  if(wa.length<2||wb.length<2)return false;
+  // a contains all words of b OR b contains all words of a
+  return wa.every(w=>lb.indexOf(w)>=0)||wb.every(w=>la.indexOf(w)>=0);
+}
+
 function getDailyRate(personName,company,propertyTitle,roomId){
   // Priority: 1) Person+Property  2) Person (any)  3) Company+Property  4) Company (any)  5) Room rate  6) Property default
   const pn=(personName||'').toLowerCase();
   const co=(company||'').toLowerCase();
   const pt=(propertyTitle||'').toLowerCase();
 
-  // 1. Person + specific property
-  let rate=allRates.find(r=>(r.Person_Name||'').toLowerCase()===pn&&(r.Property||'').toLowerCase()===pt&&r.DailyRate);
-  if(rate)return{rate:rate.DailyRate,source:'Person+Property'};
+  // 1. Person + specific property (fuzzy name, exact property)
+  let rate=allRates.find(r=>_nameMatch(r.Person_Name,personName)&&(r.Property||'').toLowerCase()===pt&&r.DailyRate);
+  if(rate)return{rate:rate.DailyRate,source:'Person+Property',matchedName:rate.Person_Name};
 
-  // 2. Person any property
-  rate=allRates.find(r=>(r.Person_Name||'').toLowerCase()===pn&&!(r.Property)&&r.DailyRate);
-  if(rate)return{rate:rate.DailyRate,source:'Person'};
+  // 2. Person any property (fuzzy)
+  rate=allRates.find(r=>_nameMatch(r.Person_Name,personName)&&!(r.Property)&&r.DailyRate);
+  if(rate)return{rate:rate.DailyRate,source:'Person',matchedName:rate.Person_Name};
 
   // 3. Company + specific property
   if(co){
@@ -297,7 +310,27 @@ function getDailyRate(personName,company,propertyTitle,roomId){
   const prop=properties.find(p=>(p.Title||'').toLowerCase()===pt);
   if(prop&&prop.DailyRate)return{rate:prop.DailyRate,source:'Property default'};
 
-  return{rate:0,source:'No rate set'};
+  // No rate found — but check for near-misses and flag them
+  const nearMiss=_findRateNearMiss(personName,company,propertyTitle);
+  return{rate:0,source:'No rate set',nearMiss:nearMiss};
+}
+
+// Detect rate config issues: rate exists for this name but property mismatch, or fuzzy company name
+function _findRateNearMiss(personName,company,propertyTitle){
+  const pn=(personName||'').toLowerCase().trim();
+  const pt=(propertyTitle||'').toLowerCase().trim();
+  const co=(company||'').toLowerCase().trim();
+  // Does a rate exist with this name but a different property set?
+  if(pn){
+    const r=allRates.find(rt=>_nameMatch(rt.Person_Name,personName)&&rt.Property&&(rt.Property||'').toLowerCase()!==pt&&rt.DailyRate);
+    if(r)return'Rate exists for "'+r.Person_Name+'" but only for property "'+r.Property+'" (this booking is at "'+propertyTitle+'")';
+  }
+  // Does a rate exist where Person_Name appears in the rate's Company field? (possible data entry mistake)
+  if(pn){
+    const r=allRates.find(rt=>(rt.Company||'').toLowerCase().includes(pn)&&rt.DailyRate);
+    if(r)return'A rate with "'+personName+'" appears in the Company field of another rate row — possible data entry mistake';
+  }
+  return null;
 }
 
 function calcBookingNights(booking){
@@ -310,7 +343,7 @@ function calcBookingNights(booking){
 function calcBookingCost(booking,propertyTitle){
   const nights=calcBookingNights(booking);
   const rateInfo=getDailyRate(booking.Person_Name,booking.Company,propertyTitle,booking.RoomLookupId);
-  return{nights,rate:rateInfo.rate,total:nights*rateInfo.rate,source:rateInfo.source};
+  return{nights,rate:rateInfo.rate,total:nights*rateInfo.rate,source:rateInfo.source,matchedName:rateInfo.matchedName||null,nearMiss:rateInfo.nearMiss||null};
 }
 
 function doorTagBtn(b){
@@ -475,11 +508,23 @@ function showDetail(roomId){
         +'</table>'
         +(can('view_prices')?(function(){
           const cost=calcBookingCost(booking,propName);
-          if(!cost.rate)return'';
+          // Always show the pricing block, even when no rate is set, so user sees the near-miss warning
+          let extra='';
+          if(cost.matchedName&&cost.matchedName.toLowerCase()!==(booking.Person_Name||'').toLowerCase()){
+            extra='<div style="font-size:11px;color:var(--text-tertiary);margin-top:4px">Matched rate row: "'+cost.matchedName+'"</div>';
+          }
+          if(cost.nearMiss){
+            extra+='<div style="margin-top:6px;padding:6px 8px;background:var(--bg-warning);border:1px solid #EF9F27;border-radius:4px;color:var(--text-warning);font-size:11px">⚠ '+cost.nearMiss+'</div>';
+          }
+          if(!cost.rate){
+            return'<div style="margin-top:10px;padding:10px;background:var(--bg-secondary);border-radius:var(--radius-md);font-size:12px">'
+              +'<strong>Pricing</strong> <span class="muted">(no rate set)</span>'
+              +extra+'</div>';
+          }
           return'<div style="margin-top:10px;padding:10px;background:var(--bg-secondary);border-radius:var(--radius-md);font-size:12px">'
             +'<strong>Pricing</strong> <span class="muted">('+cost.source+')</span><br>'
             +'Rate: <strong>'+cost.rate+' kr/night</strong> × '+cost.nights+' nights = <strong>'+cost.total.toLocaleString('nb-NO')+' kr</strong>'
-            +'</div>';
+            +extra+'</div>';
         })():'')
         +washHtml;
     }else{

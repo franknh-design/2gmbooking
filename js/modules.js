@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v12.10 — modules.js
+// 2GM Booking v12.11 — modules.js
 // Hours, Archive, Import/Export, Admin (checkbox permissions)
 // ============================================================
 
@@ -878,7 +878,7 @@ async function deleteRate(id){
 }
 
 // ============================================================
-// PERSONS / CUSTOMERS (v12.10)
+// PERSONS / CUSTOMERS (v12.11)
 // ============================================================
 let editingPersonId=null;
 
@@ -1084,7 +1084,7 @@ function onPersonNameInput(){
 }
 
 // ============================================================
-// CHARTS (v12.10) — pure SVG, no dependencies
+// CHARTS (v12.11) — pure SVG, no dependencies
 // ============================================================
 
 // Reusable bar chart: data = [{label, value, subtitle?}]
@@ -1393,7 +1393,7 @@ function renderHoursCharts(filtered){
 }
 
 // ============================================================
-// CLEANING EFFICIENCY ANALYSIS (v12.10)
+// CLEANING EFFICIENCY ANALYSIS (v12.11)
 // ============================================================
 // Compares cleaner hours against guest-nights per property, per week/month.
 // USE WITH CAUTION: Hours include breaks, transport, repairs — not just cleaning.
