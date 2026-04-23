@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v12.5 — modules.js
+// 2GM Booking v12.6 — modules.js
 // Hours, Archive, Import/Export, Admin (checkbox permissions)
 // ============================================================
 
@@ -65,22 +65,41 @@ function toggleArchive(){
 function renderArchive(){
   const search=(document.getElementById('archiveSearch').value||'').toLowerCase();
   const statusFilter=document.getElementById('archiveStatus').value;
+  const fromVal=document.getElementById('archiveFrom').value;
+  const toVal=document.getElementById('archiveTo').value;
+  const fromDate=fromVal?new Date(fromVal+'T00:00:00'):null;
+  const toDate=toVal?new Date(toVal+'T23:59:59'):null;
   const roomIds=new Set(rooms.map(r=>r.id));
   let archived=allBookings.filter(b=>{
     const rid=String(b.RoomLookupId||'');if(!roomIds.has(rid))return false;
     if(statusFilter!=='all'&&b.Status!==statusFilter)return false;
+    if(fromDate||toDate){
+      if(!b.Check_In)return false;
+      const ci=new Date(b.Check_In);
+      if(fromDate&&ci<fromDate)return false;
+      if(toDate&&ci>toDate)return false;
+    }
     if(search){if(!((b.Person_Name||'')+(b.Company||'')+getRoomTitle(b)).toLowerCase().includes(search))return false}
     return true;
   }).sort((a,b)=>new Date(b.Check_In||0)-new Date(a.Check_In||0));
   const limited=archived.slice(0,100);
-  document.getElementById('archiveTitle').textContent='Archive — '+archived.length+' booking'+(archived.length!==1?'s':'');
+  let titleSuffix='';
+  if(fromVal||toVal){titleSuffix=' — '+(fromVal?formatDate(fromVal):'…')+' → '+(toVal?formatDate(toVal):'…')}
+  document.getElementById('archiveTitle').textContent='Archive — '+archived.length+' booking'+(archived.length!==1?'s':'')+titleSuffix;
   const body=document.getElementById('archiveBody');
+  // Re-render charts if open
+  if(document.getElementById('archiveChartsContainer').style.display!=='none'){renderArchiveCharts(archived)}
   if(!limited.length){body.innerHTML='<tr><td colspan="7" class="loading">No bookings found</td></tr>';return}
   body.innerHTML=limited.map(b=>{
     const sc={Completed:'background:var(--bg-secondary);color:var(--text-secondary)',Cancelled:'background:var(--bg-danger);color:var(--text-danger)',Active:'background:var(--bg-success);color:var(--text-success)',Upcoming:'background:var(--bg-warning);color:var(--text-warning)'}[b.Status]||'';
     return'<tr><td style="font-weight:500">'+getRoomTitle(b)+'</td><td>'+(b.Person_Name||'—')+'</td><td class="muted">'+(b.Company||'')+'</td><td>'+formatDate(b.Check_In)+'</td><td>'+(b.Check_Out?formatDate(b.Check_Out):'Open-ended')+'</td><td><span class="pill" style="'+sc+'">'+b.Status+'</span></td>'
       +'<td>'+(b.Status==='Completed'||b.Status==='Cancelled'?'<button onclick="reopenBooking(\''+b.id+'\')" style="padding:3px 10px;border:1px solid var(--accent);border-radius:4px;background:var(--bg-success);color:var(--text-success);cursor:pointer;font-size:11px;font-family:inherit">Reopen</button>':'')+'</td></tr>';
   }).join('')+(archived.length>100?'<tr><td colspan="7" class="loading">Showing 100 of '+archived.length+'</td></tr>':'');
+}
+
+function clearArchiveDateRange(){
+  document.getElementById('archiveFrom').value='';document.getElementById('archiveTo').value='';
+  renderArchive();
 }
 function getRoomTitle(b){const r=allRooms.find(rm=>rm.id===String(b.RoomLookupId));return r?r.Title:'?'}
 async function reopenBooking(id){
@@ -259,6 +278,10 @@ function renderHours(){
     periodLabel=months[month]+' '+year;
   }
   document.getElementById('hoursTitle').textContent='Hours — '+periodLabel+' — '+workerName;
+
+  // Update charts if visible
+  const chartsContainer=document.getElementById('hoursChartsContainer');
+  if(chartsContainer&&chartsContainer.style.display!=='none'){renderHoursCharts(filtered)}
 
   const body=document.getElementById('hoursBody');
   if(!filtered.length){body.innerHTML='<tr><td colspan="8" class="loading">No hours registered</td></tr>';document.getElementById('hoursTotal').textContent='0.00';return}
@@ -783,7 +806,7 @@ async function deleteRate(id){
 }
 
 // ============================================================
-// PERSONS / CUSTOMERS (v12.5)
+// PERSONS / CUSTOMERS (v12.6)
 // ============================================================
 let editingPersonId=null;
 
@@ -939,4 +962,304 @@ function onPersonNameInput(){
   }else{
     info.innerHTML='<span class="muted">New name — will be saved as free text (create person card in Persons panel to enable autofill next time)</span>';
   }
+}
+
+// ============================================================
+// CHARTS (v12.6) — pure SVG, no dependencies
+// ============================================================
+
+// Reusable bar chart: data = [{label, value, subtitle?}]
+function svgBarChart(data, opts){
+  opts=opts||{};
+  const width=opts.width||640;
+  const barHeight=opts.barHeight||24;
+  const gap=opts.gap||6;
+  const labelW=opts.labelW||140;
+  const rightPad=opts.rightPad||60;
+  const maxV=Math.max(1,...data.map(d=>d.value||0));
+  const height=data.length*(barHeight+gap)+10;
+  const color=opts.color||'#1D9E75';
+  let svg='<svg width="100%" viewBox="0 0 '+width+' '+height+'" xmlns="http://www.w3.org/2000/svg" style="font-family:-apple-system,Segoe UI,sans-serif;font-size:12px">';
+  data.forEach((d,i)=>{
+    const y=i*(barHeight+gap)+5;
+    const barW=((d.value||0)/maxV)*(width-labelW-rightPad);
+    const label=escapeHtml(d.label||'');
+    const val=opts.formatValue?opts.formatValue(d.value):d.value;
+    svg+='<text x="'+(labelW-8)+'" y="'+(y+barHeight/2+4)+'" text-anchor="end" fill="#2C2C2A">'+label+'</text>';
+    svg+='<rect x="'+labelW+'" y="'+y+'" width="'+barW+'" height="'+barHeight+'" fill="'+color+'" rx="3"/>';
+    svg+='<text x="'+(labelW+barW+6)+'" y="'+(y+barHeight/2+4)+'" fill="#5F5E5A">'+val+'</text>';
+    if(d.subtitle){svg+='<text x="'+(labelW-8)+'" y="'+(y+barHeight/2+16)+'" text-anchor="end" fill="#888780" font-size="10">'+escapeHtml(d.subtitle)+'</text>'}
+  });
+  svg+='</svg>';
+  return svg;
+}
+
+// Reusable line-like area chart for time series
+// series = [{date: Date, value: number}] already sorted ascending
+function svgTimeSeries(series, opts){
+  opts=opts||{};
+  const width=opts.width||800;
+  const height=opts.height||180;
+  const padL=36, padR=12, padT=12, padB=28;
+  const innerW=width-padL-padR, innerH=height-padT-padB;
+  const color=opts.color||'#1D9E75';
+  if(!series.length)return '<svg width="100%" viewBox="0 0 '+width+' '+height+'"><text x="'+width/2+'" y="'+height/2+'" text-anchor="middle" fill="#888780" font-family="sans-serif" font-size="12">No data</text></svg>';
+  const maxV=Math.max(1,...series.map(s=>s.value));
+  // Y-axis ticks: 4 steps
+  let svg='<svg width="100%" viewBox="0 0 '+width+' '+height+'" xmlns="http://www.w3.org/2000/svg" style="font-family:-apple-system,Segoe UI,sans-serif;font-size:10px">';
+  for(let i=0;i<=4;i++){
+    const y=padT+(innerH/4)*i;
+    const v=Math.round(maxV*(1-i/4)*100)/100;
+    svg+='<line x1="'+padL+'" y1="'+y+'" x2="'+(width-padR)+'" y2="'+y+'" stroke="#e5e4df" stroke-width="1"/>';
+    svg+='<text x="'+(padL-6)+'" y="'+(y+3)+'" text-anchor="end" fill="#888780">'+v+'</text>';
+  }
+  // Bars (easier to read than line for sparse daily data)
+  const barW=innerW/series.length*0.7;
+  const step=innerW/series.length;
+  series.forEach((s,i)=>{
+    const h=(s.value/maxV)*innerH;
+    const x=padL+i*step+(step-barW)/2;
+    const y=padT+innerH-h;
+    svg+='<rect x="'+x+'" y="'+y+'" width="'+barW+'" height="'+h+'" fill="'+color+'" rx="2"><title>'+escapeHtml(s.label||'')+': '+s.value+'</title></rect>';
+  });
+  // X-axis labels: show first, last, middle
+  const showIdx=new Set();
+  if(series.length)showIdx.add(0);
+  if(series.length>1)showIdx.add(series.length-1);
+  if(series.length>4)showIdx.add(Math.floor(series.length/2));
+  if(series.length>8){showIdx.add(Math.floor(series.length/4));showIdx.add(Math.floor(3*series.length/4))}
+  series.forEach((s,i)=>{
+    if(!showIdx.has(i))return;
+    const x=padL+i*step+step/2;
+    svg+='<text x="'+x+'" y="'+(height-8)+'" text-anchor="middle" fill="#5F5E5A">'+escapeHtml(s.label||'')+'</text>';
+  });
+  svg+='</svg>';
+  return svg;
+}
+
+// --- ARCHIVE CHARTS ---
+function toggleArchiveCharts(){
+  const c=document.getElementById('archiveChartsContainer');
+  const isOpen=c.style.display!=='none';
+  c.style.display=isOpen?'none':'block';
+  const btn=document.getElementById('archiveChartsBtn');
+  btn.style.background=isOpen?'var(--bg-secondary)':'var(--accent)';
+  btn.style.color=isOpen?'':'#fff';
+  if(!isOpen)renderArchive();
+}
+
+function renderArchiveCharts(archived){
+  const c=document.getElementById('archiveChartsContainer');
+  if(!archived||!archived.length){c.innerHTML='<div style="text-align:center;padding:20px;color:var(--text-secondary);font-size:13px">No data to chart — adjust filters above</div>';return}
+
+  // --- Card layout ---
+  let html='<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(360px,1fr));gap:14px">';
+
+  // Chart 1: Bookings per month (check-in date)
+  const byMonth={};
+  archived.forEach(b=>{
+    if(!b.Check_In)return;
+    const d=new Date(b.Check_In);
+    const k=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+    byMonth[k]=(byMonth[k]||0)+1;
+  });
+  const monthKeys=Object.keys(byMonth).sort();
+  const monthNames=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const monthSeries=monthKeys.map(k=>{
+    const [y,m]=k.split('-');
+    return {label:monthNames[parseInt(m)-1]+' '+y.slice(2),value:byMonth[k]};
+  });
+  html+='<div style="background:#fff;padding:12px;border-radius:8px;border:.5px solid var(--border-tertiary)">'
+    +'<div style="font-size:12px;font-weight:500;margin-bottom:8px;color:var(--text-secondary)">Bookings per month (by check-in)</div>'
+    +svgTimeSeries(monthSeries,{height:160,color:'#1D9E75'})
+    +'</div>';
+
+  // Chart 2: Guest-nights per month — actual occupancy load
+  const nightsPerMonth={};
+  archived.forEach(b=>{
+    if(!b.Check_In)return;
+    const ci=new Date(b.Check_In);ci.setHours(0,0,0,0);
+    const co=b.Check_Out?new Date(b.Check_Out):new Date();co.setHours(0,0,0,0);
+    // Walk each night
+    const cur=new Date(ci);
+    while(cur<co){
+      const k=cur.getFullYear()+'-'+String(cur.getMonth()+1).padStart(2,'0');
+      nightsPerMonth[k]=(nightsPerMonth[k]||0)+1;
+      cur.setDate(cur.getDate()+1);
+    }
+  });
+  const nightSeries=Object.keys(nightsPerMonth).sort().map(k=>{
+    const [y,m]=k.split('-');
+    return {label:monthNames[parseInt(m)-1]+' '+y.slice(2),value:nightsPerMonth[k]};
+  });
+  html+='<div style="background:#fff;padding:12px;border-radius:8px;border:.5px solid var(--border-tertiary)">'
+    +'<div style="font-size:12px;font-weight:500;margin-bottom:8px;color:var(--text-secondary)">Guest-nights per month</div>'
+    +svgTimeSeries(nightSeries,{height:160,color:'#EF9F27'})
+    +'</div>';
+
+  // Chart 3: Top companies
+  const byCompany={};
+  archived.forEach(b=>{
+    const c=(b.Company||'(no company)').trim()||'(no company)';
+    if(!byCompany[c])byCompany[c]={bookings:0,nights:0};
+    byCompany[c].bookings++;
+    if(b.Check_In){
+      const ci=new Date(b.Check_In);
+      const co=b.Check_Out?new Date(b.Check_Out):new Date();
+      const nights=Math.max(1,Math.round((co-ci)/864e5));
+      byCompany[c].nights+=nights;
+    }
+  });
+  const topCompanies=Object.entries(byCompany)
+    .sort((a,b)=>b[1].nights-a[1].nights).slice(0,10)
+    .map(([name,d])=>({label:name.length>20?name.slice(0,19)+'…':name,value:d.nights,subtitle:d.bookings+' booking'+(d.bookings!==1?'s':'')}));
+  html+='<div style="background:#fff;padding:12px;border-radius:8px;border:.5px solid var(--border-tertiary)">'
+    +'<div style="font-size:12px;font-weight:500;margin-bottom:8px;color:var(--text-secondary)">Top 10 companies (by guest-nights)</div>'
+    +svgBarChart(topCompanies,{barHeight:22,gap:10,labelW:150,color:'#1D9E75'})
+    +'</div>';
+
+  // Chart 4: Stay length distribution
+  const buckets={'1-3 nights':0,'4-7 nights':0,'8-14 nights':0,'15-30 nights':0,'31-90 nights':0,'90+ nights':0};
+  archived.forEach(b=>{
+    if(!b.Check_In)return;
+    const ci=new Date(b.Check_In);
+    const co=b.Check_Out?new Date(b.Check_Out):new Date();
+    const n=Math.max(1,Math.round((co-ci)/864e5));
+    if(n<=3)buckets['1-3 nights']++;
+    else if(n<=7)buckets['4-7 nights']++;
+    else if(n<=14)buckets['8-14 nights']++;
+    else if(n<=30)buckets['15-30 nights']++;
+    else if(n<=90)buckets['31-90 nights']++;
+    else buckets['90+ nights']++;
+  });
+  const stayData=Object.entries(buckets).map(([k,v])=>({label:k,value:v}));
+  html+='<div style="background:#fff;padding:12px;border-radius:8px;border:.5px solid var(--border-tertiary)">'
+    +'<div style="font-size:12px;font-weight:500;margin-bottom:8px;color:var(--text-secondary)">Stay length distribution</div>'
+    +svgBarChart(stayData,{barHeight:22,gap:8,labelW:110,color:'#5B8AC4'})
+    +'</div>';
+
+  // Summary numbers
+  const totalNights=Object.values(nightsPerMonth).reduce((a,b)=>a+b,0);
+  const totalBookings=archived.length;
+  const avgStay=totalBookings?Math.round(totalNights/totalBookings*10)/10:0;
+  const uniqueGuests=new Set(archived.map(b=>(b.Person_Name||'').toLowerCase()).filter(Boolean)).size;
+  const uniqueCompanies=new Set(archived.map(b=>(b.Company||'').toLowerCase()).filter(Boolean)).size;
+  const completed=archived.filter(b=>b.Status==='Completed').length;
+  const cancelled=archived.filter(b=>b.Status==='Cancelled').length;
+  const cancelRate=totalBookings?Math.round(cancelled/totalBookings*1000)/10:0;
+
+  html+='<div style="background:#fff;padding:12px;border-radius:8px;border:.5px solid var(--border-tertiary);grid-column:1/-1">'
+    +'<div style="font-size:12px;font-weight:500;margin-bottom:10px;color:var(--text-secondary)">Summary</div>'
+    +'<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px">'
+    +'<div><div style="font-size:11px;color:var(--text-tertiary)">Bookings</div><div style="font-size:20px;font-weight:500">'+totalBookings+'</div></div>'
+    +'<div><div style="font-size:11px;color:var(--text-tertiary)">Guest-nights</div><div style="font-size:20px;font-weight:500">'+totalNights+'</div></div>'
+    +'<div><div style="font-size:11px;color:var(--text-tertiary)">Avg. stay (nights)</div><div style="font-size:20px;font-weight:500">'+avgStay+'</div></div>'
+    +'<div><div style="font-size:11px;color:var(--text-tertiary)">Unique guests</div><div style="font-size:20px;font-weight:500">'+uniqueGuests+'</div></div>'
+    +'<div><div style="font-size:11px;color:var(--text-tertiary)">Companies</div><div style="font-size:20px;font-weight:500">'+uniqueCompanies+'</div></div>'
+    +'<div><div style="font-size:11px;color:var(--text-tertiary)">Cancel rate</div><div style="font-size:20px;font-weight:500">'+cancelRate+'%</div></div>'
+    +'</div></div>';
+
+  html+='</div>';
+  c.innerHTML=html;
+}
+
+// --- HOURS CHARTS ---
+function toggleHoursCharts(){
+  const c=document.getElementById('hoursChartsContainer');
+  const isOpen=c.style.display!=='none';
+  c.style.display=isOpen?'none':'block';
+  const btn=document.getElementById('hoursChartsBtn');
+  btn.style.background=isOpen?'var(--bg-secondary)':'var(--accent)';
+  btn.style.color=isOpen?'':'#fff';
+  if(!isOpen)renderHours();
+}
+
+function renderHoursCharts(filtered){
+  const c=document.getElementById('hoursChartsContainer');
+  if(!c)return;
+  if(!filtered||!filtered.length){c.innerHTML='<div style="text-align:center;padding:20px;color:var(--text-secondary);font-size:13px">No hours data to chart — adjust filters above</div>';return}
+
+  // Helper: hours for one entry
+  const hoursOf=h=>calcHoursDiff(h.Time_From,h.Time_To);
+
+  let html='<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(360px,1fr));gap:14px">';
+
+  // Chart 1: Hours per day (time series in visible period)
+  const byDay={};
+  filtered.forEach(h=>{
+    if(!h.Date)return;
+    const d=new Date(h.Date);
+    const k=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+    byDay[k]=(byDay[k]||0)+hoursOf(h);
+  });
+  const dayKeys=Object.keys(byDay).sort();
+  const daySeries=dayKeys.map(k=>{
+    const [y,m,d]=k.split('-');
+    return {label:d+'.'+m,value:Math.round(byDay[k]*100)/100};
+  });
+  html+='<div style="background:#fff;padding:12px;border-radius:8px;border:.5px solid var(--border-tertiary);grid-column:1/-1">'
+    +'<div style="font-size:12px;font-weight:500;margin-bottom:8px;color:var(--text-secondary)">Hours per day</div>'
+    +svgTimeSeries(daySeries,{height:180,color:'#1D9E75'})
+    +'</div>';
+
+  // Chart 2: Hours per location
+  const byLoc={};
+  filtered.forEach(h=>{
+    const l=h.Location||'(no location)';
+    byLoc[l]=(byLoc[l]||0)+hoursOf(h);
+  });
+  const locData=Object.entries(byLoc)
+    .sort((a,b)=>b[1]-a[1])
+    .map(([k,v])=>({label:k.length>18?k.slice(0,17)+'…':k,value:Math.round(v*100)/100}));
+  html+='<div style="background:#fff;padding:12px;border-radius:8px;border:.5px solid var(--border-tertiary)">'
+    +'<div style="font-size:12px;font-weight:500;margin-bottom:8px;color:var(--text-secondary)">Hours per location</div>'
+    +svgBarChart(locData,{barHeight:22,gap:8,labelW:130,color:'#EF9F27',formatValue:v=>v+' h'})
+    +'</div>';
+
+  // Chart 3: Hours per worker (only if multiple workers visible)
+  const byWorker={};
+  filtered.forEach(h=>{
+    const w=h.Worker||'(unknown)';
+    const u=allUsers.find(x=>(x.Epost||'').toLowerCase()===w.toLowerCase());
+    const name=u?u.DisplayName:w;
+    byWorker[name]=(byWorker[name]||0)+hoursOf(h);
+  });
+  if(Object.keys(byWorker).length>1){
+    const workerData=Object.entries(byWorker)
+      .sort((a,b)=>b[1]-a[1])
+      .map(([k,v])=>({label:k.length>18?k.slice(0,17)+'…':k,value:Math.round(v*100)/100}));
+    html+='<div style="background:#fff;padding:12px;border-radius:8px;border:.5px solid var(--border-tertiary)">'
+      +'<div style="font-size:12px;font-weight:500;margin-bottom:8px;color:var(--text-secondary)">Hours per worker</div>'
+      +svgBarChart(workerData,{barHeight:22,gap:8,labelW:130,color:'#5B8AC4',formatValue:v=>v+' h'})
+      +'</div>';
+  }
+
+  // Chart 4: Weekday distribution
+  const byDow={0:0,1:0,2:0,3:0,4:0,5:0,6:0};
+  filtered.forEach(h=>{if(!h.Date)return;byDow[new Date(h.Date).getDay()]+=hoursOf(h)});
+  const dowNames=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  // Re-order Mon-Sun
+  const dowData=[1,2,3,4,5,6,0].map(i=>({label:dowNames[i],value:Math.round(byDow[i]*100)/100}));
+  html+='<div style="background:#fff;padding:12px;border-radius:8px;border:.5px solid var(--border-tertiary)">'
+    +'<div style="font-size:12px;font-weight:500;margin-bottom:8px;color:var(--text-secondary)">Hours per weekday</div>'
+    +svgBarChart(dowData,{barHeight:22,gap:8,labelW:50,color:'#9B7EC4',formatValue:v=>v+' h'})
+    +'</div>';
+
+  // Summary
+  const totalHours=Math.round(Object.values(byLoc).reduce((a,b)=>a+b,0)*100)/100;
+  const uniqueDays=Object.keys(byDay).length;
+  const avgPerDay=uniqueDays?Math.round(totalHours/uniqueDays*100)/100:0;
+  const nWorkers=Object.keys(byWorker).length;
+  html+='<div style="background:#fff;padding:12px;border-radius:8px;border:.5px solid var(--border-tertiary)">'
+    +'<div style="font-size:12px;font-weight:500;margin-bottom:10px;color:var(--text-secondary)">Summary</div>'
+    +'<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(100px,1fr));gap:10px">'
+    +'<div><div style="font-size:11px;color:var(--text-tertiary)">Total hours</div><div style="font-size:20px;font-weight:500">'+totalHours+'</div></div>'
+    +'<div><div style="font-size:11px;color:var(--text-tertiary)">Days worked</div><div style="font-size:20px;font-weight:500">'+uniqueDays+'</div></div>'
+    +'<div><div style="font-size:11px;color:var(--text-tertiary)">Avg/day</div><div style="font-size:20px;font-weight:500">'+avgPerDay+'</div></div>'
+    +'<div><div style="font-size:11px;color:var(--text-tertiary)">Entries</div><div style="font-size:20px;font-weight:500">'+filtered.length+'</div></div>'
+    +'<div><div style="font-size:11px;color:var(--text-tertiary)">Workers</div><div style="font-size:20px;font-weight:500">'+nWorkers+'</div></div>'
+    +'</div></div>';
+
+  html+='</div>';
+  c.innerHTML=html;
 }
