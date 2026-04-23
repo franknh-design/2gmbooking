@@ -732,33 +732,3 @@ async function deleteRate(id){
     renderRatesPanel();
   }catch(e){alert('Failed')}
 }
-
-
-// ===== v12.6 Date fix (timezone safe) =====
-
-function parseDateLocal(dateStr) {
-  if (!dateStr) return null;
-  const parts = dateStr.split('-');
-  if (parts.length !== 3) return new Date(dateStr);
-  return new Date(parts[0], parts[1]-1, parts[2]);
-}
-
-function formatDateInput(dateStr) {
-  const d = parseDateLocal(dateStr);
-  if (!d) return '';
-  return d.getFullYear() + '-' +
-    String(d.getMonth()+1).padStart(2,'0') + '-' +
-    String(d.getDate()).padStart(2,'0');
-}
-
-// Override common bug pattern (best effort)
-const _oldDate = Date;
-Date = function(...args) {
-  if (args.length === 1 && typeof args[0] === 'string' && args[0].match(/^\d{4}-\d{2}-\d{2}$/)) {
-    return parseDateLocal(args[0]);
-  }
-  return new _oldDate(...args);
-};
-Date.prototype = _oldDate.prototype;
-
-// ===== End v12.6 =====
