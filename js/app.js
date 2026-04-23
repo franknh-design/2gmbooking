@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v12.11 — app.js (Core)
+// 2GM Booking v12.12 — app.js (Core)
 // Auth, Graph API, Data, Rendering, Bookings
 // ============================================================
 
@@ -118,6 +118,12 @@ function updateNavActiveState(){
   // Hours is special — it's a view, not a panel
   const hBtn=document.getElementById('btnHours');
   if(hBtn)hBtn.classList.toggle('active-nav',currentView==='hours');
+  // Invoicing menu item
+  const invPanel=document.getElementById('invoicingPanel');
+  const invActive=invPanel&&invPanel.classList.contains('open');
+  const mi=document.getElementById('menuBtnInvoicing');if(mi)mi.classList.toggle('active-nav',invActive);
+  // More-button gets highlight if any menu item is active
+  const mb=document.getElementById('btnMoreMenu');if(mb)mb.classList.toggle('active-nav',invActive);
 }
 
 function applyPermissions(){
@@ -432,13 +438,12 @@ function updateStats(){
   bookings.forEach(b=>occupiedRoomIds.add(String(b.RoomLookupId||'')));
   document.getElementById('statCheckedIn').textContent=occupiedRoomIds.size+' / '+tr;
   document.getElementById('statEmpty').textContent=tr-occupiedRoomIds.size;
-  // Dirty: all assigned properties
-  const assignedPropIds=new Set(properties.map(p=>p.id));
-  const assignedRoomIds=new Set(allRooms.filter(r=>assignedPropIds.has(String(r.PropertyLookupId))).map(r=>r.id));
+  // Dirty: only current property (matches filter view)
+  const currentRoomIds=new Set(rooms.map(r=>r.id));
   const allDirtyRoomIds=new Set();
   allBookings.forEach(b=>{
     const rid=String(b.RoomLookupId||'');
-    if(!assignedRoomIds.has(rid))return;
+    if(!currentRoomIds.has(rid))return;
     if(b.Cleaning_Status==='Dirty'&&(b.Status==='Active'||b.Status==='Upcoming'))allDirtyRoomIds.add(rid);
     if(b.Status==='Active'&&b.Check_In){const w=calcWashDates(b.Check_In,b.Check_Out);if(w.some(x=>x.isToday))allDirtyRoomIds.add(rid)}
   });
@@ -720,7 +725,7 @@ function printDoorTag(bookingId){
 
 // --- VIEW SWITCHING ---
 function showMainView(){currentView='main';document.getElementById('mainView').style.display='';document.getElementById('hoursView').style.display='none';document.getElementById('propertySelect').style.display='';if(selectedProperty)document.getElementById('headerTitle').textContent='2GM Booking — '+selectedProperty.Title;updateNavActiveState()}
-function showHoursView(){currentView='hours';document.getElementById('mainView').style.display='none';document.getElementById('mainView').classList.remove('panel-mode');document.getElementById('incomingPanel').classList.remove('open');document.getElementById('archivePanel').classList.remove('open');const pp=document.getElementById('personsPanel');if(pp)pp.classList.remove('open');document.getElementById('hoursView').style.display='';document.getElementById('propertySelect').style.display='none';document.getElementById('headerTitle').textContent='2GM Booking — Hours';updateNavActiveState()}
+function showHoursView(){currentView='hours';document.getElementById('mainView').style.display='none';document.getElementById('mainView').classList.remove('panel-mode');document.getElementById('incomingPanel').classList.remove('open');document.getElementById('archivePanel').classList.remove('open');const pp=document.getElementById('personsPanel');if(pp)pp.classList.remove('open');const ip=document.getElementById('invoicingPanel');if(ip)ip.classList.remove('open');document.getElementById('hoursView').style.display='';document.getElementById('propertySelect').style.display='none';document.getElementById('headerTitle').textContent='2GM Booking — Hours';updateNavActiveState()}
 function ensureMainView(){if(currentView==='hours')showMainView()}
 
 // --- FILTER ---
