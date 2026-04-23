@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v12.14 — modules.js
+// 2GM Booking v12.15 — modules.js
 // Hours, Archive, Import/Export, Admin (checkbox permissions)
 // ============================================================
 
@@ -899,7 +899,7 @@ async function deleteRate(id){
 }
 
 // ============================================================
-// PERSONS / CUSTOMERS (v12.14)
+// PERSONS / CUSTOMERS (v12.15)
 // ============================================================
 let editingPersonId=null;
 
@@ -959,15 +959,15 @@ function renderPersons(){
     const nameCell=active
       ?'<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--accent);vertical-align:middle;margin-right:6px"></span>'+escapeHtml(name)
       :escapeHtml(name);
-    return '<tr>'
+    return '<tr onclick="openPersonEdit(\''+p.id+'\')" style="cursor:pointer" onmouseover="this.style.background=\'var(--bg-secondary)\'" onmouseout="this.style.background=\'\'">'
       +'<td style="font-weight:500">'+nameCell+'</td>'
       +'<td>'+activeCell+'</td>'
       +'<td>'+escapeHtml(company)+'</td>'
-      +'<td>'+(mobile?'<a href="tel:'+escapeHtml(mobile)+'" style="color:var(--accent)">'+escapeHtml(mobile)+'</a>':'<span class="muted">—</span>')+'</td>'
-      +'<td>'+(p.Email?'<a href="mailto:'+escapeHtml(p.Email)+'" style="color:var(--accent)">'+escapeHtml(p.Email)+'</a>':'<span class="muted">—</span>')+'</td>'
+      +'<td onclick="event.stopPropagation()">'+(mobile?'<a href="tel:'+escapeHtml(mobile)+'" style="color:var(--accent)">'+escapeHtml(mobile)+'</a>':'<span class="muted">—</span>')+'</td>'
+      +'<td onclick="event.stopPropagation()">'+(p.Email?'<a href="mailto:'+escapeHtml(p.Email)+'" style="color:var(--accent)">'+escapeHtml(p.Email)+'</a>':'<span class="muted">—</span>')+'</td>'
       +'<td class="muted" style="font-size:11px">'+escapeHtml(addr)+'</td>'
       +'<td>'+(bookings?'<span class="pill" style="background:var(--bg-success);color:var(--text-success)">'+bookings+'</span>':'<span class="muted">0</span>')+'</td>'
-      +'<td><button onclick="openPersonEdit(\''+p.id+'\')" style="padding:3px 10px;border:1px solid var(--accent);border-radius:4px;background:var(--bg-success);color:var(--text-success);cursor:pointer;font-size:11px;font-family:inherit">Edit</button></td>'
+      +'<td onclick="event.stopPropagation()"><button onclick="openPersonEdit(\''+p.id+'\')" style="padding:3px 10px;border:1px solid var(--accent);border-radius:4px;background:var(--bg-success);color:var(--text-success);cursor:pointer;font-size:11px;font-family:inherit">Edit</button></td>'
       +'</tr>';
   }).join('');
 }
@@ -1106,7 +1106,7 @@ function onPersonNameInput(){
 }
 
 // ============================================================
-// CHARTS (v12.14) — pure SVG, no dependencies
+// CHARTS (v12.15) — pure SVG, no dependencies
 // ============================================================
 
 // Reusable bar chart: data = [{label, value, subtitle?}]
@@ -1415,7 +1415,7 @@ function renderHoursCharts(filtered){
 }
 
 // ============================================================
-// CLEANING EFFICIENCY ANALYSIS (v12.14)
+// CLEANING EFFICIENCY ANALYSIS (v12.15)
 // ============================================================
 // Compares cleaner hours against guest-nights per property, per week/month.
 // USE WITH CAUTION: Hours include breaks, transport, repairs — not just cleaning.
@@ -1768,7 +1768,7 @@ function _dateFromIsoWeek(year,week){
 }
 
 // ============================================================
-// MORE MENU (v12.14)
+// MORE MENU (v12.15)
 // ============================================================
 function toggleMoreMenu(e){
   if(e){e.stopPropagation();e.preventDefault()}
@@ -1795,7 +1795,7 @@ function closeMoreMenu(){
 }
 
 // ============================================================
-// FAKTURAGRUNNLAG / INVOICING (v12.14)
+// FAKTURAGRUNNLAG / INVOICING (v12.15)
 // ============================================================
 let invoicingInitialized=false;
 
@@ -2058,7 +2058,7 @@ function exportInvoicingCSV(){
 }
 
 // ============================================================
-// ADD GUEST FROM BOOKING (v12.14)
+// ADD GUEST FROM BOOKING (v12.15)
 // ============================================================
 function addBookingToGuests(bookingId){
   const b=allBookings.find(x=>x.id===bookingId);

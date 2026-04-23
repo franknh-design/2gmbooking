@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v12.14 — app.js (Core)
+// 2GM Booking v12.15 — app.js (Core)
 // Auth, Graph API, Data, Rendering, Bookings
 // ============================================================
 
@@ -621,7 +621,13 @@ function openNewBooking(preselectedRoomId){
   document.getElementById('fName').value='';document.getElementById('fCompany').value='';
   document.getElementById('fCheckIn').value=toISODate(new Date());document.getElementById('fCheckOut').value='';
   document.getElementById('fStatus').value='Upcoming';document.getElementById('fNotes').value='';
-  document.getElementById('bookingModal').classList.add('open');
+  document.getElementById('fNameInfo').innerHTML='';
+  const modal=document.getElementById('bookingModal');
+  modal.classList.add('open');
+  // Scroll modal content to top so user sees Room field first
+  const modalContent=modal.querySelector('.modal');
+  if(modalContent)modalContent.scrollTop=0;
+  modal.scrollTop=0;
 }
 function openEditBooking(bookingId){
   const b=allBookings.find(x=>x.id===bookingId);if(!b)return;editingBookingId=bookingId;
@@ -632,7 +638,13 @@ function openEditBooking(bookingId){
   document.getElementById('fCheckIn').value=b.Check_In?toISODate(b.Check_In):'';
   document.getElementById('fCheckOut').value=b.Check_Out?toISODate(b.Check_Out):'';
   document.getElementById('fStatus').value=b.Status||'Upcoming';document.getElementById('fNotes').value=b.Notes||'';
-  document.getElementById('bookingModal').classList.add('open');
+  document.getElementById('fNameInfo').innerHTML='';
+  const modal=document.getElementById('bookingModal');
+  modal.classList.add('open');
+  // Scroll modal content to top
+  const modalContent=modal.querySelector('.modal');
+  if(modalContent)modalContent.scrollTop=0;
+  modal.scrollTop=0;
 }
 function closeBookingModal(){document.getElementById('bookingModal').classList.remove('open');editingBookingId=null}
 
