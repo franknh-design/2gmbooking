@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v12.15 — modules.js
+// 2GM Booking v12.16 — modules.js
 // Hours, Archive, Import/Export, Admin (checkbox permissions)
 // ============================================================
 
@@ -899,7 +899,7 @@ async function deleteRate(id){
 }
 
 // ============================================================
-// PERSONS / CUSTOMERS (v12.15)
+// PERSONS / CUSTOMERS (v12.16)
 // ============================================================
 let editingPersonId=null;
 
@@ -951,14 +951,27 @@ function renderPersons(){
       const room=allRooms.find(r=>r.id===String(active.RoomLookupId));
       const roomTitle=room?room.Title:'?';
       const propName=active.Property_Name||'';
-      activeCell='<span style="display:inline-flex;align-items:center;gap:4px"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--accent)"></span>'
+      // Check for today's wash
+      let todayBadge='';
+      if(active.Check_In){
+        const washes=calcWashDates(active.Check_In,active.Check_Out);
+        const todayWash=washes.find(w=>w.isToday);
+        if(todayWash)todayBadge=' <span class="pill danger" style="font-size:10px">Today — '+todayWash.type+'</span>';
+        else if(active.Cleaning_Status==='Dirty')todayBadge=' <span class="pill danger" style="font-size:10px">Needs cleaning</span>';
+      }
+      activeCell='<span style="display:inline-flex;align-items:center;gap:4px;flex-wrap:wrap"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--accent)"></span>'
         +'<strong style="color:var(--text-success)">Room '+escapeHtml(roomTitle)+'</strong>'
         +(propName?' <span class="muted" style="font-size:11px">('+escapeHtml(propName)+')</span>':'')
+        +todayBadge
         +'</span>';
     }
     const nameCell=active
       ?'<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--accent);vertical-align:middle;margin-right:6px"></span>'+escapeHtml(name)
       :escapeHtml(name);
+    // Bookings count clickable if > 0
+    const bookingsCell=bookings
+      ?'<span class="pill" style="background:var(--bg-success);color:var(--text-success);cursor:pointer;text-decoration:underline" onclick="event.stopPropagation();showGuestBookings(\''+escapeHtml(name).replace(/'/g,"\\'")+'\')" title="Show bookings">'+bookings+'</span>'
+      :'<span class="muted">0</span>';
     return '<tr onclick="openPersonEdit(\''+p.id+'\')" style="cursor:pointer" onmouseover="this.style.background=\'var(--bg-secondary)\'" onmouseout="this.style.background=\'\'">'
       +'<td style="font-weight:500">'+nameCell+'</td>'
       +'<td>'+activeCell+'</td>'
@@ -966,7 +979,7 @@ function renderPersons(){
       +'<td onclick="event.stopPropagation()">'+(mobile?'<a href="tel:'+escapeHtml(mobile)+'" style="color:var(--accent)">'+escapeHtml(mobile)+'</a>':'<span class="muted">—</span>')+'</td>'
       +'<td onclick="event.stopPropagation()">'+(p.Email?'<a href="mailto:'+escapeHtml(p.Email)+'" style="color:var(--accent)">'+escapeHtml(p.Email)+'</a>':'<span class="muted">—</span>')+'</td>'
       +'<td class="muted" style="font-size:11px">'+escapeHtml(addr)+'</td>'
-      +'<td>'+(bookings?'<span class="pill" style="background:var(--bg-success);color:var(--text-success)">'+bookings+'</span>':'<span class="muted">0</span>')+'</td>'
+      +'<td>'+bookingsCell+'</td>'
       +'<td onclick="event.stopPropagation()"><button onclick="openPersonEdit(\''+p.id+'\')" style="padding:3px 10px;border:1px solid var(--accent);border-radius:4px;background:var(--bg-success);color:var(--text-success);cursor:pointer;font-size:11px;font-family:inherit">Edit</button></td>'
       +'</tr>';
   }).join('');
@@ -1106,7 +1119,7 @@ function onPersonNameInput(){
 }
 
 // ============================================================
-// CHARTS (v12.15) — pure SVG, no dependencies
+// CHARTS (v12.16) — pure SVG, no dependencies
 // ============================================================
 
 // Reusable bar chart: data = [{label, value, subtitle?}]
@@ -1415,7 +1428,7 @@ function renderHoursCharts(filtered){
 }
 
 // ============================================================
-// CLEANING EFFICIENCY ANALYSIS (v12.15)
+// CLEANING EFFICIENCY ANALYSIS (v12.16)
 // ============================================================
 // Compares cleaner hours against guest-nights per property, per week/month.
 // USE WITH CAUTION: Hours include breaks, transport, repairs — not just cleaning.
@@ -1768,7 +1781,7 @@ function _dateFromIsoWeek(year,week){
 }
 
 // ============================================================
-// MORE MENU (v12.15)
+// MORE MENU (v12.16)
 // ============================================================
 function toggleMoreMenu(e){
   if(e){e.stopPropagation();e.preventDefault()}
@@ -1795,7 +1808,7 @@ function closeMoreMenu(){
 }
 
 // ============================================================
-// FAKTURAGRUNNLAG / INVOICING (v12.15)
+// FAKTURAGRUNNLAG / INVOICING (v12.16)
 // ============================================================
 let invoicingInitialized=false;
 
@@ -2058,7 +2071,7 @@ function exportInvoicingCSV(){
 }
 
 // ============================================================
-// ADD GUEST FROM BOOKING (v12.15)
+// ADD GUEST FROM BOOKING (v12.16)
 // ============================================================
 function addBookingToGuests(bookingId){
   const b=allBookings.find(x=>x.id===bookingId);
@@ -2079,4 +2092,76 @@ function addBookingToGuests(bookingId){
   document.getElementById('personModal').classList.add('open');
   // Focus on mobile field since name+company are already filled
   setTimeout(()=>{const el=document.getElementById('pMobile');if(el)el.focus()},100);
+}
+
+// ============================================================
+// GUEST BOOKINGS HISTORY (v12.16)
+// ============================================================
+function showGuestBookings(name){
+  if(!name)return;
+  const lower=name.toLowerCase().trim();
+  // Find all bookings matching this name (fuzzy)
+  const words=lower.split(/[\s,]+/).filter(w=>w.length>1);
+  const matching=allBookings.filter(b=>{
+    const bn=(b.Person_Name||'').toLowerCase().trim();
+    if(bn===lower)return true;
+    if(words.length>=2){
+      const bwords=bn.split(/[\s,]+/).filter(w=>w.length>1);
+      if(bwords.length>=2){
+        return words.every(w=>bn.indexOf(w)>=0)||bwords.every(w=>lower.indexOf(w)>=0);
+      }
+    }
+    return false;
+  }).sort((a,b)=>new Date(b.Check_In||0)-new Date(a.Check_In||0));
+  document.getElementById('guestBookingsTitle').textContent=name+' — '+matching.length+' booking'+(matching.length!==1?'s':'');
+  const body=document.getElementById('guestBookingsBody');
+  if(!matching.length){
+    body.innerHTML='<div style="text-align:center;padding:20px;color:var(--text-secondary)">No bookings found.</div>';
+  }else{
+    // Summary
+    let totalNights=0,totalRevenue=0;
+    matching.forEach(b=>{
+      if(b.Status==='Cancelled')return;
+      if(!b.Check_In)return;
+      const ci=new Date(b.Check_In);const co=b.Check_Out?new Date(b.Check_Out):new Date();
+      const n=Math.max(0,Math.round((co-ci)/864e5));
+      totalNights+=n;
+      const cost=calcBookingCost(b,b.Property_Name||'');
+      totalRevenue+=n*(cost.rate||0);
+    });
+    let html='<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:14px">'
+      +'<div style="background:var(--bg-secondary);padding:10px;border-radius:8px"><div style="font-size:11px;color:var(--text-tertiary)">Bookings</div><div style="font-size:18px;font-weight:500">'+matching.length+'</div></div>'
+      +'<div style="background:var(--bg-secondary);padding:10px;border-radius:8px"><div style="font-size:11px;color:var(--text-tertiary)">Guest-nights</div><div style="font-size:18px;font-weight:500">'+totalNights+'</div></div>'
+      +'<div style="background:var(--bg-secondary);padding:10px;border-radius:8px"><div style="font-size:11px;color:var(--text-tertiary)">Total revenue</div><div style="font-size:18px;font-weight:500;color:var(--text-success)">'+totalRevenue.toLocaleString('nb-NO')+' kr</div></div>'
+      +'</div>';
+    html+='<table style="width:100%;font-size:12px"><thead><tr style="background:var(--bg-secondary)">'
+      +'<th style="padding:6px 10px;text-align:left">Room</th>'
+      +'<th style="padding:6px 10px;text-align:left">Property</th>'
+      +'<th style="padding:6px 10px;text-align:left">Company</th>'
+      +'<th style="padding:6px 10px;text-align:left">Check-in</th>'
+      +'<th style="padding:6px 10px;text-align:left">Check-out</th>'
+      +'<th style="padding:6px 10px;text-align:right">Nights</th>'
+      +'<th style="padding:6px 10px;text-align:left">Status</th>'
+      +'</tr></thead><tbody>';
+    matching.forEach(b=>{
+      const room=allRooms.find(r=>r.id===String(b.RoomLookupId));
+      const roomTitle=room?room.Title:'?';
+      const ci=b.Check_In?new Date(b.Check_In):null;
+      const co=b.Check_Out?new Date(b.Check_Out):(b.Status==='Active'?new Date():null);
+      const nights=ci&&co?Math.max(0,Math.round((co-ci)/864e5)):0;
+      const statusColor={Completed:'background:var(--bg-secondary);color:var(--text-secondary)',Cancelled:'background:var(--bg-danger);color:var(--text-danger)',Active:'background:var(--bg-success);color:var(--text-success)',Upcoming:'background:var(--bg-warning);color:var(--text-warning)'}[b.Status]||'';
+      html+='<tr onclick="document.getElementById(\'guestBookingsModal\').classList.remove(\'open\');openEditBooking(\''+b.id+'\')" style="border-top:.5px solid var(--border-tertiary);cursor:pointer" onmouseover="this.style.background=\'var(--bg-secondary)\'" onmouseout="this.style.background=\'\'">'
+        +'<td style="padding:6px 10px;font-weight:500">'+escapeHtml(roomTitle)+'</td>'
+        +'<td style="padding:6px 10px">'+escapeHtml(b.Property_Name||'')+'</td>'
+        +'<td style="padding:6px 10px">'+escapeHtml(b.Company||'')+'</td>'
+        +'<td style="padding:6px 10px">'+(ci?formatDate(b.Check_In):'—')+'</td>'
+        +'<td style="padding:6px 10px">'+(b.Check_Out?formatDate(b.Check_Out):(b.Status==='Active'?'<span class="muted">Open</span>':'—'))+'</td>'
+        +'<td style="padding:6px 10px;text-align:right">'+nights+'</td>'
+        +'<td style="padding:6px 10px"><span class="pill" style="'+statusColor+'">'+b.Status+'</span></td>'
+        +'</tr>';
+    });
+    html+='</tbody></table>';
+    body.innerHTML=html;
+  }
+  document.getElementById('guestBookingsModal').classList.add('open');
 }
