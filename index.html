@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- 2GM Booking v12.0 — Created by Frank Haugan -->
+<!-- 2GM Booking v12.1 — Created by Frank Haugan -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -7,87 +7,78 @@
 <title>2GM Booking</title>
 <script src="https://alcdn.msauth.net/browser/2.30.0/js/msal-browser.min.js"></script>
 <style>
-  :root{--bg-primary:#fff;--bg-secondary:#f5f4ef;--bg-tertiary:#faf9f5;--bg-warning:#FAEEDA;--bg-danger:#FCEBEB;--bg-success:#E1F5EE;--text-primary:#2C2C2A;--text-secondary:#5F5E5A;--text-tertiary:#888780;--text-warning:#854F0B;--text-danger:#A32D2D;--text-success:#0F6E56;--border-tertiary:rgba(0,0,0,0.12);--border-secondary:rgba(0,0,0,0.2);--radius-md:8px;--radius-lg:12px;--accent:#1D9E75;--accent-hover:#178A66}
-  *{box-sizing:border-box}body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;font-size:14px;line-height:1.5;color:var(--text-primary);background:var(--bg-tertiary);margin:0;padding:1.5rem}
-  .container{max-width:1800px;margin:0 auto}
-  .header{background:#2C2C2A;color:#fff;padding:12px 20px;border-radius:var(--radius-lg);display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;gap:8px}
-  .header-left{display:flex;align-items:center;gap:12px;flex-shrink:0}
-  .header h1{margin:0;font-size:20px;font-weight:500;white-space:nowrap}
-  .header select{padding:6px 12px;border-radius:var(--radius-md);border:1px solid rgba(255,255,255,.3);background:#444;color:#fff;font-size:14px;font-family:inherit}
-  .header-buttons{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-  .header-btn{padding:6px 14px;border-radius:var(--radius-md);border:1px solid rgba(255,255,255,.3);background:0 0;color:#fff;font-size:13px;cursor:pointer;font-family:inherit}
-  .header-btn:hover{background:rgba(255,255,255,.1)}.header-btn.primary{background:var(--accent);border-color:var(--accent)}.header-btn.primary:hover{background:var(--accent-hover)}
-  .stats{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:1rem}
-  .stat{background:var(--bg-secondary);border-radius:var(--radius-md);padding:12px;cursor:pointer;transition:all .15s;border:2px solid transparent;user-select:none}
-  .stat:hover{background:#eeede7}.stat.active{border-color:var(--accent);background:#E1F5EE}
-  .stat-label{font-size:12px;color:var(--text-secondary)}.stat-value{font-size:22px;font-weight:500;margin-top:2px}
-  .filter-bar{display:none;margin-bottom:1rem;padding:8px 14px;background:var(--bg-success);border:1px solid var(--accent);border-radius:var(--radius-md);font-size:13px;color:var(--text-success);align-items:center;justify-content:space-between}
-  .filter-bar.open{display:flex}
-  .filter-bar button{background:0 0;border:0;color:var(--accent);cursor:pointer;font-family:inherit;font-size:13px;font-weight:500;text-decoration:underline}
-  .floors{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px}
-  .floor-card{background:var(--bg-primary);border:.5px solid var(--border-tertiary);border-radius:var(--radius-lg);overflow:hidden}
-  .floor-head{padding:10px 14px;background:var(--bg-secondary);border-bottom:.5px solid var(--border-tertiary);display:flex;justify-content:space-between;align-items:center}
-  .floor-head .title{font-weight:500;font-size:14px}.floor-head .sub{font-size:12px;color:var(--text-secondary)}
-  table{width:100%;font-size:12px;border-collapse:collapse}
-  thead th{padding:6px;text-align:left;color:var(--text-secondary);font-weight:400;border-bottom:.5px solid var(--border-tertiary);position:relative;user-select:none}
-  thead th .th-resize{position:absolute;right:0;top:0;bottom:0;width:5px;cursor:col-resize;z-index:2}
-  thead th .th-resize:hover{background:var(--accent)}
-  tbody tr{border-bottom:.5px solid var(--border-tertiary);cursor:pointer}tbody tr:hover{background:var(--bg-secondary)}
-  tbody td{padding:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .status-btn{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:4px;border:1px solid var(--border-secondary);cursor:pointer;padding:0;background:0 0;font-size:13px;font-weight:700;line-height:1}
-  .status-btn.needs-print{background:#FCEBEB;color:#A32D2D;border-color:#E24B4A}.status-btn.printed{background:#E1F5EE;color:#0F6E56;border-color:var(--accent)}
-  .clean-btn{display:inline-block;width:18px;height:18px;border-radius:50%;border:1px solid var(--border-secondary);cursor:pointer;padding:0}
-  .clean-btn.dirty{background:#E24B4A;border-color:#A32D2D}.clean-btn.clean{background:var(--accent);border-color:#0F6E56}
-  .muted{color:var(--text-secondary)}.empty-text{color:var(--text-tertiary);font-style:italic}
-  .pill{padding:1px 6px;border-radius:4px;font-size:11px}.pill.danger{background:var(--bg-danger);color:var(--text-danger)}.pill.warning{background:var(--bg-warning);color:var(--text-warning)}
-  .note-dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:#EF9F27;vertical-align:middle;margin-left:3px}
-  .detail{margin-top:1rem;background:var(--bg-primary);border:.5px solid var(--border-tertiary);border-radius:var(--radius-lg);padding:1rem 1.25rem;display:none}
-  .detail.open{display:block}
-  .detail-grid{display:flex;justify-content:space-between;align-items:flex-start;gap:1.5rem;flex-wrap:wrap}
-  .detail-main{flex:1;min-width:280px}.detail-name{font-weight:500;font-size:18px;margin-bottom:4px}
-  .detail-sub{color:var(--text-secondary);font-size:13px;margin-bottom:12px}
-  .detail-info{font-size:13px}.detail-info td{padding:3px 0}.detail-info td:first-child{color:var(--text-secondary);padding-right:20px}
-  .detail-actions{display:flex;flex-direction:column;gap:6px;min-width:160px}
-  .detail-actions button{padding:8px 16px;border:.5px solid var(--border-secondary);border-radius:var(--radius-md);background:var(--bg-primary);color:var(--text-primary);font-family:inherit;font-size:13px;cursor:pointer}
-  .detail-actions button:hover{background:var(--bg-secondary)}.detail-actions button.primary{background:#2C2C2A;color:#fff;border-color:#2C2C2A}.detail-actions button.danger{color:var(--text-danger)}
-  .loading{text-align:center;padding:40px;color:var(--text-secondary)}.error{text-align:center;padding:40px;color:var(--text-danger)}
-  .login-screen{text-align:center;padding:100px 20px}.login-screen h1{font-size:32px;color:#2C2C2A;margin-bottom:8px}.login-screen p{color:var(--text-secondary);margin-bottom:30px}
-  .login-btn{padding:12px 32px;background:#2C2C2A;color:#fff;border:none;border-radius:var(--radius-md);font-size:16px;cursor:pointer;font-family:inherit}.login-btn:hover{background:#444}
-
-  /* Modal overlay */
-  .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:1000;justify-content:center;align-items:flex-start;padding-top:80px}
-  .modal-overlay.open{display:flex}
-  .modal{background:var(--bg-primary);border-radius:var(--radius-lg);width:100%;max-width:520px;max-height:80vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.2)}
-  .modal-header{padding:16px 20px;border-bottom:.5px solid var(--border-tertiary);display:flex;justify-content:space-between;align-items:center}
-  .modal-header h2{margin:0;font-size:16px;font-weight:500}
-  .modal-close{background:0 0;border:0;font-size:20px;cursor:pointer;color:var(--text-secondary);padding:4px 8px}
-  .modal-body{padding:20px}
-  .form-group{margin-bottom:14px}
-  .form-group label{display:block;font-size:12px;color:var(--text-secondary);margin-bottom:4px}
-  .form-group input,.form-group select,.form-group textarea{width:100%;padding:8px 10px;border:1px solid var(--border-tertiary);border-radius:var(--radius-md);font-family:inherit;font-size:14px;background:var(--bg-primary)}
-  .form-group textarea{resize:vertical;min-height:60px}
-  .form-group input:focus,.form-group select:focus,.form-group textarea:focus{outline:none;border-color:var(--accent)}
-  .form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-  .modal-footer{padding:14px 20px;border-top:.5px solid var(--border-tertiary);display:flex;justify-content:flex-end;gap:8px}
-  .modal-footer button{padding:8px 20px;border-radius:var(--radius-md);font-family:inherit;font-size:13px;cursor:pointer;border:.5px solid var(--border-secondary);background:var(--bg-primary)}
-  .modal-footer button.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
-  .modal-footer button.primary:hover{background:var(--accent-hover)}
-  .modal-footer button.danger{background:#E24B4A;color:#fff;border-color:#E24B4A}
-
-  /* Incoming list panel */
-  .incoming-panel{display:none;margin-top:1rem;background:var(--bg-primary);border:.5px solid var(--border-tertiary);border-radius:var(--radius-lg);overflow:hidden}
-  .incoming-panel.open{display:block}
-  .incoming-head{padding:10px 14px;background:var(--bg-secondary);border-bottom:.5px solid var(--border-tertiary);display:flex;justify-content:space-between;align-items:center}
-  .incoming-head .title{font-weight:500;font-size:14px}
-
-  /* Door tag print */
-  @media print{
-    body *{display:none!important}
-    #doorTagPrint,#doorTagPrint *{display:block!important}
-    #doorTagPrint{position:fixed;inset:0;background:#fff;padding:40px;z-index:99999}
-  }
-
-  @media(max-width:900px){body{padding:.75rem}.floors{grid-template-columns:1fr}.stats{grid-template-columns:repeat(2,1fr)}.form-row{grid-template-columns:1fr}}
+:root{--bg-primary:#fff;--bg-secondary:#f5f4ef;--bg-tertiary:#faf9f5;--bg-warning:#FAEEDA;--bg-danger:#FCEBEB;--bg-success:#E1F5EE;--text-primary:#2C2C2A;--text-secondary:#5F5E5A;--text-tertiary:#888780;--text-warning:#854F0B;--text-danger:#A32D2D;--text-success:#0F6E56;--border-tertiary:rgba(0,0,0,0.12);--border-secondary:rgba(0,0,0,0.2);--radius-md:8px;--radius-lg:12px;--accent:#1D9E75;--accent-hover:#178A66}
+*{box-sizing:border-box}body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;font-size:14px;line-height:1.5;color:var(--text-primary);background:var(--bg-tertiary);margin:0;padding:1.5rem}
+.container{max-width:1800px;margin:0 auto}
+.header{background:#2C2C2A;color:#fff;padding:12px 20px;border-radius:var(--radius-lg);display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;gap:8px}
+.header-left{display:flex;align-items:center;gap:12px;flex-shrink:0}
+.header h1{margin:0;font-size:20px;font-weight:500;white-space:nowrap}
+.header select{padding:6px 12px;border-radius:var(--radius-md);border:1px solid rgba(255,255,255,.3);background:#444;color:#fff;font-size:14px;font-family:inherit}
+.header-buttons{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.header-btn{padding:6px 14px;border-radius:var(--radius-md);border:1px solid rgba(255,255,255,.3);background:0 0;color:#fff;font-size:13px;cursor:pointer;font-family:inherit}
+.header-btn:hover{background:rgba(255,255,255,.1)}.header-btn.primary{background:var(--accent);border-color:var(--accent)}.header-btn.primary:hover{background:var(--accent-hover)}
+.stats{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:1rem}
+.stat{background:var(--bg-secondary);border-radius:var(--radius-md);padding:12px;cursor:pointer;transition:all .15s;border:2px solid transparent;user-select:none}
+.stat:hover{background:#eeede7}.stat.active{border-color:var(--accent);background:#E1F5EE}
+.stat-label{font-size:12px;color:var(--text-secondary)}.stat-value{font-size:22px;font-weight:500;margin-top:2px}
+.filter-bar{display:none;margin-bottom:1rem;padding:8px 14px;background:var(--bg-success);border:1px solid var(--accent);border-radius:var(--radius-md);font-size:13px;color:var(--text-success);align-items:center;justify-content:space-between}
+.filter-bar.open{display:flex}
+.filter-bar button{background:0 0;border:0;color:var(--accent);cursor:pointer;font-family:inherit;font-size:13px;font-weight:500;text-decoration:underline}
+.floors{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px}
+.floor-card{background:var(--bg-primary);border:.5px solid var(--border-tertiary);border-radius:var(--radius-lg);overflow:hidden}
+.floor-head{padding:10px 14px;background:var(--bg-secondary);border-bottom:.5px solid var(--border-tertiary);display:flex;justify-content:space-between;align-items:center}
+.floor-head .title{font-weight:500;font-size:14px}.floor-head .sub{font-size:12px;color:var(--text-secondary)}
+table{width:100%;font-size:12px;border-collapse:collapse}
+thead th{padding:6px;text-align:left;color:var(--text-secondary);font-weight:400;border-bottom:.5px solid var(--border-tertiary);position:relative;user-select:none}
+thead th .th-resize{position:absolute;right:0;top:0;bottom:0;width:5px;cursor:col-resize;z-index:2}
+thead th .th-resize:hover{background:var(--accent)}
+tbody tr{border-bottom:.5px solid var(--border-tertiary);cursor:pointer}tbody tr:hover{background:var(--bg-secondary)}
+tbody td{padding:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.status-btn{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:4px;border:1px solid var(--border-secondary);cursor:pointer;padding:0;background:0 0;font-size:13px;font-weight:700;line-height:1}
+.status-btn.needs-print{background:#FCEBEB;color:#A32D2D;border-color:#E24B4A}.status-btn.printed{background:#E1F5EE;color:#0F6E56;border-color:var(--accent)}
+.clean-btn{display:inline-block;width:18px;height:18px;border-radius:50%;border:1px solid var(--border-secondary);cursor:pointer;padding:0}
+.clean-btn.dirty{background:#E24B4A;border-color:#A32D2D}.clean-btn.clean{background:var(--accent);border-color:#0F6E56}
+.muted{color:var(--text-secondary)}.empty-text{color:var(--text-tertiary);font-style:italic}
+.pill{padding:1px 6px;border-radius:4px;font-size:11px}.pill.danger{background:var(--bg-danger);color:var(--text-danger)}.pill.warning{background:var(--bg-warning);color:var(--text-warning)}
+.note-dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:#EF9F27;vertical-align:middle;margin-left:3px}
+.detail{margin-top:1rem;background:var(--bg-primary);border:.5px solid var(--border-tertiary);border-radius:var(--radius-lg);padding:1rem 1.25rem;display:none}
+.detail.open{display:block}
+.detail-grid{display:flex;justify-content:space-between;align-items:flex-start;gap:1.5rem;flex-wrap:wrap}
+.detail-main{flex:1;min-width:280px}.detail-name{font-weight:500;font-size:18px;margin-bottom:4px}
+.detail-sub{color:var(--text-secondary);font-size:13px;margin-bottom:12px}
+.detail-info{font-size:13px}.detail-info td{padding:3px 0}.detail-info td:first-child{color:var(--text-secondary);padding-right:20px}
+.detail-actions{display:flex;flex-direction:column;gap:6px;min-width:160px}
+.detail-actions button{padding:8px 16px;border:.5px solid var(--border-secondary);border-radius:var(--radius-md);background:var(--bg-primary);color:var(--text-primary);font-family:inherit;font-size:13px;cursor:pointer}
+.detail-actions button:hover{background:var(--bg-secondary)}.detail-actions button.primary{background:#2C2C2A;color:#fff;border-color:#2C2C2A}.detail-actions button.danger{color:var(--text-danger)}
+.loading{text-align:center;padding:40px;color:var(--text-secondary)}.error{text-align:center;padding:40px;color:var(--text-danger)}
+.login-screen{text-align:center;padding:100px 20px}.login-screen h1{font-size:32px;color:#2C2C2A;margin-bottom:8px}.login-screen p{color:var(--text-secondary);margin-bottom:30px}
+.login-btn{padding:12px 32px;background:#2C2C2A;color:#fff;border:none;border-radius:var(--radius-md);font-size:16px;cursor:pointer;font-family:inherit}.login-btn:hover{background:#444}
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:1000;justify-content:center;align-items:flex-start;padding-top:80px}
+.modal-overlay.open{display:flex}
+.modal{background:var(--bg-primary);border-radius:var(--radius-lg);width:100%;max-width:520px;max-height:80vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.2)}
+.modal-header{padding:16px 20px;border-bottom:.5px solid var(--border-tertiary);display:flex;justify-content:space-between;align-items:center}
+.modal-header h2{margin:0;font-size:16px;font-weight:500}
+.modal-close{background:0 0;border:0;font-size:20px;cursor:pointer;color:var(--text-secondary);padding:4px 8px}
+.modal-body{padding:20px}
+.form-group{margin-bottom:14px}
+.form-group label{display:block;font-size:12px;color:var(--text-secondary);margin-bottom:4px}
+.form-group input,.form-group select,.form-group textarea{width:100%;padding:8px 10px;border:1px solid var(--border-tertiary);border-radius:var(--radius-md);font-family:inherit;font-size:14px;background:var(--bg-primary)}
+.form-group textarea{resize:vertical;min-height:60px}
+.form-group input:focus,.form-group select:focus,.form-group textarea:focus{outline:none;border-color:var(--accent)}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.modal-footer{padding:14px 20px;border-top:.5px solid var(--border-tertiary);display:flex;justify-content:flex-end;gap:8px}
+.modal-footer button{padding:8px 20px;border-radius:var(--radius-md);font-family:inherit;font-size:13px;cursor:pointer;border:.5px solid var(--border-secondary);background:var(--bg-primary)}
+.modal-footer button.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+.modal-footer button.primary:hover{background:var(--accent-hover)}
+.modal-footer button.danger{background:#E24B4A;color:#fff;border-color:#E24B4A}
+.incoming-panel{display:none;margin-top:1rem;background:var(--bg-primary);border:.5px solid var(--border-tertiary);border-radius:var(--radius-lg);overflow:hidden}
+.incoming-panel.open{display:block}
+.incoming-head{padding:10px 14px;background:var(--bg-secondary);border-bottom:.5px solid var(--border-tertiary);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px}
+.incoming-head .title{font-weight:500;font-size:14px}
+.perm-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:4px;margin-top:6px}
+.perm-grid label{font-size:12px;display:flex;align-items:center;gap:4px;cursor:pointer}
+@media print{body *{display:none!important}#doorTagPrint,#doorTagPrint *{display:block!important}#doorTagPrint{position:fixed;inset:0;background:#fff;padding:40px;z-index:99999}}
+@media(max-width:900px){body{padding:.75rem}.floors{grid-template-columns:1fr}.stats{grid-template-columns:repeat(2,1fr)}.form-row{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
@@ -98,1894 +89,136 @@
 </div>
 <div id="app" class="container" style="display:none">
   <div class="header">
-    <div class="header-left"><img src="data:image/png;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1BST0ZJTEUAAQEAAAHIAAAAAAQwAABtbnRyUkdCIFhZWiAH4AABAAEAAAAAAABhY3NwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAA9tYAAQAAAADTLQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAlkZXNjAAAA8AAAACRyWFlaAAABFAAAABRnWFlaAAABKAAAABRiWFlaAAABPAAAABR3dHB0AAABUAAAABRyVFJDAAABZAAAAChnVFJDAAABZAAAAChiVFJDAAABZAAAAChjcHJ0AAABjAAAADxtbHVjAAAAAAAAAAEAAAAMZW5VUwAAAAgAAAAcAHMAUgBHAEJYWVogAAAAAAAAb6IAADj1AAADkFhZWiAAAAAAAABimQAAt4UAABjaWFlaIAAAAAAAACSgAAAPhAAAts9YWVogAAAAAAAA9tYAAQAAAADTLXBhcmEAAAAAAAQAAAACZmYAAPKnAAANWQAAE9AAAApbAAAAAAAAAABtbHVjAAAAAAAAAAEAAAAMZW5VUwAAACAAAAAcAEcAbwBvAGcAbABlACAASQBuAGMALgAgADIAMAAxADb/2wBDAAUDBAQEAwUEBAQFBQUGBwwIBwcHBw8LCwkMEQ8SEhEPERETFhwXExQaFRERGCEYGh0dHx8fExciJCIeJBweHx7/2wBDAQUFBQcGBw4ICA4eFBEUHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh7/wAARCAFnBFEDASIAAhEBAxEB/8QAHQABAAICAwEBAAAAAAAAAAAAAAcIBgkBBAUDAv/EAGUQAAEDAgIEBQYYCAsHAgcAAAABAgMEBQYRBxIhMQgTQVFhFBgiVnHSCRUXMjY4QlJXZXN0dYGRkpShpLGytNPiFiM1N3KElbMkM1NVYnaCk6XB0UNGVIWixPA0RWNno8LU4eT/xAAbAQEBAAMBAQEAAAAAAAAAAAAAAQQFBgMCB//EADkRAQABAgMCCggGAwEBAAAAAAABAgMEBREh0QYSMUFRYXGRobETFBUiU3KBwRYyMzSi8CM1glLh/9oADAMBAAIRAxEAPwC5YAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA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" alt="2GM" style="height:32px;filter:brightness(0) invert(1)"><h1 id="headerTitle" style="margin:0">Booking v12.0</h1></div>
+    <div class="header-left"><h1 id="headerTitle" style="margin:0">2GM Booking</h1></div>
     <div class="header-buttons">
       <select id="propertySelect"></select>
       <button class="header-btn" onclick="loadData()">Refresh</button>
-      <button class="header-btn" onclick="toggleIncoming()">Upcoming</button>
-      <button class="header-btn" onclick="toggleArchive()">Archive</button>
-      <button class="header-btn" onclick="toggleHours()" id="hoursBtn">Hours</button>
-      <button class="header-btn primary" onclick="openNewBooking()">+ New booking</button>
-      <button class="header-btn" id="adminBtn" onclick="openAdminPanel()" style="display:none">⚙ Admin</button>
-      <button class="header-btn" onclick="signOut()" style="margin-left:12px">Sign out</button>
+      <button class="header-btn" id="btnUpcoming" onclick="toggleIncoming()">Upcoming</button>
+      <button class="header-btn" id="btnArchive" onclick="toggleArchive()">Archive</button>
+      <button class="header-btn" id="btnHours" onclick="toggleHours()">Hours</button>
+      <button class="header-btn primary" id="btnNewBooking" onclick="openNewBooking()">+ New booking</button>
+      <button class="header-btn" id="btnSignOut" onclick="signOut()" style="margin-left:12px">Sign out</button>
     </div>
   </div>
-  <div class="stats">
-    <div class="stat" onclick="toggleFilter('checkedIn')"><div class="stat-label">Checked in</div><div class="stat-value" id="statCheckedIn">-</div></div>
-    <div class="stat" onclick="toggleFilter('empty')"><div class="stat-label">Empty rooms</div><div class="stat-value" id="statEmpty">-</div></div>
-    <div class="stat" onclick="toggleFilter('dirty')"><div class="stat-label">Needs cleaning</div><div class="stat-value" id="statDirty">-</div></div>
-    <div class="stat" onclick="toggleFilter('doorTag')"><div class="stat-label">Door tag: needs print</div><div class="stat-value" id="statDoorTag">-</div></div>
-    <div class="stat" onclick="toggleFilter('battery')"><div class="stat-label">Low battery (&lt;30%)</div><div class="stat-value" id="statBattery">-</div></div>
+  <!-- ADMIN BAR (above banner, right aligned) -->
+  <div id="adminBar" style="display:none;text-align:right;margin-bottom:4px">
+    <button onclick="openAdminPanel()" style="background:0 0;border:0;color:var(--text-tertiary);cursor:pointer;font-size:11px;font-family:inherit;text-decoration:underline">⚙ Admin</button>
+    <button onclick="openRatesPanel()" id="ratesBtn" style="background:0 0;border:0;color:var(--text-tertiary);cursor:pointer;font-size:11px;font-family:inherit;text-decoration:underline;margin-left:12px">💰 Rates</button>
   </div>
-  <div class="filter-bar" id="filterBar"><span id="filterLabel"></span><button onclick="clearFilter()">Clear filter ✕</button></div>
-  <div class="floors">
-    <div class="floor-card">
-      <div class="floor-head"><span class="title" id="floor1Title">1st floor</span><span class="sub" id="floor1Sub"></span></div>
-      <table id="table1"><colgroup><col style="width:28px"><col style="width:28px"><col style="width:50px"><col><col style="width:80px"><col style="width:44px"><col style="width:180px"></colgroup>
-      <thead><tr><th>T<div class="th-resize"></div></th><th>C<div class="th-resize"></div></th><th>Room<div class="th-resize"></div></th><th>Name<div class="th-resize"></div></th><th>Company<div class="th-resize"></div></th><th>Bat.<div class="th-resize"></div></th><th>Dates</th></tr></thead>
-      <tbody id="floor1Body"><tr><td colspan="7" class="loading">Loading...</td></tr></tbody></table>
-    </div>
-    <div class="floor-card">
-      <div class="floor-head"><span class="title" id="floor2Title">2nd floor</span><span class="sub" id="floor2Sub"></span></div>
-      <table id="table2"><colgroup><col style="width:28px"><col style="width:28px"><col style="width:50px"><col><col style="width:80px"><col style="width:44px"><col style="width:180px"></colgroup>
-      <thead><tr><th>T<div class="th-resize"></div></th><th>C<div class="th-resize"></div></th><th>Room<div class="th-resize"></div></th><th>Name<div class="th-resize"></div></th><th>Company<div class="th-resize"></div></th><th>Bat.<div class="th-resize"></div></th><th>Dates</th></tr></thead>
-      <tbody id="floor2Body"><tr><td colspan="7" class="loading">Loading...</td></tr></tbody></table>
+  <!-- HOURS REMINDER BANNER -->
+  <div id="hoursReminder" style="display:none;margin-bottom:1rem;padding:12px 20px;background:var(--bg-warning);border:1px solid #EF9F27;border-radius:var(--radius-lg);font-size:14px;color:var(--text-warning);display:none;align-items:center;justify-content:space-between">
+    <span id="hoursReminderText">⏰ You have not registered hours for yesterday. Please add your hours.</span>
+    <div style="display:flex;gap:8px;align-items:center">
+      <button onclick="toggleHours()" style="padding:6px 14px;background:#EF9F27;color:#fff;border:none;border-radius:var(--radius-md);cursor:pointer;font-size:13px;font-family:inherit">Open Hours</button>
+      <button onclick="dismissReminder()" style="padding:6px 10px;background:0 0;border:1px solid #EF9F27;border-radius:var(--radius-md);cursor:pointer;font-size:13px;color:var(--text-warning);font-family:inherit">Dismiss</button>
     </div>
   </div>
-  <div class="detail" id="detailPanel"></div>
-  <div style="text-align:center;padding:12px;font-size:11px;color:var(--text-tertiary);margin-top:1rem" id="appFooter">v10.3 — Created by Frank Haugan</div>
-  <div class="incoming-panel" id="incomingPanel">
-    <div class="incoming-head"><span class="title">Upcoming — next 30 days</span><button class="modal-close" onclick="toggleIncoming()">&times;</button></div>
-    <table id="tableUpcoming"><colgroup><col style="width:50px"><col><col style="width:80px"><col style="width:100px"><col style="width:100px"><col style="width:80px"><col style="width:50px"></colgroup>
-    <thead><tr><th>Room<div class="th-resize"></div></th><th>Name<div class="th-resize"></div></th><th>Company<div class="th-resize"></div></th><th>Check-in<div class="th-resize"></div></th><th>Check-out<div class="th-resize"></div></th><th>Status<div class="th-resize"></div></th><th></th></tr></thead>
-    <tbody id="incomingBody"></tbody></table>
-  </div>
-  <div class="incoming-panel" id="archivePanel">
-    <div class="incoming-head">
-      <span class="title" id="archiveTitle">Archive</span>
-      <div style="display:flex;gap:8px;align-items:center">
-        <input type="text" id="archiveSearch" placeholder="Search name, company, room..." oninput="renderArchive()" style="padding:5px 10px;border:1px solid var(--border-tertiary);border-radius:var(--radius-md);font-size:13px;font-family:inherit;width:200px">
-        <select id="archiveStatus" onchange="renderArchive()" style="padding:5px 8px;border:1px solid var(--border-tertiary);border-radius:var(--radius-md);font-size:13px;font-family:inherit">
-          <option value="all">All statuses</option>
-          <option value="Completed" selected>Completed</option>
-          <option value="Cancelled">Cancelled</option>
-          <option value="Active">Active</option>
-          <option value="Upcoming">Upcoming</option>
-        </select>
-        <button onclick="exportArchiveExcel()" style="padding:5px 12px;border:1px solid var(--border-tertiary);border-radius:var(--radius-md);font-size:13px;font-family:inherit;background:var(--accent);color:#fff;cursor:pointer;white-space:nowrap">↓ Export</button>
-        <button onclick="document.getElementById('importModal').classList.add('open')" style="padding:5px 12px;border:1px solid var(--border-tertiary);border-radius:var(--radius-md);font-size:13px;font-family:inherit;background:#EF9F27;color:#fff;cursor:pointer;white-space:nowrap">↑ Import</button>
-        <button class="modal-close" onclick="toggleArchive()">&times;</button>
+  <!-- MAIN BOOKING VIEW -->
+  <div id="mainView">
+    <div class="stats" id="statsBar" style="grid-template-columns:repeat(6,1fr)">
+      <div class="stat" onclick="toggleFilter('checkedIn')"><div class="stat-label">Checked in</div><div class="stat-value" id="statCheckedIn">-</div></div>
+      <div class="stat" onclick="toggleFilter('empty')"><div class="stat-label">Empty rooms</div><div class="stat-value" id="statEmpty">-</div></div>
+      <div class="stat" onclick="toggleFilter('dirty')"><div class="stat-label">Needs cleaning</div><div class="stat-value" id="statDirty">-</div></div>
+      <div class="stat" onclick="toggleFilter('doorTag')"><div class="stat-label">Door tag: needs print</div><div class="stat-value" id="statDoorTag">-</div></div>
+      <div class="stat" onclick="toggleFilter('battery')"><div class="stat-label">Low battery (&lt;30%)</div><div class="stat-value" id="statBattery">-</div></div>
+      <div class="stat" onclick="showOccupancyReport()"><div class="stat-label">Occupancy</div><div class="stat-value" id="statOccupancy">-</div></div>
+    </div>
+    <div class="filter-bar" id="filterBar"><span id="filterLabel"></span><button onclick="clearFilter()">Clear filter ✕</button></div>
+    <div class="floors">
+      <div class="floor-card"><div class="floor-head"><span class="title" id="floor1Title">1st floor</span><span class="sub" id="floor1Sub"></span></div>
+        <table id="table1"><colgroup><col style="width:28px"><col style="width:28px"><col style="width:50px"><col><col style="width:80px"><col style="width:44px"><col style="width:180px"></colgroup>
+        <thead><tr><th>T<div class="th-resize"></div></th><th>C<div class="th-resize"></div></th><th>Room<div class="th-resize"></div></th><th>Name<div class="th-resize"></div></th><th>Company<div class="th-resize"></div></th><th>Bat.<div class="th-resize"></div></th><th>Dates</th></tr></thead>
+        <tbody id="floor1Body"><tr><td colspan="7" class="loading">Loading...</td></tr></tbody></table></div>
+      <div class="floor-card"><div class="floor-head"><span class="title" id="floor2Title">2nd floor</span><span class="sub" id="floor2Sub"></span></div>
+        <table id="table2"><colgroup><col style="width:28px"><col style="width:28px"><col style="width:50px"><col><col style="width:80px"><col style="width:44px"><col style="width:180px"></colgroup>
+        <thead><tr><th>T<div class="th-resize"></div></th><th>C<div class="th-resize"></div></th><th>Room<div class="th-resize"></div></th><th>Name<div class="th-resize"></div></th><th>Company<div class="th-resize"></div></th><th>Bat.<div class="th-resize"></div></th><th>Dates</th></tr></thead>
+        <tbody id="floor2Body"><tr><td colspan="7" class="loading">Loading...</td></tr></tbody></table></div>
+    </div>
+    <div class="detail" id="detailPanel"></div>
+    <div class="incoming-panel" id="incomingPanel">
+      <div class="incoming-head"><span class="title">Upcoming — next 30 days</span><button class="modal-close" onclick="toggleIncoming()">&times;</button></div>
+      <table id="tableUpcoming"><thead><tr><th>Room</th><th>Name</th><th>Company</th><th>Check-in</th><th>Check-out</th><th>Status</th><th></th></tr></thead>
+      <tbody id="incomingBody"></tbody></table>
+    </div>
+    <div class="incoming-panel" id="archivePanel">
+      <div class="incoming-head">
+        <span class="title" id="archiveTitle">Archive</span>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <input type="text" id="archiveSearch" placeholder="Search..." oninput="renderArchive()" style="padding:5px 10px;border:1px solid var(--border-tertiary);border-radius:var(--radius-md);font-size:13px;font-family:inherit;width:180px">
+          <select id="archiveStatus" onchange="renderArchive()" style="padding:5px 8px;border:1px solid var(--border-tertiary);border-radius:var(--radius-md);font-size:13px;font-family:inherit"><option value="all">All</option><option value="Completed" selected>Completed</option><option value="Cancelled">Cancelled</option><option value="Active">Active</option><option value="Upcoming">Upcoming</option></select>
+          <button onclick="exportArchiveExcel()" style="padding:5px 12px;border:1px solid var(--border-tertiary);border-radius:var(--radius-md);font-size:13px;font-family:inherit;background:var(--accent);color:#fff;cursor:pointer">↓ Export</button>
+          <button onclick="document.getElementById('importModal').classList.add('open')" style="padding:5px 12px;border:1px solid var(--border-tertiary);border-radius:var(--radius-md);font-size:13px;font-family:inherit;background:#EF9F27;color:#fff;cursor:pointer">↑ Import</button>
+          <button class="modal-close" onclick="toggleArchive()">&times;</button>
+        </div>
       </div>
-    </div>
-    <div style="max-height:500px;overflow-y:auto">
-    <table><colgroup><col style="width:50px"><col><col style="width:80px"><col style="width:90px"><col style="width:90px"><col style="width:80px"><col style="width:60px"></colgroup>
-    <thead><tr><th>Room</th><th>Name</th><th>Company</th><th>Check-in</th><th>Check-out</th><th>Status</th><th></th></tr></thead>
-    <tbody id="archiveBody"></tbody></table>
+      <div style="max-height:500px;overflow-y:auto"><table><thead><tr><th>Room</th><th>Name</th><th>Company</th><th>Check-in</th><th>Check-out</th><th>Status</th><th></th></tr></thead><tbody id="archiveBody"></tbody></table></div>
     </div>
   </div>
-  <!-- Hours Panel -->
-  <div class="incoming-panel" id="hoursPanel">
-    <div class="incoming-head">
-      <span class="title" id="hoursTitle">Hours</span>
-      <div style="display:flex;gap:8px;align-items:center">
-        <select id="hoursMonth" onchange="renderHours()" style="padding:5px 8px;border:1px solid var(--border-tertiary);border-radius:var(--radius-md);font-size:13px;font-family:inherit">
-        </select>
-        <select id="hoursYear" onchange="renderHours()" style="padding:5px 8px;border:1px solid var(--border-tertiary);border-radius:var(--radius-md);font-size:13px;font-family:inherit">
-        </select>
-        <button onclick="openAddHours()" style="padding:5px 12px;border:1px solid var(--accent);border-radius:var(--radius-md);font-size:13px;font-family:inherit;background:var(--accent);color:#fff;cursor:pointer;white-space:nowrap">+ Add hours</button>
-        <button onclick="exportHoursExcel()" style="padding:5px 12px;border:1px solid var(--border-tertiary);border-radius:var(--radius-md);font-size:13px;font-family:inherit;background:var(--bg-secondary);cursor:pointer;white-space:nowrap">↓ Export</button>
-        <button onclick="archiveHours()" style="padding:5px 12px;border:1px solid var(--border-tertiary);border-radius:var(--radius-md);font-size:13px;font-family:inherit;background:var(--bg-secondary);cursor:pointer;white-space:nowrap">Archive month</button>
-        <button class="modal-close" onclick="toggleHours()">&times;</button>
+  <!-- HOURS VIEW (replaces mainView) -->
+  <div id="hoursView" style="display:none">
+    <div style="background:var(--bg-primary);border:.5px solid var(--border-tertiary);border-radius:var(--radius-lg);overflow:hidden">
+      <div class="incoming-head">
+        <span class="title" id="hoursTitle">Hours</span>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <select id="hoursWorkerFilter" onchange="renderHours()" style="padding:5px 8px;border:1px solid var(--border-tertiary);border-radius:var(--radius-md);font-size:13px;font-family:inherit"></select>
+          <select id="hoursMonth" onchange="renderHours()" style="padding:5px 8px;border:1px solid var(--border-tertiary);border-radius:var(--radius-md);font-size:13px;font-family:inherit"></select>
+          <select id="hoursYear" onchange="renderHours()" style="padding:5px 8px;border:1px solid var(--border-tertiary);border-radius:var(--radius-md);font-size:13px;font-family:inherit"></select>
+          <button onclick="openAddHours()" style="padding:5px 12px;background:var(--accent);color:#fff;border:1px solid var(--accent);border-radius:var(--radius-md);font-size:13px;cursor:pointer">+ Add</button>
+          <button onclick="exportHoursExcel()" style="padding:5px 12px;border:1px solid var(--border-tertiary);border-radius:var(--radius-md);font-size:13px;background:var(--bg-secondary);cursor:pointer">↓ Export</button>
+          <button onclick="archiveHoursMonth()" style="padding:5px 12px;border:1px solid var(--border-tertiary);border-radius:var(--radius-md);font-size:13px;background:var(--bg-secondary);cursor:pointer">Archive month</button>
+        </div>
       </div>
-    </div>
-    <div style="max-height:500px;overflow-y:auto">
-    <table id="hoursTable" style="font-size:13px">
-      <thead><tr><th style="width:90px">Date</th><th>Location</th><th style="width:70px">From</th><th style="width:70px">To</th><th style="width:70px;text-align:right">Hours</th><th style="width:40px"></th></tr></thead>
+      <div style="max-height:600px;overflow-y:auto">
+      <table style="font-size:13px"><thead><tr><th style="width:100px">Date</th><th>Location</th><th>Worker</th><th style="width:60px">From</th><th style="width:60px">To</th><th style="width:70px;text-align:right">Hours</th><th>Notes</th><th style="width:40px"></th></tr></thead>
       <tbody id="hoursBody"></tbody>
-      <tfoot><tr style="font-weight:500;border-top:2px solid var(--border-secondary)"><td colspan="4">Total</td><td style="text-align:right" id="hoursTotal">0.00</td><td></td></tr></tfoot>
-    </table>
+      <tfoot><tr style="font-weight:500;border-top:2px solid var(--border-secondary)"><td colspan="6">Total</td><td style="text-align:right" id="hoursTotal">0.00</td><td></td></tr></tfoot></table>
+      </div>
     </div>
   </div>
+  <div style="text-align:center;padding:12px;font-size:11px;color:var(--text-tertiary);margin-top:1rem">v12.1 — Created by Frank Haugan</div>
 </div>
-<div class="modal-overlay" id="bookingModal">
-  <div class="modal">
-    <div class="modal-header"><h2 id="bookingModalTitle">New booking</h2><button class="modal-close" onclick="closeBookingModal()">&times;</button></div>
-    <div class="modal-body">
-      <div class="form-group"><label>Room</label><select id="fRoom"></select></div>
-      <div class="form-group"><label>Guest name</label><input id="fName" type="text" placeholder="Full name"></div>
-      <div class="form-group"><label>Company</label><input id="fCompany" type="text" placeholder="Company name"></div>
-      <div class="form-row">
-        <div class="form-group"><label>Check-in</label><input id="fCheckIn" type="date"></div>
-        <div class="form-group"><label>Check-out</label><input id="fCheckOut" type="date"><div style="font-size:11px;color:var(--text-tertiary);margin-top:2px">Leave empty for open-ended</div></div>
-      </div>
-      <div class="form-row">
-        <div class="form-group"><label>Status</label><select id="fStatus"><option value="Upcoming">Upcoming</option><option value="Active">Active (checked in)</option></select></div>
-        <div class="form-group"><label>Floor</label><input id="fFloor" type="number" min="1" max="9" readonly></div>
-      </div>
-      <div class="form-group"><label>Notes</label><textarea id="fNotes" placeholder="Optional notes..."></textarea></div>
-    </div>
-    <div class="modal-footer">
-      <button onclick="closeBookingModal()">Cancel</button>
-      <button class="primary" id="bookingSaveBtn" onclick="saveBooking()">Create booking</button>
-    </div>
-  </div>
-</div>
-
-<!-- Door Tag Print (hidden, used for printing) -->
+<!-- Modals -->
+<div class="modal-overlay" id="bookingModal"><div class="modal"><div class="modal-header"><h2 id="bookingModalTitle">New booking</h2><button class="modal-close" onclick="closeBookingModal()">&times;</button></div><div class="modal-body"><div class="form-group"><label>Room</label><div style="display:flex;gap:8px"><select id="fRoom" style="flex:1"></select><button type="button" onclick="findAvailableRoom()" style="padding:6px 12px;background:var(--accent);color:#fff;border:none;border-radius:var(--radius-md);cursor:pointer;font-size:12px;white-space:nowrap;font-family:inherit">Find available</button></div><div id="fRoomInfo" style="font-size:11px;margin-top:4px;color:var(--text-tertiary)"></div></div><div class="form-group"><label>Guest name</label><input id="fName" type="text" placeholder="Full name"></div><div class="form-group"><label>Company</label><input id="fCompany" type="text" placeholder="Company name"></div><div class="form-row"><div class="form-group"><label>Check-in</label><input id="fCheckIn" type="date"></div><div class="form-group"><label>Check-out</label><input id="fCheckOut" type="date"><div style="font-size:11px;color:var(--text-tertiary);margin-top:2px">Leave empty for open-ended</div></div></div><div class="form-row"><div class="form-group"><label>Status</label><select id="fStatus"><option value="Upcoming">Upcoming</option><option value="Active">Active (checked in)</option></select></div><div class="form-group"><label>Floor</label><input id="fFloor" type="number" min="1" max="9" readonly></div></div><div class="form-group"><label>Notes</label><textarea id="fNotes" placeholder="Optional notes..."></textarea></div></div><div class="modal-footer"><button onclick="closeBookingModal()">Cancel</button><button class="primary" id="bookingSaveBtn" onclick="saveBooking()">Create booking</button></div></div></div>
+<div class="modal-overlay" id="checkoutModal"><div class="modal" style="max-width:380px"><div class="modal-header"><h2>Check out</h2><button class="modal-close" onclick="closeCheckoutModal()">&times;</button></div><div class="modal-body"><p style="margin:0 0 16px;font-size:14px">Check out <strong id="checkoutGuestName"></strong></p><div class="form-group"><label>Check-out date</label><input id="fCheckOutDate" type="date"><div style="font-size:11px;color:var(--text-tertiary);margin-top:4px">Defaults to today. Change if the guest left earlier.</div></div></div><div class="modal-footer"><button onclick="closeCheckoutModal()">Cancel</button><button class="primary" id="checkoutConfirmBtn" onclick="confirmCheckout()" style="background:#EF9F27;border-color:#EF9F27">Confirm check-out</button></div></div></div>
+<div class="modal-overlay" id="hoursModal"><div class="modal" style="max-width:450px"><div class="modal-header"><h2>Add hours</h2><button class="modal-close" onclick="closeHoursModal()">&times;</button></div><div class="modal-body"><div class="form-group"><label>Date</label><input id="hDate" type="date"></div><div class="form-group" id="hWorkerGroup"><label>Register for</label><select id="hWorker" style="width:100%;padding:8px 10px;border:1px solid var(--border-tertiary);border-radius:var(--radius-md);font-family:inherit;font-size:14px"></select></div><div class="form-group"><label>Location</label><input id="hLocation" type="text" list="locationList" placeholder="Type or select"><datalist id="locationList"></datalist></div><div class="form-row"><div class="form-group"><label>From</label><input id="hFrom" type="time" value="08:00"></div><div class="form-group"><label>To</label><input id="hTo" type="time" value="16:00"></div></div><div class="form-group"><label>Notes</label><input id="hNotes" type="text" placeholder="Optional notes..."></div></div><div class="modal-footer"><button onclick="closeHoursModal()">Cancel</button><button class="primary" id="hoursSaveBtn" onclick="saveHours()">Save</button></div></div></div>
+<div class="modal-overlay" id="importModal"><div class="modal" style="max-width:620px"><div class="modal-header"><h2>Import bookings</h2><button class="modal-close" onclick="closeImportModal()">&times;</button></div><div class="modal-body"><p style="margin:0 0 8px;font-size:13px;color:var(--text-secondary)">CSV with semicolon separator.</p><div class="form-group"><label>CSV file</label><input type="file" id="importFile" accept=".csv,.txt"></div><div class="form-group"><label>Default status</label><select id="importStatus" style="width:100%;padding:8px;border:1px solid var(--border-tertiary);border-radius:var(--radius-md);font-size:14px"><option value="Completed" selected>Completed</option><option value="Active">Active</option><option value="Upcoming">Upcoming</option></select></div><div id="importPreview" style="display:none;margin-top:12px"><div id="importPreviewTitle" style="font-size:13px;font-weight:500;margin-bottom:6px"></div><div style="max-height:200px;overflow-y:auto;border:1px solid var(--border-tertiary);border-radius:var(--radius-md)"><table style="font-size:11px"><thead><tr><th>Room</th><th>Name</th><th>Company</th><th>Check-in</th><th>Check-out</th><th>Status</th></tr></thead><tbody id="importPreviewBody"></tbody></table></div></div><div id="importProgress" style="display:none;margin-top:12px"><div id="importProgressText" style="font-size:13px"></div><div style="height:6px;background:var(--bg-secondary);border-radius:3px;margin-top:6px;overflow:hidden"><div id="importProgressBar" style="height:100%;background:var(--accent);width:0%;transition:width .2s"></div></div></div><div id="importResult" style="display:none;margin-top:12px;padding:10px;border-radius:var(--radius-md);font-size:13px"></div></div><div class="modal-footer"><button onclick="closeImportModal()">Cancel</button><button id="importParseBtn" onclick="parseImportFile()" style="background:var(--bg-secondary);border:1px solid var(--border-tertiary);border-radius:var(--radius-md);padding:8px 16px;cursor:pointer;font-size:13px">Preview</button><button class="primary" id="importRunBtn" onclick="runImport()" disabled style="background:#EF9F27;border-color:#EF9F27">Import</button></div></div></div>
+<div class="modal-overlay" id="adminModal"><div class="modal" style="max-width:750px"><div class="modal-header"><h2>User Administration</h2><button class="modal-close" onclick="closeAdminPanel()">&times;</button></div><div class="modal-body"><div id="adminUserList" style="max-height:450px;overflow-y:auto;margin-bottom:16px"></div><div style="border-top:1px solid var(--border-tertiary);padding-top:14px"><div style="font-size:13px;font-weight:500;margin-bottom:8px">Add user</div><div class="form-row" style="grid-template-columns:1fr 1fr auto;gap:8px"><input id="aName" type="text" placeholder="Display name" style="padding:6px 8px;border:1px solid var(--border-tertiary);border-radius:var(--radius-md);font-size:13px"><input id="aEmail" type="email" placeholder="email@example.com" style="padding:6px 8px;border:1px solid var(--border-tertiary);border-radius:var(--radius-md);font-size:13px"><button onclick="addUser()" style="padding:6px 14px;background:var(--accent);color:#fff;border:none;border-radius:var(--radius-md);cursor:pointer;font-size:13px">+ Add</button></div></div></div><div class="modal-footer"><button onclick="sendAllInvites()" style="margin-right:auto;background:var(--accent);color:#fff;border:1px solid var(--accent);border-radius:var(--radius-md);padding:8px 16px;cursor:pointer;font-size:13px">✉ Send all invites</button><button onclick="closeAdminPanel()">Close</button></div></div></div>
 <div id="doorTagPrint" style="display:none"></div>
-
-<!-- Check-out Modal -->
-<div class="modal-overlay" id="checkoutModal">
-  <div class="modal" style="max-width:380px">
-    <div class="modal-header"><h2>Check out</h2><button class="modal-close" onclick="closeCheckoutModal()">&times;</button></div>
-    <div class="modal-body">
-      <p style="margin:0 0 16px;font-size:14px">Check out <strong id="checkoutGuestName"></strong></p>
-      <div class="form-group">
-        <label>Check-out date</label>
-        <input id="fCheckOutDate" type="date">
-        <div style="font-size:11px;color:var(--text-tertiary);margin-top:4px">Defaults to today. Change if the guest left earlier.</div>
-      </div>
-    </div>
-    <div class="modal-footer">
-      <button onclick="closeCheckoutModal()">Cancel</button>
-      <button class="primary" id="checkoutConfirmBtn" onclick="confirmCheckout()" style="background:#EF9F27;border-color:#EF9F27">Confirm check-out</button>
-    </div>
-  </div>
-</div>
-
-<!-- Import Modal -->
-<div class="modal-overlay" id="importModal">
-  <div class="modal" style="max-width:620px">
-    <div class="modal-header"><h2>Import bookings</h2><button class="modal-close" onclick="closeImportModal()">&times;</button></div>
-    <div class="modal-body">
-      <p style="margin:0 0 8px;font-size:13px;color:var(--text-secondary)">Upload a CSV file with booking data. The file must use semicolon (;) as separator.</p>
-      <div style="margin-bottom:16px;padding:12px;background:var(--bg-secondary);border-radius:var(--radius-md);font-size:12px;font-family:monospace">
-        <strong>Required columns:</strong><br>
-        Room ; Name ; Company ; Check-in ; Check-out ; Status<br><br>
-        <strong>Example:</strong><br>
-        101 ; John Doe ; SalMar ; 01.01.2025 ; 15.03.2025 ; Completed<br>
-        205 ; Jane Smith ; Mowi ; 10.02.2025 ; ; Completed
-      </div>
-      <div class="form-group">
-        <label>CSV file</label>
-        <input type="file" id="importFile" accept=".csv,.txt" style="font-family:inherit;font-size:14px">
-      </div>
-      <div class="form-group">
-        <label>Default status for imported rows</label>
-        <select id="importStatus" style="width:100%;padding:8px 10px;border:1px solid var(--border-tertiary);border-radius:var(--radius-md);font-family:inherit;font-size:14px">
-          <option value="Completed" selected>Completed (archive)</option>
-          <option value="Active">Active</option>
-          <option value="Upcoming">Upcoming</option>
-          <option value="Cancelled">Cancelled</option>
-        </select>
-        <div style="font-size:11px;color:var(--text-tertiary);margin-top:2px">Used when Status column is missing or empty</div>
-      </div>
-      <div id="importPreview" style="display:none;margin-top:12px">
-        <div style="font-size:13px;font-weight:500;margin-bottom:6px" id="importPreviewTitle"></div>
-        <div style="max-height:200px;overflow-y:auto;border:1px solid var(--border-tertiary);border-radius:var(--radius-md)">
-          <table style="font-size:11px"><thead><tr><th>Room</th><th>Name</th><th>Company</th><th>Check-in</th><th>Check-out</th><th>Status</th></tr></thead>
-          <tbody id="importPreviewBody"></tbody></table>
-        </div>
-      </div>
-      <div id="importProgress" style="display:none;margin-top:12px">
-        <div style="font-size:13px" id="importProgressText">Importing...</div>
-        <div style="height:6px;background:var(--bg-secondary);border-radius:3px;margin-top:6px;overflow:hidden"><div id="importProgressBar" style="height:100%;background:var(--accent);width:0%;transition:width .2s"></div></div>
-      </div>
-      <div id="importResult" style="display:none;margin-top:12px;padding:10px;border-radius:var(--radius-md);font-size:13px"></div>
-    </div>
-    <div class="modal-footer">
-      <button onclick="closeImportModal()">Cancel</button>
-      <button id="importParseBtn" onclick="parseImportFile()" style="background:var(--bg-secondary);border:1px solid var(--border-tertiary);border-radius:var(--radius-md);padding:8px 16px;cursor:pointer;font-family:inherit;font-size:13px">Preview</button>
-      <button class="primary" id="importRunBtn" onclick="runImport()" disabled style="background:#EF9F27;border-color:#EF9F27">Import</button>
-    </div>
-  </div>
-</div>
-
-<!-- Add Hours Modal -->
-<div class="modal-overlay" id="hoursModal">
-  <div class="modal" style="max-width:450px">
-    <div class="modal-header"><h2 id="hoursModalTitle">Add hours</h2><button class="modal-close" onclick="closeHoursModal()">&times;</button></div>
-    <div class="modal-body">
-      <div class="form-group"><label>Date</label><input id="hDate" type="date"></div>
-      <div class="form-group"><label>Location</label>
-        <select id="hLocation" style="width:100%;padding:8px 10px;border:1px solid var(--border-tertiary);border-radius:var(--radius-md);font-family:inherit;font-size:14px">
-        </select>
-      </div>
-      <div class="form-row">
-        <div class="form-group"><label>From</label><input id="hFrom" type="time" value="08:00"></div>
-        <div class="form-group"><label>To</label><input id="hTo" type="time" value="16:00"></div>
-      </div>
-    </div>
-    <div class="modal-footer">
-      <button onclick="closeHoursModal()">Cancel</button>
-      <button class="primary" id="hoursSaveBtn" onclick="saveHours()">Save</button>
-    </div>
-  </div>
-</div>
-
-<!-- Admin Modal -->
-<div class="modal-overlay" id="adminModal">
-  <div class="modal" style="max-width:600px">
-    <div class="modal-header"><h2>User Administration</h2><button class="modal-close" onclick="closeAdminPanel()">&times;</button></div>
-    <div class="modal-body">
-      <div id="adminUserList" style="max-height:300px;overflow-y:auto;margin-bottom:16px">
-        <table style="font-size:13px;width:100%">
-          <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Active</th><th></th></tr></thead>
-          <tbody id="adminUserBody"></tbody>
-        </table>
-      </div>
-      <div style="border-top:1px solid var(--border-tertiary);padding-top:14px">
-        <div style="font-size:13px;font-weight:500;margin-bottom:8px">Add user</div>
-        <div class="form-row" style="grid-template-columns:1fr 1fr 1fr auto;gap:8px">
-          <input id="aName" type="text" placeholder="Display name" style="padding:6px 8px;border:1px solid var(--border-tertiary);border-radius:var(--radius-md);font-size:13px;font-family:inherit">
-          <input id="aEmail" type="email" placeholder="email@example.com" style="padding:6px 8px;border:1px solid var(--border-tertiary);border-radius:var(--radius-md);font-size:13px;font-family:inherit">
-          <select id="aRole" style="padding:6px 8px;border:1px solid var(--border-tertiary);border-radius:var(--radius-md);font-size:13px;font-family:inherit">
-            <option value="Admin">Admin</option>
-            <option value="Cleaner">Cleaner</option>
-            <option value="ReadOnly">ReadOnly</option>
-          </select>
-          <button onclick="addUser()" style="padding:6px 14px;background:var(--accent);color:#fff;border:none;border-radius:var(--radius-md);cursor:pointer;font-size:13px;white-space:nowrap">+ Add</button>
-        </div>
-      </div>
-    </div>
-    <div class="modal-footer">
-      <button onclick="closeAdminPanel()">Close</button>
-    </div>
-  </div>
-</div>
-
-<script>
-// ============================================================
-// AUTH
-// ============================================================
-const msalConfig={auth:{clientId:'f8e2259d-c440-41d3-94e3-3a2dce095817',authority:'https://login.microsoftonline.com/2b495272-f733-47a8-a771-bb744309fa17',redirectUri:'https://franknh-design.github.io/2gmbooking/'},cache:{cacheLocation:'localStorage'}};
-const msalInstance=new msal.PublicClientApplication(msalConfig);
-let accessToken=null;
-let currentUser={email:'',role:'ReadOnly',displayName:''};
-
-async function signIn(){if(!msalReady){alert('Please wait, loading...');return}try{await msalInstance.loginPopup({scopes:['Sites.ReadWrite.All']});await getToken();await loadCurrentUser();showApp();applyRole();await loadProperties();await loadData()}catch(e){console.error('Login failed:',e)}}
-async function getToken(){const a=msalInstance.getAllAccounts();if(!a.length)return null;try{const r=await msalInstance.acquireTokenSilent({scopes:['Sites.ReadWrite.All'],account:a[0]});accessToken=r.accessToken;return accessToken}catch(e){const r=await msalInstance.acquireTokenPopup({scopes:['Sites.ReadWrite.All']});accessToken=r.accessToken;return accessToken}}
-function signOut(){msalInstance.logoutPopup();document.getElementById('app').style.display='none';document.getElementById('loginScreen').style.display='block'}
-function showApp(){document.getElementById('loginScreen').style.display='none';document.getElementById('app').style.display='block'}
-
-// ============================================================
-// GRAPH API
-// ============================================================
-const SITE_HOST='2gmeiendom.sharepoint.com';
-const SITE_PATH='/sites/2GMBooking';
-let siteId=null;
-
-async function graphGet(ep){await getToken();const r=await fetch('https://graph.microsoft.com/v1.0'+ep,{headers:{'Authorization':'Bearer '+accessToken,'Accept':'application/json'}});if(!r.ok)throw new Error('Graph error '+r.status+': '+await r.text());return r.json()}
-async function graphPatch(ep,body){await getToken();const r=await fetch('https://graph.microsoft.com/v1.0'+ep,{method:'PATCH',headers:{'Authorization':'Bearer '+accessToken,'Content-Type':'application/json'},body:JSON.stringify(body)});if(!r.ok)throw new Error('Graph error '+r.status);return r.json()}
-async function graphPost(ep,body){await getToken();const r=await fetch('https://graph.microsoft.com/v1.0'+ep,{method:'POST',headers:{'Authorization':'Bearer '+accessToken,'Content-Type':'application/json'},body:JSON.stringify(body)});if(!r.ok){const txt=await r.text();throw new Error('Graph error '+r.status+': '+txt)}return r.json()}
-async function graphDelete(ep){await getToken();const r=await fetch('https://graph.microsoft.com/v1.0'+ep,{method:'DELETE',headers:{'Authorization':'Bearer '+accessToken}});if(!r.ok)throw new Error('Graph error '+r.status);return true}
-
-async function getSiteId(){if(siteId)return siteId;const r=await graphGet('/sites/'+SITE_HOST+':'+SITE_PATH);siteId=r.id;return siteId}
-
-const LIST_IDS={'Properties':'d842d574-f238-442a-be3d-77334727e89f','Rooms':'bfa962a0-5eb2-416c-abe8-adba06558c11','Bookings':'fe1dfe34-23df-4864-b0b1-b01bf60bfb75','Persons':'ebbe517d-83f8-4169-9423-70c63a3f8c07','Cleaning_Log':'6b1bd5f9-c54f-42ee-892f-d50c79481375','Hours':'9db53c54-70dd-483d-ad1d-565d0e4ac7ac','Users':'1b9b866f-0944-4f43-a80d-2a630e1e7c25'};
-async function getListId(name){if(LIST_IDS[name])return LIST_IDS[name];throw new Error('List not found: '+name)}
-
-async function getListItems(listName){const s=await getSiteId();const lid=await getListId(listName);let all=[];let url='/sites/'+s+'/lists/'+lid+'/items?$expand=fields&$top=500';while(url){const r=await graphGet(url);all=all.concat(r.value.map(i=>({id:i.id,...i.fields})));url=r['@odata.nextLink']?r['@odata.nextLink'].replace('https://graph.microsoft.com/v1.0',''):null}return all}
-
-async function createListItem(listName,fields){const s=await getSiteId();const lid=await getListId(listName);return graphPost('/sites/'+s+'/lists/'+lid+'/items',{fields})}
-async function updateListItem(listName,itemId,fields){const s=await getSiteId();const lid=await getListId(listName);return graphPatch('/sites/'+s+'/lists/'+lid+'/items/'+itemId+'/fields',fields)}
-async function deleteListItem(listName,itemId){const s=await getSiteId();const lid=await getListId(listName);return graphDelete('/sites/'+s+'/lists/'+lid+'/items/'+itemId)}
-
-// ============================================================
-// STATE
-// ============================================================
-let properties=[],rooms=[],allRooms=[],bookings=[],allBookings=[];
-let selectedProperty=null,selectedRoom=null,selectedBooking=null;
-let editingBookingId=null;
-let checkoutBookingId=null;
-let allUsers=[];
-
-// ============================================================
-// ROLE MANAGEMENT
-// ============================================================
-async function loadCurrentUser(){
-  const accounts=msalInstance.getAllAccounts();
-  if(!accounts.length)return;
-  const email=(accounts[0].username||'').toLowerCase();
-  currentUser.email=email;
-  currentUser.displayName=email; // fallback
-
-  try{
-    allUsers=await getListItems('Users');
-    console.log('Current email:',email);
-    console.log('Users loaded:',allUsers.length,allUsers.map(u=>u.Epost+' → '+u.Role));
-    const match=allUsers.find(u=>(u.Epost||'').toLowerCase()===email&&u.Active!==false);
-    if(match){
-      currentUser.role=match.Role||'ReadOnly';
-      currentUser.displayName=match.DisplayName||email;
-      currentUser.userId=match.id;
-      console.log('Matched user:',match.DisplayName,match.Role);
-    }else{
-      currentUser.role='ReadOnly';
-      console.warn('No user match found for:',email);
-    }
-  }catch(e){
-    console.error('Failed to load user role:',e);
-    currentUser.role='ReadOnly';
-  }
-}
-
-// Permission check
-function can(action){
-  const r=currentUser.role;
-  const perms={
-    SuperAdmin:['view','edit','create','delete','checkin','checkout','cancel','cleaning','doortag','import','export','print','admin','hours'],
-    Admin:['view','edit','create','delete','checkin','checkout','cancel','cleaning','doortag','import','export','print','hours'],
-    Cleaner:['view_clean','cleaning','print','doortag','hours'],
-    ReadOnly:['view']
-  };
-  return(perms[r]||[]).includes(action);
-}
-
-function applyRole(){
-  const r=currentUser.role;
-
-  // Header buttons visibility
-  const els={
-    newBookingBtn:can('create'),
-    upcomingBtn:true,
-    archiveBtn:can('view'),
-    refreshBtn:true,
-    adminBtn:can('admin'),
-    propertySelect:true
-  };
-
-  // Show/hide new booking button
-  document.querySelectorAll('.header-btn.primary').forEach(btn=>{
-    if(btn.textContent.includes('New booking'))btn.style.display=can('create')?'':'none';
-  });
-
-  // Show/hide admin button
-  const adminBtn=document.getElementById('adminBtn');
-  if(adminBtn)adminBtn.style.display=can('admin')?'':'none';
-
-  // Show/hide archive and upcoming buttons
-  document.querySelectorAll('.header-btn').forEach(btn=>{
-    if(btn.textContent==='Archive')btn.style.display=can('view')?'':'none';
-    if(btn.textContent==='Upcoming')btn.style.display=can('view')||can('view_clean')?'':'none';
-    if(btn.textContent==='Hours')btn.style.display=can('hours')?'':'none';
-  });
-
-  // Update sign out button to show user info
-  document.querySelectorAll('.header-btn').forEach(btn=>{
-    if(btn.onclick&&btn.getAttribute('onclick')==='signOut()')
-      btn.textContent=currentUser.displayName+' ('+r+') — Sign out';
-  });
-
-  // Cleaner: hide stats that don't apply
-  if(r==='Cleaner'){
-    document.querySelectorAll('.stat').forEach((el,i)=>{
-      // Only show "Needs cleaning"
-      if(i!==2)el.style.display='none';
-    });
-    document.querySelector('.stats').style.gridTemplateColumns='1fr';
-  }
-}
-
-// ============================================================
-// DATA LOADING
-// ============================================================
-async function loadProperties(){
-  try{
-    properties=await getListItems('Properties');
-    const sel=document.getElementById('propertySelect');
-    sel.innerHTML=properties.map(p=>'<option value="'+p.id+'">'+p.Title+'</option>').join('');
-    sel.onchange=()=>{selectedProperty=properties.find(p=>p.id===sel.value);loadData()};
-    selectedProperty=properties[0];
-  }catch(e){console.error('Error loading properties:',e)}
-}
-
-async function loadData(){
-  if(!selectedProperty)return;
-  document.getElementById('headerTitle').textContent='2GM Booking — '+selectedProperty.Title;
-  document.getElementById('floor1Body').innerHTML='<tr><td colspan="7" class="loading">Loading...</td></tr>';
-  document.getElementById('floor2Body').innerHTML='<tr><td colspan="7" class="loading">Loading...</td></tr>';
-  closeDetail();
-
-  try{
-    allRooms=await getListItems('Rooms');
-    allBookings=await getListItems('Bookings');
-
-    // Filter rooms by property using PropertyLookupId
-    rooms=allRooms.filter(r=>String(r.PropertyLookupId)===String(selectedProperty.id));
-
-    // If no rooms matched (PropertyLookupId might use a different value), fall back to all active rooms
-    if(rooms.length===0){
-      console.warn('No rooms matched PropertyLookupId='+selectedProperty.id+'. Showing all rooms.');
-      rooms=allRooms.filter(r=>r.Active!==false);
-    }
-
-    // Filter bookings: match via RoomLookupId to rooms in this property
-    // Active bookings always show. Upcoming only on check-in day from 12:00.
-    const roomIds=new Set(rooms.map(r=>r.id));
-    const now=new Date();
-    bookings=allBookings.filter(b=>{
-      const rid=String(b.RoomLookupId||'');
-      if(!roomIds.has(rid))return false;
-      if(b.Status==='Active')return true;
-      if(b.Status==='Upcoming'){
-        const ci=new Date(b.Check_In);ci.setHours(0,0,0,0);
-        const today=new Date();today.setHours(0,0,0,0);
-        // Same day and past 12:00, or overdue (check-in was before today)
-        if(ci.getTime()<today.getTime())return true;
-        if(ci.getTime()===today.getTime()&&now.getHours()>=12)return true;
-        return false;
-      }
-      return false;
-    });
-
-    renderFloors();
-    updateStats();
-    renderIncoming();
-  }catch(e){
-    console.error('Error loading data:',e);
-    document.getElementById('floor1Body').innerHTML='<tr><td colspan="7" class="error">Error: '+e.message+'</td></tr>';
-  }
-}
-
-// ============================================================
-// RENDERING
-// ============================================================
-function getBookingForRoom(roomId){
-  return bookings.find(b=>String(b.RoomLookupId)===String(roomId)&&b.Status==='Active')
-    ||bookings.find(b=>String(b.RoomLookupId)===String(roomId)&&b.Status==='Upcoming');
-}
-
-function formatDate(d){if(!d)return'';const dt=new Date(d);return String(dt.getDate()).padStart(2,'0')+'.'+String(dt.getMonth()+1).padStart(2,'0')+'.'+dt.getFullYear()}
-function toISODate(d){if(!d)return'';const dt=new Date(d);return dt.toISOString().split('T')[0]}
-
-function getNextWeekday(date){
-  // If Saturday (6) → Monday, if Sunday (0) → Monday, else same day
-  const d=new Date(date);
-  const day=d.getDay();
-  if(day===0)d.setDate(d.getDate()+1); // Sunday → Monday
-  else if(day===6)d.setDate(d.getDate()+2); // Saturday → Monday
-  return d;
-}
-
-function calcWashDates(checkInDate,checkOutDate){
-  const ci=new Date(checkInDate);ci.setHours(0,0,0,0);
-  const co=checkOutDate?new Date(checkOutDate):null;
-  if(co)co.setHours(0,0,0,0);
-  const today=new Date();today.setHours(0,0,0,0);
-
-  const washes=[];
-  let week=1;
-  const maxWeeks=52; // safety limit
-
-  while(week<=maxWeeks){
-    const rawDate=new Date(ci);
-    rawDate.setDate(rawDate.getDate()+week*7);
-    const washDate=getNextWeekday(rawDate);
-
-    // Stop if past check-out date
-    if(co&&washDate>=co)break;
-
-    const type=(week%2===1)?'Towels':'Towels + Beddings';
-    const isPast=washDate<today;
-    const isToday=washDate.getTime()===today.getTime();
-    const isNext=!isPast&&!isToday&&washes.every(w=>w.isPast||w.isToday);
-
-    washes.push({date:washDate,type,week,isPast,isToday,isNext});
-    week++;
-  }
-
-  return washes;
-}
-
-function getWashScheduleHtml(booking){
-  if(!booking.Check_In)return'';
-  if(booking.Status!=='Active'&&booking.Status!=='Upcoming')return'';
-
-  const washes=calcWashDates(booking.Check_In,booking.Check_Out);
-  if(!washes.length)return'';
-
-  // Show upcoming washes (next 6) + today's
-  const upcoming=washes.filter(w=>!w.isPast);
-  const show=upcoming.slice(0,6);
-
-  if(!show.length)return'';
-
-  const dayNames=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-  let html='<div style="margin-top:14px"><div style="font-size:12px;color:var(--text-secondary);margin-bottom:4px;font-weight:500">Wash schedule</div>';
-  html+='<table style="font-size:12px;width:auto">';
-  show.forEach(w=>{
-    let style='';
-    let badge='';
-    if(w.isToday){style='color:var(--text-danger);font-weight:500';badge=' <span class="pill danger">Today</span>'}
-    else if(w.isNext){style='color:var(--accent);font-weight:500';badge=' <span class="pill" style="background:var(--bg-success);color:var(--text-success)">Next</span>'}
-    html+='<tr style="'+style+'"><td style="padding:2px 12px 2px 0">'+dayNames[w.date.getDay()]+' '+formatDate(w.date)+badge+'</td><td style="padding:2px 0">'+w.type+'</td></tr>';
-  });
-  html+='</table></div>';
-  return html;
-}
-
-function doorTagBtn(b){
-  if(!b)return'<button class="status-btn" disabled></button>';
-  const s=b.Door_Tag_Status||'None';
-  if(s==='Needs-print')return'<button class="status-btn needs-print" onclick="cycleDT(event,\''+b.id+'\')">✕</button>';
-  if(s==='Printed')return'<button class="status-btn printed" onclick="cycleDT(event,\''+b.id+'\')">✓</button>';
-  return'<button class="status-btn" onclick="cycleDT(event,\''+b.id+'\')"></button>';
-}
-
-function cleanBtn(b){
-  if(!b)return'<button class="clean-btn" disabled></button>';
-  const s=b.Cleaning_Status||'None';
-  if(s==='Dirty')return'<button class="clean-btn dirty" onclick="cycleCS(event,\''+b.id+'\')"></button>';
-  if(s==='Clean')return'<button class="clean-btn clean" onclick="cycleCS(event,\''+b.id+'\')"></button>';
-  return'<button class="clean-btn" onclick="cycleCS(event,\''+b.id+'\')"></button>';
-}
-
-function batCell(l){
-  if(l==null)return'<span class="muted">—</span>';
-  if(l<30)return'<span class="pill danger">'+l+'%</span>';
-  if(l<60)return'<span class="pill warning">'+l+'%</span>';
-  return'<span>'+l+'%</span>';
-}
-
-function datesCell(b){
-  if(!b)return'<span class="empty-text">Empty</span>';
-  const ci=formatDate(b.Check_In);
-  const co=b.Check_Out?formatDate(b.Check_Out):'Open-ended';
-  const today=new Date();today.setHours(0,0,0,0);
-  const ind=new Date(b.Check_In);ind.setHours(0,0,0,0);
-  const days=Math.round((ind-today)/864e5);
-  let s='';
-  if(b.Status==='Upcoming'||days>0){
-    if(days>=0&&days<=4)s='color:var(--accent);font-weight:500;';
-    else if(days>4&&days<=30)s='color:#EF9F27;font-weight:500;';
-  }
-  return'<span style="'+s+'">'+ci+'</span> — '+co;
-}
-
-function renderRow(room,booking){
-  const isCleaner=currentUser.role==='Cleaner';
-  const n=booking?booking.Person_Name:'';
-  const c=booking?(booking.Company||''):'';
-  if(isCleaner){
-    // Cleaner: only room, cleaning status, wash info
-    const washNext=booking?getNextWashDate(booking):'';
-    return'<tr onclick="showDetail(\''+room.id+'\')">'
-      +'<td>'+cleanBtn(booking)+'</td>'
-      +'<td style="font-variant-numeric:tabular-nums;font-weight:500">'+room.Title+'</td>'
-      +'<td>'+(booking?'Occupied':'<span class="empty-text">Empty</span>')+'</td>'
-      +'<td>'+washNext+'</td>'
-      +'</tr>';
-  }
-  return'<tr onclick="showDetail(\''+room.id+'\')">'
-    +'<td>'+doorTagBtn(booking)+'</td>'
-    +'<td>'+cleanBtn(booking)+'</td>'
-    +'<td style="font-variant-numeric:tabular-nums;font-weight:500">'+room.Title+'</td>'
-    +'<td>'+(n||'<span class="empty-text">—</span>')+(booking&&booking.Notes?'<span class="note-dot"></span>':'')+'</td>'
-    +'<td class="muted">'+c+'</td>'
-    +'<td style="text-align:right;font-variant-numeric:tabular-nums">'+batCell(room.Door_Battery_Level)+'</td>'
-    +'<td style="font-variant-numeric:tabular-nums">'+datesCell(booking)+'</td>'
-    +'</tr>';
-}
-
-function getNextWashDate(booking){
-  if(!booking||!booking.Check_In)return'';
-  if(booking.Status!=='Active')return'';
-  const washes=calcWashDates(booking.Check_In,booking.Check_Out);
-  const next=washes.find(w=>!w.isPast);
-  if(!next)return'<span class="muted">—</span>';
-  const dayNames=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-  if(next.isToday)return'<span class="pill danger">Today — '+next.type+'</span>';
-  return dayNames[next.date.getDay()]+' '+formatDate(next.date)+' — '+next.type;
-}
-
-function renderFloors(){
-  // For dirty filter: use ALL bookings to build bMap since rooms come from all properties
-  const sourceBk=(activeFilter==='dirty')?allBookings:bookings;
-  const bMap={};
-  sourceBk.forEach(b=>{
-    const rid=String(b.RoomLookupId||'');
-    if(rid&&(b.Status==='Active'||b.Status==='Upcoming')&&(!bMap[rid]||b.Status==='Active'))bMap[rid]=b;
-  });
-
-  const isCleaner=currentUser.role==='Cleaner';
-  const cols=isCleaner?4:7;
-
-  // Update table headers for cleaner view
-  if(isCleaner){
-    document.querySelectorAll('#table1 thead tr, #table2 thead tr').forEach(tr=>{
-      tr.innerHTML='<th>C</th><th>Room</th><th>Status</th><th>Next wash</th>';
-    });
-  }
-
-  const f1=getFilteredRoomsForFloor(1).sort((a,b)=>(a.Title||'').localeCompare(b.Title||'',undefined,{numeric:true}));
-  const f2=getFilteredRoomsForFloor(2).sort((a,b)=>(a.Title||'').localeCompare(b.Title||'',undefined,{numeric:true}));
-
-  const allF1=rooms.filter(r=>r.Floor===1||String(r.Floor)==='1');
-  const allF2=rooms.filter(r=>r.Floor===2||String(r.Floor)==='2');
-
-  const noMatch='<tr><td colspan="'+cols+'" class="loading">No matching rooms</td></tr>';
-  document.getElementById('floor1Body').innerHTML=f1.length?f1.map(r=>{
-    const b=bMap[r.id];
-    // For dirty cross-property: show property name in room title
-    if(activeFilter==='dirty'){
-      const prop=properties.find(p=>String(p.id)===String(r.PropertyLookupId));
-      const propName=prop?prop.Title:'';
-      return renderRowWithProperty(r,b,propName);
-    }
-    return renderRow(r,b);
-  }).join(''):noMatch;
-  document.getElementById('floor2Body').innerHTML=f2.length?f2.map(r=>{
-    const b=bMap[r.id];
-    if(activeFilter==='dirty'){
-      const prop=properties.find(p=>String(p.id)===String(r.PropertyLookupId));
-      const propName=prop?prop.Title:'';
-      return renderRowWithProperty(r,b,propName);
-    }
-    return renderRow(r,b);
-  }).join(''):noMatch;
-
-  const f1range=allF1.length?'Rooms '+allF1.sort((a,b)=>(a.Title||'').localeCompare(b.Title||'',undefined,{numeric:true}))[0].Title+'–'+allF1[allF1.length-1].Title:'';
-  const f2range=allF2.length?'Rooms '+allF2.sort((a,b)=>(a.Title||'').localeCompare(b.Title||'',undefined,{numeric:true}))[0].Title+'–'+allF2[allF2.length-1].Title:'';
-
-  if(activeFilter==='dirty'){
-    document.getElementById('floor1Sub').textContent=f1.length+' rooms — all properties';
-    document.getElementById('floor2Sub').textContent=f2.length+' rooms — all properties';
-  }else{
-    document.getElementById('floor1Sub').textContent=activeFilter?f1.length+' of '+allF1.length+' rooms':f1range;
-    document.getElementById('floor2Sub').textContent=activeFilter?f2.length+' of '+allF2.length+' rooms':f2range;
-  }
-}
-
-function renderRowWithProperty(room,booking,propName){
-  const isCleaner=currentUser.role==='Cleaner';
-  if(isCleaner){
-    const washNext=booking?getNextWashDate(booking):'';
-    return'<tr onclick="showDetail(\''+room.id+'\')">'
-      +'<td>'+cleanBtn(booking)+'</td>'
-      +'<td style="font-variant-numeric:tabular-nums;font-weight:500">'+room.Title+'</td>'
-      +'<td class="muted" style="font-size:11px">'+propName+'</td>'
-      +'<td>'+washNext+'</td>'
-      +'</tr>';
-  }
-  const n=booking?booking.Person_Name:'';
-  const washNext=booking?getNextWashDate(booking):'';
-  return'<tr onclick="showDetail(\''+room.id+'\')">'
-    +'<td>'+cleanBtn(booking)+'</td>'
-    +'<td style="font-variant-numeric:tabular-nums;font-weight:500">'+room.Title+'</td>'
-    +'<td class="muted" style="font-size:11px">'+propName+'</td>'
-    +'<td>'+(n||'<span class="empty-text">—</span>')+'</td>'
-    +'<td>'+washNext+'</td>'
-    +'<td style="font-variant-numeric:tabular-nums">'+(booking?datesCell(booking):'')+'</td>'
-    +'</tr>';
-}
-
-function updateStats(){
-  const tr=rooms.length;
-
-  // bookings array is already filtered: Active + Upcoming that passed the 12:00 rule
-  const occupiedRoomIds=new Set();
-  bookings.forEach(b=>{
-    const rid=String(b.RoomLookupId||'');
-    occupiedRoomIds.add(rid);
-  });
-
-  document.getElementById('statCheckedIn').textContent=occupiedRoomIds.size+' / '+tr;
-  document.getElementById('statEmpty').textContent=tr-occupiedRoomIds.size;
-  // Needs cleaning: count ALL rooms across ALL properties that are dirty OR have wash today
-  const allDirtyRoomIds=new Set();
-  allBookings.forEach(b=>{
-    if(b.Cleaning_Status==='Dirty'&&(b.Status==='Active'||b.Status==='Upcoming'))allDirtyRoomIds.add(String(b.RoomLookupId));
-    // Also check wash schedule for today
-    if(b.Status==='Active'&&b.Check_In){
-      const washes=calcWashDates(b.Check_In,b.Check_Out);
-      if(washes.some(w=>w.isToday))allDirtyRoomIds.add(String(b.RoomLookupId));
-    }
-  });
-  document.getElementById('statDirty').textContent=allDirtyRoomIds.size;
-  document.getElementById('statDoorTag').textContent=bookings.filter(b=>b.Door_Tag_Status==='Needs-print').length;
-  document.getElementById('statBattery').textContent=rooms.filter(r=>r.Door_Battery_Level!=null&&r.Door_Battery_Level<30).length;
-}
-
-// ============================================================
-// DETAIL PANEL
-// ============================================================
-function showDetail(roomId){
-  const room=rooms.find(r=>r.id===roomId);
-  if(!room)return;
-  const booking=getBookingForRoom(roomId);
-  selectedRoom=room;selectedBooking=booking;
-  const p=document.getElementById('detailPanel');
-  const isCleaner=currentUser.role==='Cleaner';
-
-  if(!booking){
-    if(isCleaner){
-      p.innerHTML='<div class="detail-grid"><div class="detail-main">'
-        +'<div class="detail-name">Room '+room.Title+'</div>'
-        +'<div class="detail-sub">Empty</div>'
-        +'</div><div class="detail-actions">'
-        +'<button onclick="closeDetail()">Close</button>'
-        +'</div></div>';
-    }else{
-      p.innerHTML='<div class="detail-grid"><div class="detail-main">'
-        +'<div class="detail-name">Room '+room.Title+'</div>'
-        +'<div class="detail-sub">Empty — '+selectedProperty.Title+'</div>'
-        +'</div><div class="detail-actions">'
-        +(can('create')?'<button class="primary" onclick="openNewBooking(\''+room.id+'\')">Create booking</button>':'')
-        +'<button onclick="closeDetail()">Close</button>'
-        +'</div></div>';
-    }
-  }else{
-    const dt={'None':'—','Needs-print':'✕ Needs print','Printed':'✓ Printed'}[booking.Door_Tag_Status]||'—';
-    const cl={'None':'—','Dirty':'● Needs cleaning','Clean':'● Clean'}[booking.Cleaning_Status]||'—';
-    const washHtml=getWashScheduleHtml(booking);
-
-    if(isCleaner){
-      // Cleaner sees: room, cleaning status, wash schedule, mark-as-cleaned + print door tag
-      p.innerHTML='<div class="detail-grid"><div class="detail-main">'
-        +'<div class="detail-name">Room '+room.Title+'</div>'
-        +'<div class="detail-sub">'+cl+'</div>'
-        +washHtml
-        +'</div><div class="detail-actions">'
-        +(booking.Cleaning_Status==='Dirty'?'<button class="primary" onclick="markClean(\''+booking.id+'\')">Mark as cleaned ✓</button>':'')
-        +(booking.Cleaning_Status==='Clean'?'<button onclick="markDirty(\''+booking.id+'\')">Mark as dirty</button>':'')
-        +'<button onclick="printDoorTag(\''+booking.id+'\')">Print door tag</button>'
-        +'<button onclick="closeDetail()">Close</button>'
-        +'</div></div>';
-    }else{
-      p.innerHTML='<div class="detail-grid"><div class="detail-main">'
-        +'<div class="detail-name">'+booking.Person_Name+'</div>'
-        +'<div class="detail-sub">Room '+room.Title+' · '+(booking.Company||'')+' · '+selectedProperty.Title+'</div>'
-        +'<table class="detail-info">'
-        +'<tr><td>Check-in</td><td>'+formatDate(booking.Check_In)+'</td></tr>'
-        +'<tr><td>Check-out</td><td>'+(booking.Check_Out?formatDate(booking.Check_Out):'Open-ended')+'</td></tr>'
-        +'<tr><td>Status</td><td>'+booking.Status+'</td></tr>'
-        +'<tr><td>Door tag</td><td>'+dt+'</td></tr>'
-        +'<tr><td>Cleaning</td><td>'+cl+'</td></tr>'
-        +(booking.Notes?'<tr><td>Notes</td><td>'+booking.Notes+'</td></tr>':'')
-        +'</table>'
-        +washHtml
-        +'</div><div class="detail-actions">'
-        +(can('edit')?'<button onclick="openEditBooking(\''+booking.id+'\')">Edit booking</button>':'')
-        +(can('print')?'<button onclick="printDoorTag(\''+booking.id+'\')">Print door tag</button>':'')
-        +(booking.Status==='Upcoming'&&can('checkin')?'<button class="primary" onclick="checkIn(\''+booking.id+'\')">Check in</button>':'')
-        +(booking.Status==='Active'&&can('checkout')?'<button class="primary" style="background:#EF9F27;border-color:#EF9F27" onclick="checkOut(\''+booking.id+'\')">Check out</button>':'')
-        +(can('cancel')?'<button class="danger" onclick="cancelBooking(\''+booking.id+'\')">Cancel booking</button>':'')
-        +'<button onclick="closeDetail()">Close</button>'
-        +'</div></div>';
-    }
-  }
-  p.classList.add('open');
-}
-
-// Quick cleaning buttons for cleaners
-async function markClean(id){
-  try{await updateListItem('Bookings',id,{Cleaning_Status:'Clean'});
-    const local=allBookings.find(x=>x.id===id);if(local)local.Cleaning_Status='Clean';
-    closeDetail();refreshLocal();loadData();
-  }catch(e){console.error(e);alert('Failed')}
-}
-async function markDirty(id){
-  try{await updateListItem('Bookings',id,{Cleaning_Status:'Dirty'});
-    const local=allBookings.find(x=>x.id===id);if(local)local.Cleaning_Status='Dirty';
-    closeDetail();refreshLocal();loadData();
-  }catch(e){console.error(e);alert('Failed')}
-}
-function closeDetail(){document.getElementById('detailPanel').classList.remove('open');selectedRoom=null;selectedBooking=null}
-
-// ============================================================
-// STATUS TOGGLES
-// ============================================================
-async function cycleDT(e,id){
-  e.stopPropagation();
-  const b=bookings.find(x=>x.id===id);if(!b)return;
-  const c={'None':'Needs-print','Needs-print':'Printed','Printed':'None'};
-  const ns=c[b.Door_Tag_Status||'None'];
-  try{await updateListItem('Bookings',id,{Door_Tag_Status:ns});b.Door_Tag_Status=ns;renderFloors();updateStats()}
-  catch(er){console.error(er);alert('Failed to update door tag status')}
-}
-
-async function cycleCS(e,id){
-  e.stopPropagation();
-  const b=bookings.find(x=>x.id===id);if(!b)return;
-  const c={'None':'Dirty','Dirty':'Clean','Clean':'None'};
-  const ns=c[b.Cleaning_Status||'None'];
-  try{await updateListItem('Bookings',id,{Cleaning_Status:ns});b.Cleaning_Status=ns;renderFloors();updateStats()}
-  catch(er){console.error(er);alert('Failed to update cleaning status')}
-}
-
-// ============================================================
-// CHECK IN / OUT / CANCEL
-// ============================================================
-async function checkIn(id){
-  if(!confirm('Check in this guest?'))return;
-  try{
-    const now=new Date().toISOString();
-    await updateListItem('Bookings',id,{Status:'Active',Check_In:now});
-    const local=allBookings.find(x=>x.id===id);
-    if(local){local.Status='Active';local.Check_In=now}
-    closeDetail();refreshLocal();
-    loadData();
-  }catch(e){console.error(e);alert('Failed to check in')}
-}
-
-function checkOut(id){
-  const b=bookings.find(x=>x.id===id)||allBookings.find(x=>x.id===id);
-  if(!b)return;
-  checkoutBookingId=id;
-  const today=new Date().toISOString().split('T')[0];
-  document.getElementById('fCheckOutDate').value=today;
-  document.getElementById('checkoutGuestName').textContent=b.Person_Name||'Guest';
-  document.getElementById('checkoutModal').classList.add('open');
-}
-
-function closeCheckoutModal(){document.getElementById('checkoutModal').classList.remove('open');checkoutBookingId=null}
-
-async function confirmCheckout(){
-  if(!checkoutBookingId)return;
-  const dateVal=document.getElementById('fCheckOutDate').value;
-  if(!dateVal){alert('Please select a date');return}
-  const btn=document.getElementById('checkoutConfirmBtn');
-  btn.disabled=true;btn.textContent='Processing...';
-  try{
-    await updateListItem('Bookings',checkoutBookingId,{Status:'Completed',Cleaning_Status:'Dirty',Check_Out:dateVal+'T12:00:00Z'});
-    const local=allBookings.find(x=>x.id===checkoutBookingId);
-    if(local){local.Status='Completed';local.Cleaning_Status='Dirty';local.Check_Out=dateVal+'T12:00:00Z'}
-    closeCheckoutModal();closeDetail();refreshLocal();
-    loadData();
-  }catch(e){
-    console.error(e);alert('Failed to check out: '+e.message);
-  }finally{btn.disabled=false;btn.textContent='Confirm check-out'}
-}
-
-async function cancelBooking(id){
-  if(!confirm('Cancel this booking?'))return;
-  try{
-    await updateListItem('Bookings',id,{Status:'Cancelled'});
-    const local=allBookings.find(x=>x.id===id);
-    if(local)local.Status='Cancelled';
-    closeDetail();refreshLocal();
-    loadData();
-  }catch(e){console.error(e);alert('Failed to cancel')}
-}
-
-// Refresh UI from local data without waiting for API
-function refreshLocal(){
-  const roomIdSet=new Set(rooms.map(r=>r.id));
-  const now=new Date();
-  bookings=allBookings.filter(b=>{
-    const rid=String(b.RoomLookupId||'');
-    if(!roomIdSet.has(rid))return false;
-    if(b.Status==='Active')return true;
-    if(b.Status==='Upcoming'){
-      const ci=new Date(b.Check_In);ci.setHours(0,0,0,0);
-      const today=new Date();today.setHours(0,0,0,0);
-      if(ci.getTime()<today.getTime())return true;
-      if(ci.getTime()===today.getTime()&&now.getHours()>=12)return true;
-      return false;
-    }
-    return false;
-  });
-  renderFloors();updateStats();
-}
-
-// ============================================================
-// BOOKING MODAL (NEW + EDIT)
-// ============================================================
-function populateRoomSelect(preselectedRoomId){
-  const sel=document.getElementById('fRoom');
-  const sorted=[...rooms].sort((a,b)=>(a.Title||'').localeCompare(b.Title||'',undefined,{numeric:true}));
-  sel.innerHTML=sorted.map(r=>'<option value="'+r.id+'"'+(r.id===preselectedRoomId?' selected':'')+'>'+r.Title+' (Floor '+r.Floor+')</option>').join('');
-  sel.onchange=()=>{
-    const rm=rooms.find(r=>r.id===sel.value);
-    document.getElementById('fFloor').value=rm?rm.Floor:'';
-  };
-  // Set initial floor
-  const rm=rooms.find(r=>r.id===sel.value);
-  document.getElementById('fFloor').value=rm?rm.Floor:'';
-}
-
-function openNewBooking(preselectedRoomId){
-  editingBookingId=null;
-  document.getElementById('bookingModalTitle').textContent='New booking';
-  document.getElementById('bookingSaveBtn').textContent='Create booking';
-  document.getElementById('bookingSaveBtn').className='primary';
-  populateRoomSelect(preselectedRoomId||'');
-  document.getElementById('fName').value='';
-  document.getElementById('fCompany').value='';
-  document.getElementById('fCheckIn').value=toISODate(new Date());
-  document.getElementById('fCheckOut').value='';
-  document.getElementById('fStatus').value='Upcoming';
-  document.getElementById('fNotes').value='';
-  document.getElementById('bookingModal').classList.add('open');
-}
-
-function openEditBooking(bookingId){
-  const b=bookings.find(x=>x.id===bookingId)||allBookings.find(x=>x.id===bookingId);
-  if(!b)return;
-  editingBookingId=bookingId;
-  document.getElementById('bookingModalTitle').textContent='Edit booking';
-  document.getElementById('bookingSaveBtn').textContent='Save changes';
-  document.getElementById('bookingSaveBtn').className='primary';
-  populateRoomSelect(String(b.RoomLookupId));
-  document.getElementById('fName').value=b.Person_Name||'';
-  document.getElementById('fCompany').value=b.Company||'';
-  document.getElementById('fCheckIn').value=b.Check_In?toISODate(b.Check_In):'';
-  document.getElementById('fCheckOut').value=b.Check_Out?toISODate(b.Check_Out):'';
-  document.getElementById('fStatus').value=b.Status||'Upcoming';
-  document.getElementById('fNotes').value=b.Notes||'';
-  document.getElementById('bookingModal').classList.add('open');
-}
-
-function closeBookingModal(){document.getElementById('bookingModal').classList.remove('open');editingBookingId=null}
-
-async function saveBooking(){
-  const roomId=document.getElementById('fRoom').value;
-  const name=document.getElementById('fName').value.trim();
-  const company=document.getElementById('fCompany').value.trim();
-  const checkIn=document.getElementById('fCheckIn').value;
-  const checkOut=document.getElementById('fCheckOut').value;
-  const status=document.getElementById('fStatus').value;
-  const notes=document.getElementById('fNotes').value.trim();
-  const room=rooms.find(r=>r.id===roomId);
-
-  if(!name){alert('Guest name is required');return}
-  if(!checkIn){alert('Check-in date is required');return}
-
-  // === COLLISION CHECK ===
-  const newIn=new Date(checkIn);newIn.setHours(0,0,0,0);
-  const newOut=checkOut?new Date(checkOut):null;
-  if(newOut)newOut.setHours(0,0,0,0);
-
-  const conflicts=allBookings.filter(b=>{
-    if(editingBookingId&&b.id===editingBookingId)return false;
-    if(b.Status==='Cancelled'||b.Status==='Completed')return false;
-    if(String(b.RoomLookupId)!==String(roomId))return false;
-
-    const bIn=new Date(b.Check_In);bIn.setHours(0,0,0,0);
-    const bOut=b.Check_Out?new Date(b.Check_Out):null;
-    if(bOut)bOut.setHours(0,0,0,0);
-
-    // Open-ended existing booking: conflicts if new check-in >= existing check-in
-    if(!bOut){return newIn>=bIn||(newOut?newOut>bIn:true)}
-    // Open-ended new booking: conflicts if existing check-out > new check-in
-    if(!newOut){return bOut>newIn||bIn>=newIn}
-    // Both have dates: overlap if one starts before the other ends
-    return newIn<bOut&&newOut>bIn;
-  });
-
-  if(conflicts.length>0){
-    const c=conflicts[0];
-    const cRoom=allRooms.find(r=>r.id===String(c.RoomLookupId));
-    const msg='Room '+(cRoom?cRoom.Title:'?')+' already has a booking:\n\n'
-      +c.Person_Name+' ('+c.Status+')\n'
-      +formatDate(c.Check_In)+' — '+(c.Check_Out?formatDate(c.Check_Out):'Open-ended')
-      +'\n\nThis overlaps with your dates. Continue anyway?';
-    if(!confirm(msg))return;
-  }
-
-  const fields={
-    Person_Name:name,
-    Company:company,
-    Check_In:checkIn+'T15:00:00Z',
-    Status:status,
-    Door_Tag_Status:'Needs-print',
-    Cleaning_Status:'None',
-    Property_Name:selectedProperty.Title,
-    Floor:room?room.Floor:1,
-    Notes:notes||null
-  };
-  if(checkOut)fields.Check_Out=checkOut+'T12:00:00Z';
-  else fields.Check_Out=null;
-  fields.RoomLookupId=parseInt(roomId);
-
-  const btn=document.getElementById('bookingSaveBtn');
-  btn.disabled=true;btn.textContent='Saving...';
-
-  try{
-    if(editingBookingId){
-      // Edit existing — update locally first for instant UI
-      delete fields.Door_Tag_Status;
-      delete fields.Cleaning_Status;
-      await updateListItem('Bookings',editingBookingId,fields);
-      // Update local data immediately
-      const local=allBookings.find(x=>x.id===editingBookingId);
-      if(local){Object.assign(local,fields);local.Check_Out=fields.Check_Out}
-      closeBookingModal();closeDetail();refreshLocal();
-      loadData();
-    }else{
-      // Create new — need full reload to get new ID
-      await createListItem('Bookings',fields);
-      closeBookingModal();closeDetail();
-      await loadData();
-    }
-  }catch(e){
-    console.error('Save failed:',e);
-    alert('Failed to save booking: '+e.message);
-  }finally{
-    btn.disabled=false;
-    btn.textContent=editingBookingId?'Save changes':'Create booking';
-  }
-}
-
-// ============================================================
-// INCOMING LIST
-// ============================================================
-function toggleIncoming(){
-  const p=document.getElementById('incomingPanel');
-  // Close archive if open
-  document.getElementById('archivePanel').classList.remove('open');
-  p.classList.toggle('open');
-  if(p.classList.contains('open'))renderIncoming();
-}
-
-function renderIncoming(){
-  const today=new Date();today.setHours(0,0,0,0);
-  const in30=new Date(today);in30.setDate(in30.getDate()+30);
-
-  // Get upcoming bookings with check-in in the future (not today — those are already on the board)
-  const roomIds=new Set(rooms.map(r=>r.id));
-  const tomorrow=new Date(today);tomorrow.setDate(tomorrow.getDate()+1);
-  const upcoming=allBookings.filter(b=>{
-    if(b.Status!=='Upcoming')return false;
-    const rid=String(b.RoomLookupId||'');
-    if(!roomIds.has(rid))return false;
-    const ci=new Date(b.Check_In);ci.setHours(0,0,0,0);
-    return ci>=tomorrow&&ci<=in30;
-  }).sort((a,b)=>new Date(a.Check_In)-new Date(b.Check_In));
-
-  const body=document.getElementById('incomingBody');
-  if(!upcoming.length){
-    body.innerHTML='<tr><td colspan="7" class="loading">No upcoming bookings in the next 30 days</td></tr>';
-    return;
-  }
-
-  body.innerHTML=upcoming.map(b=>{
-    const room=rooms.find(r=>r.id===String(b.RoomLookupId));
-    const roomTitle=room?room.Title:'?';
-    const daysUntil=Math.round((new Date(b.Check_In)-today)/864e5);
-    let badge='';
-    if(daysUntil<=3)badge='<span class="pill danger">'+daysUntil+'d</span>';
-    else if(daysUntil<=7)badge='<span class="pill warning">'+daysUntil+'d</span>';
-    return'<tr onclick="showDetail(\''+(room?room.id:'')+'\')">'
-      +'<td style="font-weight:500">'+roomTitle+'</td>'
-      +'<td>'+b.Person_Name+'</td>'
-      +'<td class="muted">'+(b.Company||'')+'</td>'
-      +'<td>'+formatDate(b.Check_In)+' '+badge+'</td>'
-      +'<td>'+(b.Check_Out?formatDate(b.Check_Out):'Open-ended')+'</td>'
-      +'<td><span class="pill" style="background:var(--bg-warning);color:var(--text-warning)">Upcoming</span></td>'
-      +'<td><button style="border:0;background:0 0;cursor:pointer;font-size:11px;color:var(--accent);text-decoration:underline" onclick="event.stopPropagation();openEditBooking(\''+b.id+'\')">Edit</button></td>'
-      +'</tr>';
-  }).join('');
-}
-
-// ============================================================
-// ARCHIVE
-// ============================================================
-function toggleArchive(){
-  const p=document.getElementById('archivePanel');
-  // Close incoming if open
-  document.getElementById('incomingPanel').classList.remove('open');
-  p.classList.toggle('open');
-  if(p.classList.contains('open'))renderArchive();
-}
-
-function renderArchive(){
-  const search=(document.getElementById('archiveSearch').value||'').toLowerCase();
-  const statusFilter=document.getElementById('archiveStatus').value;
-  const roomIds=new Set(rooms.map(r=>r.id));
-
-  let archived=allBookings.filter(b=>{
-    const rid=String(b.RoomLookupId||'');
-    if(!roomIds.has(rid))return false;
-    if(statusFilter!=='all'&&b.Status!==statusFilter)return false;
-    if(search){
-      const haystack=((b.Person_Name||'')+(b.Company||'')+getRoomTitle(b)).toLowerCase();
-      if(!haystack.includes(search))return false;
-    }
-    return true;
-  });
-
-  // Sort by check-in descending (newest first)
-  archived.sort((a,b)=>new Date(b.Check_In||0)-new Date(a.Check_In||0));
-
-  // Limit to 100 for performance
-  const limited=archived.slice(0,100);
-  const total=archived.length;
-
-  document.getElementById('archiveTitle').textContent='Archive — '+total+' booking'+(total!==1?'s':'');
-
-  const body=document.getElementById('archiveBody');
-  if(!limited.length){
-    body.innerHTML='<tr><td colspan="7" class="loading">No bookings found</td></tr>';
-    return;
-  }
-
-  body.innerHTML=limited.map(b=>{
-    const roomTitle=getRoomTitle(b);
-    const statusColors={Completed:'background:var(--bg-secondary);color:var(--text-secondary)',Cancelled:'background:var(--bg-danger);color:var(--text-danger)',Active:'background:var(--bg-success);color:var(--text-success)',Upcoming:'background:var(--bg-warning);color:var(--text-warning)'};
-    const sc=statusColors[b.Status]||'';
-    return'<tr>'
-      +'<td style="font-weight:500">'+roomTitle+'</td>'
-      +'<td>'+( b.Person_Name||'—')+'</td>'
-      +'<td class="muted">'+(b.Company||'')+'</td>'
-      +'<td>'+formatDate(b.Check_In)+'</td>'
-      +'<td>'+(b.Check_Out?formatDate(b.Check_Out):'Open-ended')+'</td>'
-      +'<td><span class="pill" style="'+sc+'">'+b.Status+'</span></td>'
-      +'<td>'+(b.Status==='Completed'||b.Status==='Cancelled'?'<button style="border:0;background:0 0;cursor:pointer;font-size:11px;color:var(--accent);text-decoration:underline;margin-right:8px" onclick="reopenBooking(\''+b.id+'\')">Reopen</button>':'')
-      +'<button style="border:0;background:0 0;cursor:pointer;font-size:11px;color:#dc3545;text-decoration:underline" onclick="deleteBooking(\''+b.id+'\')">Delete</button></td>'
-      +'</tr>';
-  }).join('');
-  if(total>100)body.innerHTML+='<tr><td colspan="7" class="loading">Showing 100 of '+total+' — use search to narrow</td></tr>';
-}
-
-function getRoomTitle(booking){
-  const room=allRooms.find(r=>r.id===String(booking.RoomLookupId));
-  return room?room.Title:'?';
-}
-
-async function reopenBooking(id){
-  if(!confirm('Reopen this booking as Upcoming?'))return;
-  try{
-    await updateListItem('Bookings',id,{Status:'Upcoming',Cleaning_Status:'None',Door_Tag_Status:'Needs-print'});
-    await loadData();
-    renderArchive();
-  }catch(e){console.error(e);alert('Failed to reopen: '+e.message)}
-}
-
-async function deleteBooking(id){
-  const booking=allBookings.find(b=>b.id===id);
-  if(!booking)return;
-  
-  const roomTitle=getRoomTitle(booking);
-  const confirmMsg='Permanently delete this booking?\n\n'+booking.Person_Name+' ('+booking.Status+')\nRoom '+roomTitle+'\n'+formatDate(booking.Check_In)+' — '+(booking.Check_Out?formatDate(booking.Check_Out):'Open-ended')+'\n\nThis cannot be undone.';
-  
-  if(!confirm(confirmMsg))return;
-  
-  try{
-    await deleteListItem('Bookings',id);
-    // Remove from local arrays
-    const idx=allBookings.findIndex(b=>b.id===id);
-    if(idx>=0)allBookings.splice(idx,1);
-    const localIdx=bookings.findIndex(b=>b.id===id);
-    if(localIdx>=0)bookings.splice(localIdx,1);
-    
-    refreshLocal();
-    renderArchive();
-  }catch(e){
-    console.error(e);
-    alert('Failed to delete booking: '+e.message);
-  }
-}
-
-function exportArchiveExcel(){
-  const search=(document.getElementById('archiveSearch').value||'').toLowerCase();
-  const statusFilter=document.getElementById('archiveStatus').value;
-  const roomIds=new Set(rooms.map(r=>r.id));
-
-  let archived=allBookings.filter(b=>{
-    const rid=String(b.RoomLookupId||'');
-    if(!roomIds.has(rid))return false;
-    if(statusFilter!=='all'&&b.Status!==statusFilter)return false;
-    if(search){
-      const haystack=((b.Person_Name||'')+(b.Company||'')+getRoomTitle(b)).toLowerCase();
-      if(!haystack.includes(search))return false;
-    }
-    return true;
-  });
-  archived.sort((a,b)=>new Date(b.Check_In||0)-new Date(a.Check_In||0));
-
-  // Build CSV with semicolon separator (Norwegian Excel default) and BOM
-  const headers=['Room','Name','Company','Check-in','Check-out','Status','Door Tag','Cleaning','Notes'];
-  const rows=archived.map(b=>{
-    const roomTitle=getRoomTitle(b);
-    return [
-      roomTitle,
-      b.Person_Name||'',
-      b.Company||'',
-      formatDate(b.Check_In),
-      b.Check_Out?formatDate(b.Check_Out):'Open-ended',
-      b.Status||'',
-      b.Door_Tag_Status||'',
-      b.Cleaning_Status||'',
-      (b.Notes||'').replace(/[\r\n]+/g,' ')
-    ];
-  });
-
-  const escape=v=>{
-    const s=String(v);
-    if(s.includes(';')||s.includes('"')||s.includes('\n'))return'"'+s.replace(/"/g,'""')+'"';
-    return s;
-  };
-
-  const csv='\uFEFF'+headers.join(';')+'\n'+rows.map(r=>r.map(escape).join(';')).join('\n');
-  const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});
-  const url=URL.createObjectURL(blob);
-  const a=document.createElement('a');
-  const propName=(selectedProperty?selectedProperty.Title:'2GM').replace(/\s+/g,'_');
-  const date=new Date().toISOString().split('T')[0];
-  a.href=url;
-  a.download='Archive_'+propName+'_'+date+'.csv';
-  a.click();
-  URL.revokeObjectURL(url);
-}
-
-// ============================================================
-// IMPORT
-// ============================================================
-let importData=[];
-
-function closeImportModal(){
-  document.getElementById('importModal').classList.remove('open');
-  document.getElementById('importFile').value='';
-  document.getElementById('importPreview').style.display='none';
-  document.getElementById('importProgress').style.display='none';
-  document.getElementById('importResult').style.display='none';
-  document.getElementById('importRunBtn').disabled=true;
-  importData=[];
-}
-
-function parseDate(str){
-  if(!str||!str.trim())return null;
-  str=str.trim();
-  // Try dd.mm.yyyy
-  let m=str.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
-  if(m)return m[3]+'-'+m[2].padStart(2,'0')+'-'+m[1].padStart(2,'0');
-  // Try dd.mm.yy
-  m=str.match(/^(\d{1,2})\.(\d{1,2})\.(\d{2})$/);
-  if(m){const y=parseInt(m[3]);const full=y>50?'19'+m[3]:'20'+m[3];return full+'-'+m[2].padStart(2,'0')+'-'+m[1].padStart(2,'0')}
-  // Try yyyy-mm-dd
-  m=str.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if(m)return str;
-  // Try dd/mm/yyyy
-  m=str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-  if(m)return m[3]+'-'+m[2].padStart(2,'0')+'-'+m[1].padStart(2,'0');
-  return null;
-}
-
-function parseImportFile(){
-  const file=document.getElementById('importFile').files[0];
-  if(!file){alert('Please select a CSV file');return}
-  console.log('Parsing file:',file.name,'Size:',file.size,'bytes');
-
-  const reader=new FileReader();
-  reader.onload=function(e){
-    let text=e.target.result;
-    console.log('Raw file content length:',text.length);
-    console.log('First 200 chars:',text.substring(0,200));
-    
-    // Handle lines wrapped in quotes (entire line in one quote pair)
-    const lines=text.split(/\r?\n/).filter(l=>l.trim()).map(line=>{
-      line=line.trim();
-      if(line.startsWith('"')&&line.endsWith('"')&&line.split('"').length===3){
-        return line.slice(1,-1); // Remove outer quotes
-      }
-      return line;
-    });
-    
-    console.log('Total lines after processing:',lines.length);
-    console.log('First processed line:',lines[0]);
-    console.log('Second processed line:',lines[1]);
-    
-    if(lines.length<2){alert('File must have a header row and at least one data row');return}
-
-    // Parse header and clean up non-breaking spaces
-    const headerLine=lines[0].replace(/\xa0/g,' '); // Replace non-breaking spaces
-    const sep=headerLine.includes(';')?';':',';
-    const headers=headerLine.split(sep).map(h=>h.trim().toLowerCase().replace(/['"]/g,'').replace(/\xa0/g,' ').replace(/�/g,' ').trim());
-    console.log('Headers found:',headers);
-
-    // Find column indices (flexible matching)
-    const colRoom=headers.findIndex(h=>h==='room'||h==='rom'||h==='room_number');
-    const colName=headers.findIndex(h=>h==='name'||h==='navn'||h==='person_name'||h==='guest');
-    const colCompany=headers.findIndex(h=>h==='company'||h==='firma'||h==='bedrift');
-    const colCheckIn=headers.findIndex(h=>h.includes('check-in')||h.includes('checkin')||h==='innflytting'||h==='inn'||h==='from');
-    const colCheckOut=headers.findIndex(h=>h.includes('check-out')||h.includes('checkout')||h==='utflytting'||h==='ut'||h==='to');
-    const colStatus=headers.findIndex(h=>h==='status');
-    const colNotes=headers.findIndex(h=>h==='notes'||h==='notat'||h==='merknad');
-    
-    console.log('Column indices: room=',colRoom,'name=',colName,'company=',colCompany,'checkin=',colCheckIn,'checkout=',colCheckOut);
-
-    if(colRoom===-1||colName===-1){
-      alert('Could not find required columns: Room and Name.\n\nFound headers: '+headers.join(', '));
-      return;
-    }
-    if(colCheckIn===-1){
-      alert('Could not find Check-in column.\n\nFound headers: '+headers.join(', '));
-      return;
-    }
-
-    const defaultStatus=document.getElementById('importStatus').value;
-    importData=[];
-    
-    // Build existing bookings index for duplicate detection
-    const existing=new Set();
-    allBookings.forEach(b=>{
-      const room=allRooms.find(r=>r.id===String(b.RoomLookupId));
-      const key=(room?room.Title:'?')+'|'+b.Person_Name+'|'+(b.Check_In?formatDate(b.Check_In):'');
-      existing.add(key);
-    });
-    console.log('Found',existing.size,'existing bookings for duplicate check');
-
-    for(let i=1;i<lines.length;i++){
-      const cols=lines[i].split(sep).map(c=>c.trim().replace(/^['"]|['"]$/g,''));
-      const roomTitle=cols[colRoom]||'';
-      const name=cols[colName]||'';
-      if(!roomTitle||!name)continue;
-
-      const checkIn=parseDate(cols[colCheckIn]||'');
-      const checkOut=colCheckOut>=0?parseDate(cols[colCheckOut]||''):null;
-      const status=(colStatus>=0&&cols[colStatus])?cols[colStatus]:defaultStatus;
-      const notes=(colNotes>=0)?cols[colNotes]||'':'';
-
-      // Check for duplicates
-      const key=roomTitle+'|'+name+'|'+(checkIn?checkIn.split('-').reverse().join('.'):'');
-      const isDuplicate=existing.has(key);
-
-      // Find room by title
-      const room=allRooms.find(r=>r.Title===roomTitle);
-
-      importData.push({
-        roomTitle,roomId:room?room.id:null,
-        name,company:cols[colCompany]||'',
-        checkIn,checkOut,status,notes,
-        error:isDuplicate?'Already exists':(!room?'Room not found':(!checkIn?'Invalid date':null))
-      });
-    }
-    
-    console.log('Parsed',importData.length,'rows total');
-    const valid=importData.filter(r=>!r.error);
-    console.log('Valid rows:',valid.length);
-
-    // Show preview
-    const preview=document.getElementById('importPreview');
-    const errors=importData.filter(r=>r.error);
-    const duplicates=importData.filter(r=>r.error==='Already exists');
-    document.getElementById('importPreviewTitle').textContent=importData.length+' rows parsed'+(errors.length?' — '+errors.length+' with issues':'')+(duplicates.length?' ('+duplicates.length+' duplicates)':'');
-    document.getElementById('importPreviewBody').innerHTML=importData.slice(0,50).map(r=>{
-      const style=r.error?'background:var(--bg-warning)':'';
-      return'<tr style="'+style+'">'
-        +'<td>'+r.roomTitle+(r.error?' ⚠':'')+'</td>'
-        +'<td>'+r.name+'</td>'
-        +'<td>'+r.company+'</td>'
-        +'<td>'+(r.checkIn||'—')+'</td>'
-        +'<td>'+(r.checkOut||'—')+'</td>'
-        +'<td>'+r.status+(r.error?' ('+r.error+')':'')+'</td>'
-        +'</tr>';
-    }).join('')+(importData.length>50?'<tr><td colspan="6" class="loading">... and '+(importData.length-50)+' more rows</td></tr>':'');
-
-    preview.style.display='block';
-    document.getElementById('importRunBtn').disabled=importData.filter(r=>!r.error).length===0;
-    
-    // Show skip duplicates option if found
-    if(duplicates.length>0){
-      const btn=document.getElementById('importRunBtn');
-      btn.textContent='Import (skip '+duplicates.length+' duplicates)';
-    }
-  };
-  reader.readAsText(file,'ISO-8859-1');
-}
-
-async function runImport(){
-  const valid=importData.filter(r=>!r.error);
-  if(!valid.length){alert('No valid rows to import');return}
-
-  if(!confirm('Import '+valid.length+' bookings to '+selectedProperty.Title+'?\n\nRows with issues will be skipped.'))return;
-
-  const progress=document.getElementById('importProgress');
-  const bar=document.getElementById('importProgressBar');
-  const text=document.getElementById('importProgressText');
-  const result=document.getElementById('importResult');
-  progress.style.display='block';
-  document.getElementById('importRunBtn').disabled=true;
-  document.getElementById('importParseBtn').disabled=true;
-
-  let success=0,failed=0;
-
-  for(let i=0;i<valid.length;i++){
-    const r=valid[i];
-    text.textContent='Importing '+(i+1)+' of '+valid.length+'... ('+r.name+')';
-    bar.style.width=Math.round((i+1)/valid.length*100)+'%';
-
-    const fields={
-      Person_Name:r.name,
-      Company:r.company,
-      Check_In:r.checkIn+'T15:00:00Z',
-      Status:r.status,
-      Door_Tag_Status:'None',
-      Cleaning_Status:'None',
-      Property_Name:selectedProperty.Title,
-      RoomLookupId:parseInt(r.roomId)
-    };
-    if(r.checkOut)fields.Check_Out=r.checkOut+'T12:00:00Z';
-    if(r.notes)fields.Notes=r.notes;
-
-    // Get floor from room
-    const room=allRooms.find(rm=>rm.id===r.roomId);
-    if(room)fields.Floor=room.Floor;
-
-    try{
-      await createListItem('Bookings',fields);
-      success++;
-    }catch(e){
-      console.error('Import failed for',r.name,e);
-      failed++;
-    }
-
-    // Small delay to avoid throttling
-    if(i%10===9)await new Promise(res=>setTimeout(res,500));
-  }
-
-  progress.style.display='none';
-  result.style.display='block';
-  result.style.background=failed?'var(--bg-warning)':'var(--bg-success)';
-  result.style.color=failed?'var(--text-warning)':'var(--text-success)';
-  result.textContent='Done! '+success+' imported'+(failed?', '+failed+' failed':'')+'.'+(importData.filter(r=>r.error).length?' '+importData.filter(r=>r.error).length+' skipped (room not found or invalid date).':'');
-
-  document.getElementById('importParseBtn').disabled=false;
-
-  // Reload data
-  await loadData();
-  renderArchive();
-}
-
-// ============================================================
-// DOOR TAG PRINT
-// ============================================================
-function printDoorTag(bookingId){
-  const b=bookings.find(x=>x.id===bookingId)||allBookings.find(x=>x.id===bookingId);
-  if(!b)return;
-  const room=rooms.find(r=>r.id===String(b.RoomLookupId));
-  const roomTitle=room?room.Title:'?';
-
-  const prop=selectedProperty||{};
-  const wifiInfo=prop.WiFi_SSID?'WiFi: '+prop.WiFi_SSID+(prop.WiFi_Password?' · Password: '+prop.WiFi_Password:''):'';
-
-  const html='<div style="font-family:Arial,sans-serif;padding:40px;max-width:600px;margin:0 auto">'
-    +'<div style="text-align:center;margin-bottom:30px">'
-    +'<div style="font-size:72px;font-weight:700;letter-spacing:2px">'+roomTitle+'</div>'
-    +'<div style="font-size:14px;color:#888;margin-top:4px">'+selectedProperty.Title+'</div>'
-    +'</div>'
-    +'<div style="border-top:2px solid #2C2C2A;padding-top:20px">'
-    +'<h2 style="font-size:18px;margin:0 0 16px">Welcome, '+b.Person_Name+'</h2>'
-    +'<table style="font-size:14px;width:100%">'
-    +'<tr><td style="padding:6px 0;color:#888;width:120px">Company</td><td>'+(b.Company||'—')+'</td></tr>'
-    +'<tr><td style="padding:6px 0;color:#888">Check-in</td><td>After 15:00 — '+formatDate(b.Check_In)+'</td></tr>'
-    +'<tr><td style="padding:6px 0;color:#888">Check-out</td><td>Before 12:00 — '+(b.Check_Out?formatDate(b.Check_Out):'Open-ended')+'</td></tr>'
-    +'</table>'
-    +'</div>'
-    +'<div style="margin-top:24px;padding:16px;background:#f5f4ef;border-radius:8px;font-size:13px">'
-    +'<strong>Room information</strong><br>'
-    +'The room will be washed once a week.<br>'
-    +'New towels every week, and new beddings biweekly.'
-    +'</div>'
-    +(wifiInfo?'<div style="margin-top:16px;padding:16px;background:#f5f4ef;border-radius:8px;font-size:13px"><strong>WiFi</strong><br>'+wifiInfo+'</div>':'')
-    +'<div style="margin-top:16px;padding:16px;background:#f5f4ef;border-radius:8px;font-size:13px">'
-    +'<strong>Contact</strong><br>'
-    +'Questions? Contact Frank: +47 99 10 10 41 · frank@2gm.no'
-    +'</div>'
-    +'<div style="text-align:center;margin-top:40px;font-size:16px;color:#888">Have a nice stay :)</div>'
-    +'</div>';
-
-  // Open print window
-  const w=window.open('','_blank','width=700,height=900');
-  w.document.write('<!DOCTYPE html><html><head><title>Door Tag — Room '+roomTitle+'</title></head><body style="margin:0">'+html+'</body></html>');
-  w.document.close();
-  setTimeout(()=>w.print(),500);
-
-  // Mark as printed
-  cycleDTDirect(bookingId,'Printed');
-}
-
-async function cycleDTDirect(id,status){
-  const b=bookings.find(x=>x.id===id);
-  if(!b)return;
-  try{await updateListItem('Bookings',id,{Door_Tag_Status:status});b.Door_Tag_Status=status;renderFloors();updateStats()}
-  catch(er){console.error(er)}
-}
-
-// ============================================================
-// USER ADMIN
-// ============================================================
-function openAdminPanel(){
-  if(!can('admin')){alert('Access denied');return}
-  renderAdminUsers();
-  document.getElementById('adminModal').classList.add('open');
-}
-function closeAdminPanel(){document.getElementById('adminModal').classList.remove('open')}
-
-function renderAdminUsers(){
-  const body=document.getElementById('adminUserBody');
-  body.innerHTML=allUsers.map(u=>{
-    const isSelf=(u.Epost||'').toLowerCase()===currentUser.email;
-    const roleOptions=['SuperAdmin','Admin','Cleaner','ReadOnly'].map(r=>
-      '<option value="'+r+'"'+(u.Role===r?' selected':'')+'>'+r+'</option>'
-    ).join('');
-    return'<tr>'
-      +'<td style="padding:4px 6px">'+(u.DisplayName||'—')+'</td>'
-      +'<td style="padding:4px 6px;font-size:12px;color:var(--text-secondary)">'+(u.Epost||'')+'</td>'
-      +'<td style="padding:4px 6px"><select onchange="changeUserRole(\''+u.id+'\',this.value)"'+(isSelf?' disabled':'')+' style="padding:3px 6px;border:1px solid var(--border-tertiary);border-radius:4px;font-size:12px;font-family:inherit">'+roleOptions+'</select></td>'
-      +'<td style="padding:4px 6px;text-align:center"><input type="checkbox"'+(u.Active!==false?' checked':'')+(isSelf?' disabled':'')+' onchange="toggleUserActive(\''+u.id+'\',this.checked)"></td>'
-      +'<td style="padding:4px 6px">'+(isSelf?'<span style="font-size:11px;color:var(--text-tertiary)">You</span>':'<button onclick="deleteUser(\''+u.id+'\')" style="border:0;background:0 0;color:var(--text-danger);cursor:pointer;font-size:11px">Delete</button>')+'</td>'
-      +'</tr>';
-  }).join('');
-}
-
-async function changeUserRole(userId,newRole){
-  try{
-    await updateListItem('Users',userId,{Role:newRole});
-    const u=allUsers.find(x=>x.id===userId);
-    if(u)u.Role=newRole;
-    renderAdminUsers();
-  }catch(e){console.error(e);alert('Failed to update role')}
-}
-
-async function toggleUserActive(userId,active){
-  try{
-    await updateListItem('Users',userId,{Active:active});
-    const u=allUsers.find(x=>x.id===userId);
-    if(u)u.Active=active;
-  }catch(e){console.error(e);alert('Failed to update')}
-}
-
-async function addUser(){
-  const name=document.getElementById('aName').value.trim();
-  const email=document.getElementById('aEmail').value.trim().toLowerCase();
-  const role=document.getElementById('aRole').value;
-
-  if(!name||!email){alert('Name and email are required');return}
-  if(allUsers.find(u=>(u.Epost||'').toLowerCase()===email)){alert('User already exists');return}
-
-  try{
-    const result=await createListItem('Users',{Title:name,DisplayName:name,Epost:email,Role:role,Active:true});
-    allUsers.push({id:result.id||'new',Title:name,DisplayName:name,Epost:email,Role:role,Active:true});
-    document.getElementById('aName').value='';
-    document.getElementById('aEmail').value='';
-    renderAdminUsers();
-  }catch(e){console.error(e);alert('Failed to add user: '+e.message)}
-}
-
-async function deleteUser(userId){
-  const u=allUsers.find(x=>x.id===userId);
-  if(!u)return;
-  if(!confirm('Delete user '+u.DisplayName+' ('+u.Epost+')?'))return;
-  try{
-    const s=await getSiteId();const lid=await getListId('Users');
-    await graphDelete('/sites/'+s+'/lists/'+lid+'/items/'+userId);
-    allUsers=allUsers.filter(x=>x.id!==userId);
-    renderAdminUsers();
-  }catch(e){console.error(e);alert('Failed to delete: '+e.message)}
-}
-
-// ============================================================
-// HOURS / TIMELISTE
-// ============================================================
-let allHours=[],editingHoursId=null;
-
-function toggleHours(){
-  const p=document.getElementById('hoursPanel');
-  document.getElementById('incomingPanel').classList.remove('open');
-  document.getElementById('archivePanel').classList.remove('open');
-  p.classList.toggle('open');
-  if(p.classList.contains('open')){initHoursSelectors();loadHours()}
-}
-
-function initHoursSelectors(){
-  const now=new Date();
-  const monthSel=document.getElementById('hoursMonth');
-  const yearSel=document.getElementById('hoursYear');
-  const months=['January','February','March','April','May','June','July','August','September','October','November','December'];
-
-  if(!monthSel.children.length){
-    monthSel.innerHTML=months.map((m,i)=>'<option value="'+i+'"'+(i===now.getMonth()?' selected':'')+'>'+m+'</option>').join('');
-    const curYear=now.getFullYear();
-    yearSel.innerHTML=[curYear-1,curYear,curYear+1].map(y=>'<option value="'+y+'"'+(y===curYear?' selected':'')+'>'+y+'</option>').join('');
-  }
-
-  // Populate location select in add-hours modal
-  const locSel=document.getElementById('hLocation');
-  if(!locSel.children.length||locSel.children.length<=1){
-    locSel.innerHTML=properties.map(p=>'<option value="'+p.Title+'">'+p.Title+'</option>').join('');
-  }
-}
-
-async function loadHours(){
-  try{
-    allHours=await getListItems('Hours');
-    renderHours();
-  }catch(e){console.error('Failed to load hours:',e)}
-}
-
-function renderHours(){
-  const month=parseInt(document.getElementById('hoursMonth').value);
-  const year=parseInt(document.getElementById('hoursYear').value);
-  const months=['January','February','March','April','May','June','July','August','September','October','November','December'];
-
-  // Filter hours for current user (cleaners see only their own, admin sees all)
-  const isAdmin=can('admin');
-  const filtered=allHours.filter(h=>{
-    if(!h.Date)return false;
-    const d=new Date(h.Date);
-    if(d.getMonth()!==month||d.getFullYear()!==year)return false;
-    if(!isAdmin&&h.Worker&&h.Worker.toLowerCase()!==currentUser.email)return false;
-    return true;
-  }).sort((a,b)=>new Date(a.Date)-new Date(b.Date));
-
-  document.getElementById('hoursTitle').textContent='Hours — '+months[month]+' '+year+(isAdmin?' (all workers)':' ('+currentUser.displayName+')');
-
-  const body=document.getElementById('hoursBody');
-  if(!filtered.length){
-    body.innerHTML='<tr><td colspan="6" class="loading">No hours registered</td></tr>';
-    document.getElementById('hoursTotal').textContent='0.00';
-    return;
-  }
-
-  let total=0;
-  body.innerHTML=filtered.map(h=>{
-    const hrs=calcHoursDiff(h.Time_From,h.Time_To);
-    total+=hrs;
-    const dateStr=formatDate(h.Date);
-    const dayNames=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-    const day=dayNames[new Date(h.Date).getDay()];
-    return'<tr>'
-      +'<td>'+day+' '+dateStr+'</td>'
-      +'<td>'+(h.Location||'')+(isAdmin&&h.Worker?' <span class="muted" style="font-size:11px">('+h.Worker+')</span>':'')+'</td>'
-      +'<td>'+(h.Time_From||'')+'</td>'
-      +'<td>'+(h.Time_To||'')+'</td>'
-      +'<td style="text-align:right">'+hrs.toFixed(2)+'</td>'
-      +'<td><button onclick="deleteHoursEntry(\''+h.id+'\')" style="border:0;background:0 0;color:var(--text-danger);cursor:pointer;font-size:11px">✕</button></td>'
-      +'</tr>';
-  }).join('');
-
-  document.getElementById('hoursTotal').textContent=total.toFixed(2);
-}
-
-function calcHoursDiff(from,to){
-  if(!from||!to)return 0;
-  const [fh,fm]=(from||'00:00').split(':').map(Number);
-  const [th,tm]=(to||'00:00').split(':').map(Number);
-  let diff=(th*60+tm)-(fh*60+fm);
-  if(diff<0)diff+=24*60; // overnight
-  return diff/60;
-}
-
-function openAddHours(){
-  editingHoursId=null;
-  document.getElementById('hoursModalTitle').textContent='Add hours';
-  document.getElementById('hDate').value=new Date().toISOString().split('T')[0];
-  document.getElementById('hFrom').value='08:00';
-  document.getElementById('hTo').value='16:00';
-  document.getElementById('hoursModal').classList.add('open');
-}
-
-function closeHoursModal(){document.getElementById('hoursModal').classList.remove('open');editingHoursId=null}
-
-async function saveHours(){
-  const date=document.getElementById('hDate').value;
-  const location=document.getElementById('hLocation').value;
-  const from=document.getElementById('hFrom').value;
-  const to=document.getElementById('hTo').value;
-
-  if(!date){alert('Date is required');return}
-  if(!from||!to){alert('From and To times are required');return}
-
-  const btn=document.getElementById('hoursSaveBtn');
-  btn.disabled=true;btn.textContent='Saving...';
-
-  const fields={
-    Title:currentUser.displayName+' — '+location+' — '+date,
-    Date:date+'T00:00:00Z',
-    Location:location,
-    Time_From:from,
-    Time_To:to,
-    Worker:currentUser.email
-  };
-
-  try{
-    await createListItem('Hours',fields);
-    closeHoursModal();
-    await loadHours();
-  }catch(e){
-    console.error(e);alert('Failed to save: '+e.message);
-  }finally{btn.disabled=false;btn.textContent='Save'}
-}
-
-async function deleteHoursEntry(id){
-  if(!confirm('Delete this entry?'))return;
-  try{
-    const s=await getSiteId();const lid=await getListId('Hours');
-    await graphDelete('/sites/'+s+'/lists/'+lid+'/items/'+id);
-    allHours=allHours.filter(h=>h.id!==id);
-    renderHours();
-  }catch(e){console.error(e);alert('Failed to delete')}
-}
-
-function exportHoursExcel(){
-  const month=parseInt(document.getElementById('hoursMonth').value);
-  const year=parseInt(document.getElementById('hoursYear').value);
-  const months=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  const isAdmin=can('admin');
-
-  const filtered=allHours.filter(h=>{
-    if(!h.Date)return false;
-    const d=new Date(h.Date);
-    if(d.getMonth()!==month||d.getFullYear()!==year)return false;
-    if(!isAdmin&&h.Worker&&h.Worker.toLowerCase()!==currentUser.email)return false;
-    return true;
-  }).sort((a,b)=>new Date(a.Date)-new Date(b.Date));
-
-  const headers=['Date','Day','Location','From','To','Hours'+(isAdmin?';Worker':'')];
-  const dayNames=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-  let total=0;
-  const rows=filtered.map(h=>{
-    const hrs=calcHoursDiff(h.Time_From,h.Time_To);
-    total+=hrs;
-    const d=new Date(h.Date);
-    const r=[formatDate(h.Date),dayNames[d.getDay()],h.Location||'',h.Time_From||'',h.Time_To||'',hrs.toFixed(2)];
-    if(isAdmin)r.push(h.Worker||'');
-    return r;
-  });
-  rows.push(['','','','','Total',total.toFixed(2)]);
-
-  const escape=v=>{const s=String(v);if(s.includes(';')||s.includes('"'))return'"'+s.replace(/"/g,'""')+'"';return s};
-  const csv='\uFEFF'+headers.join(';')+'\n'+rows.map(r=>r.map(escape).join(';')).join('\n');
-  const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});
-  const url=URL.createObjectURL(blob);
-  const a=document.createElement('a');
-  a.href=url;a.download='Hours_'+months[month]+'_'+year+'.csv';a.click();
-  URL.revokeObjectURL(url);
-}
-
-async function archiveHours(){
-  const month=parseInt(document.getElementById('hoursMonth').value);
-  const year=parseInt(document.getElementById('hoursYear').value);
-  const months=['January','February','March','April','May','June','July','August','September','October','November','December'];
-
-  const filtered=allHours.filter(h=>{
-    if(!h.Date)return false;
-    const d=new Date(h.Date);
-    return d.getMonth()===month&&d.getFullYear()===year;
-  });
-
-  if(!filtered.length){alert('No hours to archive for '+months[month]+' '+year);return}
-  if(!confirm('Archive '+filtered.length+' entries for '+months[month]+' '+year+'?\n\nThis will mark them as archived. They will still appear in the Hours list but can be filtered out.'))return;
-
-  let done=0;
-  for(const h of filtered){
-    try{
-      await updateListItem('Hours',h.id,{Archived:'Yes'});
-      h.Archived='Yes';
-      done++;
-    }catch(e){console.error(e)}
-  }
-  alert(done+' entries archived.');
-  renderHours();
-}
-
-// ============================================================
-// STAT CARD FILTERING
-// ============================================================
-let activeFilter=null;
-
-function toggleFilter(filter){
-  if(activeFilter===filter){clearFilter();return}
-  activeFilter=filter;
-
-  // Highlight active stat card
-  document.querySelectorAll('.stat').forEach((el,i)=>{
-    const filters=['checkedIn','empty','dirty','doorTag','battery'];
-    el.classList.toggle('active',filters[i]===filter);
-  });
-
-  const labels={checkedIn:'Showing: Checked-in rooms',empty:'Showing: Empty rooms',dirty:'Showing: Rooms needing cleaning',doorTag:'Showing: Door tags needing print',battery:'Showing: Low battery rooms (<30%)'};
-  document.getElementById('filterLabel').textContent=labels[filter]||'';
-  document.getElementById('filterBar').classList.add('open');
-  renderFloors();
-}
-
-function clearFilter(){
-  activeFilter=null;
-  document.querySelectorAll('.stat').forEach(el=>el.classList.remove('active'));
-  document.getElementById('filterBar').classList.remove('open');
-  renderFloors();
-}
-
-function getFilteredRoomsForFloor(floor){
-  // For 'dirty' filter: use ALL rooms across all properties
-  const sourceRooms=(activeFilter==='dirty')?allRooms:rooms;
-  let floorRooms=sourceRooms.filter(r=>r.Floor===floor||String(r.Floor)===String(floor));
-  if(!activeFilter)return floorRooms;
-
-  // For dirty filter, build booking map from ALL bookings
-  const sourceBookings=(activeFilter==='dirty')?allBookings:bookings;
-  const bMap={};
-  sourceBookings.forEach(b=>{const rid=String(b.RoomLookupId||'');if(rid&&(b.Status==='Active'||b.Status==='Upcoming')&&(!bMap[rid]||b.Status==='Active'))bMap[rid]=b});
-
-  switch(activeFilter){
-    case 'checkedIn':
-      return floorRooms.filter(r=>!!bMap[r.id]);
-    case 'empty':
-      return floorRooms.filter(r=>!bMap[r.id]);
-    case 'dirty':
-      return floorRooms.filter(r=>{
-        const b=bMap[r.id];
-        if(!b)return false;
-        if(b.Cleaning_Status==='Dirty')return true;
-        // Also include rooms with wash scheduled today
-        if(b.Status==='Active'&&b.Check_In){
-          const washes=calcWashDates(b.Check_In,b.Check_Out);
-          if(washes.some(w=>w.isToday))return true;
-        }
-        return false;
-      });
-    case 'doorTag':
-      return floorRooms.filter(r=>bMap[r.id]&&bMap[r.id].Door_Tag_Status==='Needs-print');
-    case 'battery':
-      return floorRooms.filter(r=>r.Door_Battery_Level!=null&&r.Door_Battery_Level<30);
-    default:
-      return floorRooms;
-  }
-}
-
-// ============================================================
-// COLUMN RESIZE
-// ============================================================
-function initResize(){
-  document.querySelectorAll('.th-resize').forEach(handle=>{
-    handle.addEventListener('mousedown',function(e){
-      e.preventDefault();e.stopPropagation();
-      const th=this.parentElement;
-      const table=th.closest('table');
-      const startX=e.pageX;
-      const startW=th.offsetWidth;
-      const colIndex=Array.from(th.parentElement.children).indexOf(th);
-
-      // Also get the matching col element
-      const col=table.querySelector('colgroup').children[colIndex];
-
-      function onMove(ev){
-        const diff=ev.pageX-startX;
-        const newW=Math.max(20,startW+diff);
-        th.style.width=newW+'px';
-        if(col)col.style.width=newW+'px';
-
-        // Sync the other table's column
-        const otherId=table.id==='table1'?'table2':'table1';
-        const other=document.getElementById(otherId);
-        if(other){
-          const otherTh=other.querySelectorAll('thead th')[colIndex];
-          const otherCol=other.querySelector('colgroup').children[colIndex];
-          if(otherTh)otherTh.style.width=newW+'px';
-          if(otherCol)otherCol.style.width=newW+'px';
-        }
-      }
-      function onUp(){document.removeEventListener('mousemove',onMove);document.removeEventListener('mouseup',onUp)}
-      document.addEventListener('mousemove',onMove);
-      document.addEventListener('mouseup',onUp);
-    });
-  });
-}
-
-// ============================================================
-// INIT
-// ============================================================
-let msalReady=false;
-msalInstance.initialize().then(()=>{
-  msalReady=true;
-  initResize();
-  const a=msalInstance.getAllAccounts();
-  if(a.length>0){
-    getToken().then(async()=>{
-      if(accessToken){
-        await loadCurrentUser();
-        showApp();
-        applyRole();
-        await loadProperties();
-        await loadData();
-      }
-    });
-  }
-});
-</script>
+<!-- Rates Modal -->
+<div class="modal-overlay" id="ratesModal"><div class="modal" style="max-width:700px"><div class="modal-header"><h2>Rates Management</h2><button class="modal-close" onclick="document.getElementById('ratesModal').classList.remove('open')">&times;</button></div><div class="modal-body">
+<div style="margin-bottom:12px"><strong style="font-size:13px">Property default rates</strong></div>
+<div id="ratesPropertyList" style="margin-bottom:16px"></div>
+<div style="border-top:1px solid var(--border-tertiary);padding-top:12px;margin-bottom:12px"><strong style="font-size:13px">Room rates</strong> <span class="muted" style="font-size:11px">(overrides property default — only rooms with individual pricing)</span></div>
+<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px"><select id="rRoomProperty" onchange="renderRoomRates()" style="padding:5px 8px;border:1px solid var(--border-tertiary);border-radius:var(--radius-md);font-size:13px;font-family:inherit"></select></div>
+<div id="ratesRoomList" style="max-height:200px;overflow-y:auto;margin-bottom:16px"></div>
+<div style="border-top:1px solid var(--border-tertiary);padding-top:12px;margin-bottom:12px"><strong style="font-size:13px">Company / Person rates</strong> <span class="muted" style="font-size:11px">(overrides room &amp; property rates)</span></div>
+<div id="ratesCustomList" style="max-height:300px;overflow-y:auto;margin-bottom:12px"></div>
+<div style="border-top:1px solid var(--border-tertiary);padding-top:12px"><strong style="font-size:13px">Add custom rate</strong>
+<div style="display:grid;grid-template-columns:1fr 1fr 1fr 80px auto;gap:8px;margin-top:8px">
+<input id="rCompany" type="text" placeholder="Company" list="rCompanyList" style="padding:6px 8px;border:1px solid var(--border-tertiary);border-radius:var(--radius-md);font-size:13px"><datalist id="rCompanyList"></datalist>
+<input id="rPerson" type="text" placeholder="Person (optional)" list="rPersonList" style="padding:6px 8px;border:1px solid var(--border-tertiary);border-radius:var(--radius-md);font-size:13px"><datalist id="rPersonList"></datalist>
+<select id="rProperty" style="padding:6px 8px;border:1px solid var(--border-tertiary);border-radius:var(--radius-md);font-size:13px"></select>
+<input id="rRate" type="number" placeholder="Rate" style="padding:6px 8px;border:1px solid var(--border-tertiary);border-radius:var(--radius-md);font-size:13px">
+<button onclick="addCustomRate()" style="padding:6px 14px;background:var(--accent);color:#fff;border:none;border-radius:var(--radius-md);cursor:pointer;font-size:13px">+</button>
+</div></div>
+</div><div class="modal-footer"><button onclick="document.getElementById('ratesModal').classList.remove('open')">Close</button></div></div></div>
+<!-- Occupancy Report Modal -->
+<div class="modal-overlay" id="occupancyModal"><div class="modal" style="max-width:700px"><div class="modal-header"><h2>Occupancy Report</h2><button class="modal-close" onclick="document.getElementById('occupancyModal').classList.remove('open')">&times;</button></div><div class="modal-body">
+<div class="form-row" style="margin-bottom:16px"><div class="form-group"><label>Year</label><select id="occYear" onchange="renderOccupancyReport()" style="width:100%;padding:8px;border:1px solid var(--border-tertiary);border-radius:var(--radius-md);font-size:14px"></select></div><div class="form-group"><label>Property</label><select id="occProperty" onchange="renderOccupancyReport()" style="width:100%;padding:8px;border:1px solid var(--border-tertiary);border-radius:var(--radius-md);font-size:14px"></select></div></div>
+<div id="occReport"></div>
+</div><div class="modal-footer"><button onclick="exportOccupancyReport()" style="background:var(--accent);color:#fff;border:1px solid var(--accent);border-radius:var(--radius-md);padding:8px 16px;cursor:pointer;font-size:13px">↓ Export</button><button onclick="document.getElementById('occupancyModal').classList.remove('open')">Close</button></div></div></div>
+<script src="js/app.js"></script>
+<script src="js/modules.js"></script>
 </body>
 </html>
+
+
+<script>
+function addControlButtons(id) {
+  return `
+    <button onclick="moveToActive('${id}')">Aktiv</button>
+    <button onclick="moveToUpcoming('${id}')">Upcoming</button>
+    <button onclick="clearStatus('${id}')">Auto</button>
+  `;
+}
+</script>
