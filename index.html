@@ -369,6 +369,7 @@ async function getListItems(listName){const s=await getSiteId();const lid=await 
 
 async function createListItem(listName,fields){const s=await getSiteId();const lid=await getListId(listName);return graphPost('/sites/'+s+'/lists/'+lid+'/items',{fields})}
 async function updateListItem(listName,itemId,fields){const s=await getSiteId();const lid=await getListId(listName);return graphPatch('/sites/'+s+'/lists/'+lid+'/items/'+itemId+'/fields',fields)}
+async function deleteListItem(listName,itemId){const s=await getSiteId();const lid=await getListId(listName);return graphDelete('/sites/'+s+'/lists/'+lid+'/items/'+itemId)}
 
 // ============================================================
 // STATE
@@ -1211,7 +1212,8 @@ function renderArchive(){
       +'<td>'+formatDate(b.Check_In)+'</td>'
       +'<td>'+(b.Check_Out?formatDate(b.Check_Out):'Open-ended')+'</td>'
       +'<td><span class="pill" style="'+sc+'">'+b.Status+'</span></td>'
-      +'<td>'+(b.Status==='Completed'||b.Status==='Cancelled'?'<button style="border:0;background:0 0;cursor:pointer;font-size:11px;color:var(--accent);text-decoration:underline" onclick="reopenBooking(\''+b.id+'\')">Reopen</button>':'')+'</td>'
+      +'<td>'+(b.Status==='Completed'||b.Status==='Cancelled'?'<button style="border:0;background:0 0;cursor:pointer;font-size:11px;color:var(--accent);text-decoration:underline;margin-right:8px" onclick="reopenBooking(\''+b.id+'\')">Reopen</button>':'')
+      +'<button style="border:0;background:0 0;cursor:pointer;font-size:11px;color:#dc3545;text-decoration:underline" onclick="deleteBooking(\''+b.id+'\')">Delete</button></td>'
       +'</tr>';
   }).join('');
   if(total>100)body.innerHTML+='<tr><td colspan="7" class="loading">Showing 100 of '+total+' — use search to narrow</td></tr>';
@@ -1229,6 +1231,31 @@ async function reopenBooking(id){
     await loadData();
     renderArchive();
   }catch(e){console.error(e);alert('Failed to reopen: '+e.message)}
+}
+
+async function deleteBooking(id){
+  const booking=allBookings.find(b=>b.id===id);
+  if(!booking)return;
+  
+  const roomTitle=getRoomTitle(booking);
+  const confirmMsg='Permanently delete this booking?\n\n'+booking.Person_Name+' ('+booking.Status+')\nRoom '+roomTitle+'\n'+formatDate(booking.Check_In)+' — '+(booking.Check_Out?formatDate(booking.Check_Out):'Open-ended')+'\n\nThis cannot be undone.';
+  
+  if(!confirm(confirmMsg))return;
+  
+  try{
+    await deleteListItem('Bookings',id);
+    // Remove from local arrays
+    const idx=allBookings.findIndex(b=>b.id===id);
+    if(idx>=0)allBookings.splice(idx,1);
+    const localIdx=bookings.findIndex(b=>b.id===id);
+    if(localIdx>=0)bookings.splice(localIdx,1);
+    
+    refreshLocal();
+    renderArchive();
+  }catch(e){
+    console.error(e);
+    alert('Failed to delete booking: '+e.message);
+  }
 }
 
 function exportArchiveExcel(){
