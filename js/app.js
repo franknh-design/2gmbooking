@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v13.13 — app.js (Core)
+// 2GM Booking v13.14.1 — app.js (Core)
 // Auth, Graph API, Data, Rendering, Bookings
 // ============================================================
 
@@ -72,7 +72,22 @@ async function graphPost(ep,body){await getToken();const r=await fetch('https://
 async function graphDelete(ep){await getToken();const r=await fetch('https://graph.microsoft.com/v1.0'+ep,{method:'DELETE',headers:{Authorization:'Bearer '+accessToken}});if(!r.ok)throw new Error('Graph error '+r.status);return true}
 
 async function getSiteId(){if(siteId)return siteId;const r=await graphGet('/sites/'+SITE_HOST+':'+SITE_PATH);siteId=r.id;return siteId}
-async function getListId(name){if(LIST_IDS[name])return LIST_IDS[name];throw new Error('List not found: '+name)}
+// Cache for dynamically resolved list IDs (lists not in LIST_IDS hardcoded map)
+const _dynamicListIds={};
+async function getListId(name){
+  if(LIST_IDS[name])return LIST_IDS[name];
+  if(_dynamicListIds[name])return _dynamicListIds[name];
+  // Fall back to looking up by display name via Graph API
+  const s=await getSiteId();
+  try{
+    const r=await graphGet('/sites/'+s+'/lists?$filter=displayName eq \''+name+'\'&$select=id,displayName');
+    if(r.value&&r.value.length){
+      _dynamicListIds[name]=r.value[0].id;
+      return r.value[0].id;
+    }
+  }catch(e){console.error('Failed to lookup list '+name+':',e)}
+  throw new Error('List not found: '+name);
+}
 async function getListItems(listName){const s=await getSiteId();const lid=await getListId(listName);let all=[];let url='/sites/'+s+'/lists/'+lid+'/items?$expand=fields&$top=500';while(url){const r=await graphGet(url);all=all.concat(r.value.map(i=>({id:i.id,...i.fields})));url=r['@odata.nextLink']?r['@odata.nextLink'].replace('https://graph.microsoft.com/v1.0',''):null}return all}
 
 // Fetch a text file from a SharePoint document library.
@@ -555,14 +570,67 @@ function datesCell(b){
   return'<span style="'+s+'">'+ci+'</span> — '+co;
 }
 
+// Returns the full-tenant company for a property if active on the given date (default today), else null
+function getActiveFullTenant(property,date){
+  if(!property)return null;
+  const company=(property.FullTenant_Company||'').trim();
+  if(!company)return null;
+  const rate=Number(property.FullTenant_RatePerRoom)||0;
+  if(!rate)return null;
+  const checkDate=date||new Date();
+  const start=property.FullTenant_StartDate?new Date(property.FullTenant_StartDate):null;
+  const end=property.FullTenant_EndDate?new Date(property.FullTenant_EndDate):null;
+  if(start&&checkDate<start)return null;
+  if(end&&checkDate>end)return null;
+  return{company,rate,start,end};
+}
+
+// Checks if the property containing a given room is on full-tenant lease today
+function getRoomFullTenant(room,date){
+  if(!room)return null;
+  const prop=properties.find(p=>String(p.id)===String(room.PropertyLookupId));
+  return prop?getActiveFullTenant(prop,date):null;
+}
+
+// Compute full-tenant lease amount for a property within a date period.
+// Handles pro-rata (partial overlap between period and agreement dates).
+// Returns {days,rooms,rate,total,company,effectiveFrom,effectiveTo} or null if not applicable.
+function computeFullTenantForPeriod(property,fromDate,toDate){
+  if(!property)return null;
+  const company=(property.FullTenant_Company||'').trim();
+  const rate=Number(property.FullTenant_RatePerRoom)||0;
+  if(!company||!rate)return null;
+  const agreementStart=property.FullTenant_StartDate?new Date(property.FullTenant_StartDate):new Date(1970,0,1);
+  const agreementEnd=property.FullTenant_EndDate?new Date(property.FullTenant_EndDate):new Date(2100,0,1);
+  agreementStart.setHours(0,0,0,0);
+  agreementEnd.setHours(23,59,59,999);
+  // Effective overlap between period and agreement
+  const effFrom=new Date(Math.max(fromDate.getTime(),agreementStart.getTime()));
+  const effTo=new Date(Math.min(toDate.getTime(),agreementEnd.getTime()));
+  effFrom.setHours(0,0,0,0);
+  effTo.setHours(23,59,59,999);
+  if(effFrom>effTo)return null;
+  // Count days (inclusive)
+  const days=Math.floor((effTo-effFrom)/86400000)+1;
+  // Count rooms on this property
+  const rooms=allRooms.filter(r=>String(r.PropertyLookupId)===String(property.id)).length;
+  if(rooms===0)return null;
+  const total=Math.round(rate*rooms*days*100)/100;
+  return{days,rooms,rate,total,company,effectiveFrom:effFrom,effectiveTo:effTo};
+}
+
 function renderRow(room,booking){
   const n=booking?booking.Person_Name:'';const c=booking?(booking.Company||''):'';
-  // For empty rooms: find next upcoming booking
+  // For empty rooms: find next upcoming booking or show full-tenant reservation
   let emptyCell='<span class="empty-text">—</span>';
   if(!booking){
+    const fullTenant=getRoomFullTenant(room);
+    if(fullTenant){
+      emptyCell='<span style="color:#EF9F27;font-style:italic">🔒 Reservert '+escapeHtml(fullTenant.company)+'</span>';
+    }
     const upcoming=findNextUpcomingForRoom(room.id);
     if(upcoming){
-      emptyCell='<span class="empty-text">—</span> <span style="font-size:10px;color:#7B61FF;font-style:italic" title="Upcoming booking">📅 '+escapeHtml(upcoming.Person_Name||'')+(upcoming.Check_In?' · '+formatDate(upcoming.Check_In):'')+'</span>';
+      emptyCell=(fullTenant?'<span style="color:#EF9F27;font-style:italic">🔒 '+escapeHtml(fullTenant.company)+'</span>':'<span class="empty-text">—</span>')+' <span style="font-size:10px;color:#7B61FF;font-style:italic" title="Upcoming booking">📅 '+escapeHtml(upcoming.Person_Name||'')+(upcoming.Check_In?' · '+formatDate(upcoming.Check_In):'')+'</span>';
     }
   }
   return'<tr onclick="showDetail(\''+room.id+'\')">'
@@ -586,9 +654,13 @@ function renderRowWithProperty(room,booking,propName){
   const n=booking?booking.Person_Name:'';const washNext=booking?getNextWashDate(booking):'';
   let emptyCell='<span class="empty-text">—</span>';
   if(!booking){
+    const fullTenant=getRoomFullTenant(room);
+    if(fullTenant){
+      emptyCell='<span style="color:#EF9F27;font-style:italic">🔒 Reservert '+escapeHtml(fullTenant.company)+'</span>';
+    }
     const upcoming=findNextUpcomingForRoom(room.id);
     if(upcoming){
-      emptyCell='<span class="empty-text">—</span> <span style="font-size:10px;color:#7B61FF;font-style:italic">📅 '+escapeHtml(upcoming.Person_Name||'')+(upcoming.Check_In?' · '+formatDate(upcoming.Check_In):'')+'</span>';
+      emptyCell=(fullTenant?'<span style="color:#EF9F27;font-style:italic">🔒 '+escapeHtml(fullTenant.company)+'</span>':'<span class="empty-text">—</span>')+' <span style="font-size:10px;color:#7B61FF;font-style:italic">📅 '+escapeHtml(upcoming.Person_Name||'')+(upcoming.Check_In?' · '+formatDate(upcoming.Check_In):'')+'</span>';
     }
   }
   return'<tr onclick="showDetail(\''+room.id+'\')">'
@@ -1295,7 +1367,7 @@ msalInstance.initialize().then(()=>{
 });
 
 // ============================================================
-// AUTO-REFRESH (v13.13)
+// AUTO-REFRESH (v13.14.1)
 // ============================================================
 
 // Build a fingerprint that tells us if data has changed without full reload
