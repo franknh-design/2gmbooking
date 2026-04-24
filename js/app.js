@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v13.5 — app.js (Core)
+// 2GM Booking v13.6 — app.js (Core)
 // Auth, Graph API, Data, Rendering, Bookings
 // ============================================================
 
@@ -40,6 +40,10 @@ let selectedProperty=null,selectedRoom=null,selectedBooking=null;
 let editingBookingId=null,checkoutBookingId=null;
 let activeFilter=null;
 let currentView='main'; // 'main' or 'hours'
+let _lastRefreshTime=Date.now();
+let _knownBookingIds=new Set();
+let _knownBookingModifiedMax='';
+let _pollInterval=null;
 
 // --- AUTH ---
 async function signIn(){
@@ -223,7 +227,6 @@ function applyPermissions(){
 }
 
 // --- DATA LOADING ---
-// Reset all view state when switching properties — clear filters, close panels, etc.
 function resetViewStateForPropertyChange(){
   // Clear active filter
   activeFilter=null;
@@ -262,9 +265,13 @@ async function loadProperties(){
       properties=allProps;
     }
     const sel=document.getElementById('propertySelect');
-    sel.innerHTML=properties.map(p=>'<option value="'+p.id+'">'+p.Title+'</option>').join('');
+    sel.innerHTML='<option value="__ALL__">⭐ All properties</option>'+properties.map(p=>'<option value="'+p.id+'">'+p.Title+'</option>').join('');
     sel.onchange=()=>{
-      selectedProperty=properties.find(p=>p.id===sel.value);
+      if(sel.value==='__ALL__'){
+        selectedProperty=null; // null means "all properties" mode
+      }else{
+        selectedProperty=properties.find(p=>p.id===sel.value);
+      }
       resetViewStateForPropertyChange();
       loadData();
     };
@@ -273,8 +280,9 @@ async function loadProperties(){
 }
 
 async function loadData(){
-  if(!selectedProperty)return;
-  document.getElementById('headerTitle').textContent='2GM Booking — '+selectedProperty.Title;
+  _lastRefreshTime=Date.now();
+  const isAll=selectedProperty===null;
+  document.getElementById('headerTitle').textContent='2GM Booking'+(isAll?' — All properties':(selectedProperty?' — '+selectedProperty.Title:''));
   document.getElementById('floor1Body').innerHTML='<tr><td colspan="7" class="loading">Loading...</td></tr>';
   document.getElementById('floor2Body').innerHTML='<tr><td colspan="7" class="loading">Loading...</td></tr>';
   closeDetail();
@@ -283,8 +291,14 @@ async function loadData(){
     allBookings=await getListItems('Bookings');
     try{allPersons=await getListItems('Persons')}catch(e){allPersons=[]}
     try{allRates=await getListItems('Rates')}catch(e){allRates=[]}
-    rooms=allRooms.filter(r=>String(r.PropertyLookupId)===String(selectedProperty.id));
-    if(rooms.length===0){rooms=allRooms.filter(r=>r.Active!==false)}
+    if(isAll){
+      // Show rooms from all properties the user has access to
+      const assignedPropIds=new Set(properties.map(p=>String(p.id)));
+      rooms=allRooms.filter(r=>assignedPropIds.has(String(r.PropertyLookupId)));
+    }else{
+      rooms=allRooms.filter(r=>String(r.PropertyLookupId)===String(selectedProperty.id));
+      if(rooms.length===0){rooms=allRooms.filter(r=>r.Active!==false)}
+    }
     filterBookingsForView();
     renderFloors();updateStats();
     refreshPersonDatalists();
@@ -561,9 +575,11 @@ function renderFloors(){
   const allF2=rooms.filter(r=>r.Floor===2||String(r.Floor)==='2');
   const noMatch='<tr><td colspan="'+cols+'" class="loading">No matching rooms</td></tr>';
 
+  const isAllProps=selectedProperty===null;
+
   const renderFn=(r)=>{
     const b=bMap[r.id];
-    if(activeFilter==='dirty'){
+    if(activeFilter==='dirty'||isAllProps){
       const prop=properties.find(p=>String(p.id)===String(r.PropertyLookupId));
       return renderRowWithProperty(r,b,prop?prop.Title:'');
     }
@@ -573,7 +589,7 @@ function renderFloors(){
   document.getElementById('floor1Body').innerHTML=f1.length?f1.map(renderFn).join(''):noMatch;
   document.getElementById('floor2Body').innerHTML=f2.length?f2.map(renderFn).join(''):noMatch;
 
-  if(activeFilter==='dirty'){
+  if(activeFilter==='dirty'||isAllProps){
     document.getElementById('floor1Sub').textContent=f1.length+' rooms — all properties';
     document.getElementById('floor2Sub').textContent=f2.length+' rooms — all properties';
   }else{
@@ -1033,7 +1049,10 @@ async function saveBooking(){
     if(!confirm('Room already booked:\n'+c.Person_Name+' ('+c.Status+')\n'+formatDate(c.Check_In)+' — '+(c.Check_Out?formatDate(c.Check_Out):'Open-ended')+'\n\nContinue anyway?'))return;
   }
 
-  const fields={Person_Name:name,Company:company,Check_In:checkIn+'T15:00:00Z',Status:status,Door_Tag_Status:'Needs-print',Cleaning_Status:'None',Property_Name:selectedProperty.Title,Floor:room?room.Floor:1,Notes:notes||null};
+  // Property_Name: find from room's property (works even in "All properties" mode)
+  const roomProp=room?properties.find(pr=>String(pr.id)===String(room.PropertyLookupId)):null;
+  const propNameForSave=roomProp?roomProp.Title:(selectedProperty?selectedProperty.Title:'');
+  const fields={Person_Name:name,Company:company,Check_In:checkIn+'T15:00:00Z',Status:status,Door_Tag_Status:'Needs-print',Cleaning_Status:'None',Property_Name:propNameForSave,Floor:room?room.Floor:1,Notes:notes||null};
   fields.Include_Checkout_Fee=document.getElementById('fIncludeCheckoutFee').checked;
   if(checkOut)fields.Check_Out=checkOut+'T12:00:00Z';else fields.Check_Out=null;
   fields.RoomLookupId=parseInt(roomId);
@@ -1159,4 +1178,73 @@ msalInstance.initialize().then(()=>{
   msalReady=true;initResize();
   const a=msalInstance.getAllAccounts();
   if(a.length>0){getToken().then(async()=>{if(accessToken){await loadCurrentUser();showApp();applyPermissions();await loadProperties();await loadData();checkHoursReminder()}})}
+});
+
+// ============================================================
+// AUTO-REFRESH (v13.6)
+// ============================================================
+
+// Build a fingerprint that tells us if data has changed without full reload
+async function _checkBookingChanges(){
+  // Skip if any modal is open (don't disturb the user)
+  if(document.querySelector('.modal-overlay.open'))return;
+  try{
+    const s=await getSiteId();
+    const lid=await getListId('Bookings');
+    // Minimal fields to detect changes — get only id + Modified
+    const r=await graphGet('/sites/'+s+'/lists/'+lid+'/items?$expand=fields($select=Modified,Status)&$top=500&$orderby=fields/Modified desc');
+    const currentIds=new Set(r.value.map(i=>i.id));
+    let maxModified='';
+    r.value.forEach(i=>{if(i.fields.Modified>maxModified)maxModified=i.fields.Modified});
+    // First time — just record state
+    if(!_knownBookingIds.size){
+      _knownBookingIds=currentIds;
+      _knownBookingModifiedMax=maxModified;
+      return;
+    }
+    // Detect new or modified bookings
+    const newIds=[...currentIds].filter(id=>!_knownBookingIds.has(id));
+    const modifiedChanged=maxModified>_knownBookingModifiedMax;
+    if(newIds.length>0||modifiedChanged){
+      _showRefreshBanner(newIds.length);
+    }
+  }catch(e){/* silent fail on polling */}
+}
+
+function _showRefreshBanner(newCount){
+  let banner=document.getElementById('refreshBanner');
+  if(!banner){
+    banner=document.createElement('div');
+    banner.id='refreshBanner';
+    banner.style.cssText='position:fixed;top:80px;left:50%;transform:translateX(-50%);background:#EF9F27;color:#fff;padding:10px 20px;border-radius:6px;box-shadow:0 4px 12px rgba(0,0,0,.2);z-index:2000;cursor:pointer;font-size:13px;font-weight:500;font-family:inherit;display:flex;align-items:center;gap:10px';
+    banner.onclick=()=>{banner.remove();loadData();_knownBookingIds=new Set();_knownBookingModifiedMax=''};
+    document.body.appendChild(banner);
+  }
+  const label=newCount>0?'⚡ '+newCount+' new booking'+(newCount!==1?'s':'')+' — click to refresh':'⚡ Data updated — click to refresh';
+  banner.innerHTML=label+'<span style="opacity:.7;font-size:11px;margin-left:8px">✕</span>';
+}
+
+function _startAutoRefresh(){
+  // Refresh when tab regains focus
+  document.addEventListener('visibilitychange',()=>{
+    if(document.visibilityState==='visible'){
+      const sinceLastRefresh=Date.now()-_lastRefreshTime;
+      // If away for more than 60 seconds, force refresh
+      if(sinceLastRefresh>60000){
+        _lastRefreshTime=Date.now();
+        _knownBookingIds=new Set();_knownBookingModifiedMax='';
+        const banner=document.getElementById('refreshBanner');if(banner)banner.remove();
+        loadData();
+      }
+    }
+  });
+  // Poll every 5 minutes for changes (non-intrusive — just detects)
+  if(_pollInterval)clearInterval(_pollInterval);
+  _pollInterval=setInterval(_checkBookingChanges,5*60*1000);
+}
+
+// Start the auto-refresh watchers after initial load
+window.addEventListener('DOMContentLoaded',()=>{
+  // Delay startup so initial loadData completes first
+  setTimeout(()=>{_startAutoRefresh()},5000);
 });

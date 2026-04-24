@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v13.5 — modules.js
+// 2GM Booking v13.6 — modules.js
 // Hours, Archive, Import/Export, Admin (checkbox permissions)
 // ============================================================
 
@@ -927,7 +927,7 @@ async function deleteRate(id){
 }
 
 // ============================================================
-// PERSONS / CUSTOMERS (v13.5)
+// PERSONS / CUSTOMERS (v13.6)
 // ============================================================
 let editingPersonId=null;
 
@@ -1210,7 +1210,7 @@ function onPersonNameInput(){
 }
 
 // ============================================================
-// CHARTS (v13.5) — pure SVG, no dependencies
+// CHARTS (v13.6) — pure SVG, no dependencies
 // ============================================================
 
 // Reusable bar chart: data = [{label, value, subtitle?}]
@@ -1519,7 +1519,7 @@ function renderHoursCharts(filtered){
 }
 
 // ============================================================
-// CLEANING EFFICIENCY ANALYSIS (v13.5)
+// CLEANING EFFICIENCY ANALYSIS (v13.6)
 // ============================================================
 // Compares cleaner hours against guest-nights per property, per week/month.
 // USE WITH CAUTION: Hours include breaks, transport, repairs — not just cleaning.
@@ -1872,7 +1872,7 @@ function _dateFromIsoWeek(year,week){
 }
 
 // ============================================================
-// MORE MENU (v13.5)
+// MORE MENU (v13.6)
 // ============================================================
 function toggleMoreMenu(e){
   if(e){e.stopPropagation();e.preventDefault()}
@@ -1899,7 +1899,7 @@ function closeMoreMenu(){
 }
 
 // ============================================================
-// FAKTURAGRUNNLAG / INVOICING (v13.5)
+// FAKTURAGRUNNLAG / INVOICING (v13.6)
 // ============================================================
 let invoicingInitialized=false;
 
@@ -2223,7 +2223,7 @@ function exportInvoicingCSV(){
 }
 
 // ============================================================
-// ADD GUEST FROM BOOKING (v13.5)
+// ADD GUEST FROM BOOKING (v13.6)
 // ============================================================
 function addBookingToGuests(bookingId){
   const b=allBookings.find(x=>x.id===bookingId);
@@ -2247,7 +2247,7 @@ function addBookingToGuests(bookingId){
 }
 
 // ============================================================
-// GUEST BOOKINGS HISTORY (v13.5)
+// GUEST BOOKINGS HISTORY (v13.6)
 // ============================================================
 function showGuestBookings(name){
   if(!name)return;
@@ -2319,7 +2319,7 @@ function showGuestBookings(name){
 }
 
 // ============================================================
-// HOURS IMPORT (v13.5)
+// HOURS IMPORT (v13.6)
 // ============================================================
 let importHoursData=[];
 
@@ -2469,7 +2469,7 @@ async function runImportHours(){
 }
 
 // ============================================================
-// CLEANING DIAGNOSTICS (v13.5)
+// CLEANING DIAGNOSTICS (v13.6)
 // ============================================================
 function showCleaningDiagnostics(){
   const today=new Date();today.setHours(0,0,0,0);
@@ -2581,7 +2581,7 @@ function showCleaningDiagnostics(){
 }
 
 // ============================================================
-// BATTERY REFRESH (v13.5)
+// BATTERY REFRESH (v13.6)
 // ============================================================
 const BATTERY_FILE_PATH='Batteristatus/RoomBattery.csv';
 
