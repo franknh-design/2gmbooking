@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- 2GM Booking v12.16 — Created by Frank Haugan -->
+<!-- 2GM Booking v12.17 — Created by Frank Haugan -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -21,6 +21,8 @@
   .header-btn.active-nav:hover{background:#d88a1d}
   .more-menu-item:hover{background:var(--bg-secondary)}
   .more-menu-item.active-nav{background:#EF9F27;color:#fff}
+  /* Vertical bar before name if person exists in Guest list */
+  .known-guest{border-left:3px solid var(--accent);padding-left:8px;margin-left:-11px}
 .stats{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:1rem}
 .stat{background:var(--bg-secondary);border-radius:var(--radius-md);padding:12px;cursor:pointer;transition:all .15s;border:2px solid transparent;user-select:none}
 .stat:hover{background:#eeede7}.stat.active{border-color:var(--accent);background:#E1F5EE}
@@ -233,7 +235,7 @@ tbody td{padding:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
       </div>
     </div>
   </div>
-  <div style="text-align:center;padding:12px;font-size:11px;color:var(--text-tertiary);margin-top:1rem">v12.16 — Created by Frank Haugan</div>
+  <div style="text-align:center;padding:12px;font-size:11px;color:var(--text-tertiary);margin-top:1rem">v12.17 — Created by Frank Haugan</div>
 </div>
 <!-- Modals -->
 <div class="modal-overlay" id="bookingModal"><div class="modal"><div class="modal-header"><h2 id="bookingModalTitle">New booking</h2><button class="modal-close" onclick="closeBookingModal()">&times;</button></div><div class="modal-body"><div class="form-group"><label>Room</label><div style="display:flex;gap:8px"><select id="fRoom" style="flex:1"></select><button type="button" onclick="findAvailableRoom()" style="padding:6px 12px;background:var(--accent);color:#fff;border:none;border-radius:var(--radius-md);cursor:pointer;font-size:12px;white-space:nowrap;font-family:inherit">Find available</button></div><div id="fRoomInfo" style="font-size:11px;margin-top:4px;color:var(--text-tertiary)"></div></div><div class="form-group"><label>Guest name</label><input id="fName" type="text" placeholder="Start typing to find existing person..." list="fNameList" oninput="onPersonNameInput()"><datalist id="fNameList"></datalist><div id="fNameInfo" style="font-size:11px;margin-top:4px;color:var(--text-tertiary)"></div></div><div class="form-group"><label>Company</label><input id="fCompany" type="text" placeholder="Company name" list="fCompanyList"><datalist id="fCompanyList"></datalist></div><div class="form-row"><div class="form-group"><label>Check-in</label><input id="fCheckIn" type="date"></div><div class="form-group"><label>Check-out</label><input id="fCheckOut" type="date"><div style="font-size:11px;color:var(--text-tertiary);margin-top:2px">Leave empty for open-ended</div></div></div><div class="form-row"><div class="form-group"><label>Status</label><select id="fStatus"><option value="Upcoming">Upcoming</option><option value="Active">Active (checked in)</option></select></div><div class="form-group"><label>Floor</label><input id="fFloor" type="number" min="1" max="9" readonly></div></div><div class="form-group"><label>Notes</label><textarea id="fNotes" placeholder="Optional notes..."></textarea></div></div><div class="modal-footer"><button onclick="closeBookingModal()">Cancel</button><button class="primary" id="bookingSaveBtn" onclick="saveBooking()">Create booking</button></div></div></div>
@@ -256,6 +258,13 @@ tbody td{padding:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 <div class="form-group"><label>Company email</label><input id="pCompanyEmail" type="email" placeholder="invoice@company.com"></div>
 <div class="form-group"><label>Company address</label><textarea id="pCompanyAddress" placeholder="Street, postal code, city" style="min-height:44px"></textarea></div>
 <div class="form-group"><label>Internal notes</label><textarea id="pNotes" placeholder="Internal notes (not visible on door tags)" style="min-height:44px"></textarea></div>
+<div id="pHistorySection" style="display:none;border-top:1px solid var(--border-tertiary);margin-top:12px;padding-top:12px">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+    <strong style="font-size:13px">📜 Booking history</strong>
+    <span id="pHistorySummary" style="font-size:11px;color:var(--text-tertiary)"></span>
+  </div>
+  <div id="pHistoryBody" style="max-height:300px;overflow-y:auto;font-size:12px"></div>
+</div>
 <div id="pDeleteRow" style="display:none;border-top:1px solid var(--border-tertiary);margin-top:12px;padding-top:12px"><button onclick="deletePerson()" style="padding:6px 12px;background:#E24B4A;color:#fff;border:none;border-radius:var(--radius-md);cursor:pointer;font-size:13px">Delete person</button></div>
 </div><div class="modal-footer"><button onclick="document.getElementById('personModal').classList.remove('open')">Cancel</button><button class="primary" id="personSaveBtn" onclick="savePerson()">Save</button></div></div></div>
 
