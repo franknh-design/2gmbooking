@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v13.7 — modules.js
+// 2GM Booking v13.9 — modules.js
 // Hours, Archive, Import/Export, Admin (checkbox permissions)
 // ============================================================
 
@@ -927,7 +927,7 @@ async function deleteRate(id){
 }
 
 // ============================================================
-// PERSONS / CUSTOMERS (v13.7)
+// PERSONS / CUSTOMERS (v13.9)
 // ============================================================
 let editingPersonId=null;
 
@@ -1000,7 +1000,14 @@ function renderPersons(){
     const bookingsCell=bookings
       ?'<span class="pill" style="background:var(--bg-success);color:var(--text-success);cursor:pointer;text-decoration:underline" onclick="event.stopPropagation();showGuestBookings(\''+escapeHtml(name).replace(/'/g,"\\'")+'\')" title="Show bookings">'+bookings+'</span>'
       :'<span class="muted">0</span>';
-    return '<tr onclick="openPersonEdit(\''+p.id+'\')" style="cursor:pointer" onmouseover="this.style.background=\'var(--bg-secondary)\'" onmouseout="this.style.background=\'\'">'
+    const canEdit=can('edit_bookings');
+    const rowStyle=canEdit?'cursor:pointer':'';
+    const rowOnclick=canEdit?'onclick="openPersonEdit(\''+p.id+'\')"':'';
+    const rowHover=canEdit?'onmouseover="this.style.background=\'var(--bg-secondary)\'" onmouseout="this.style.background=\'\'"':'';
+    const editBtn=canEdit
+      ?'<td onclick="event.stopPropagation()"><button onclick="openPersonEdit(\''+p.id+'\')" style="padding:3px 10px;border:1px solid var(--accent);border-radius:4px;background:var(--bg-success);color:var(--text-success);cursor:pointer;font-size:11px;font-family:inherit">Edit</button></td>'
+      :'<td></td>';
+    return '<tr '+rowOnclick+' style="'+rowStyle+'" '+rowHover+'>'
       +'<td style="font-weight:500">'+nameCell+'</td>'
       +'<td>'+activeCell+'</td>'
       +'<td>'+escapeHtml(company)+'</td>'
@@ -1008,7 +1015,7 @@ function renderPersons(){
       +'<td onclick="event.stopPropagation()">'+(p.Email?'<a href="mailto:'+escapeHtml(p.Email)+'" style="color:var(--accent)">'+escapeHtml(p.Email)+'</a>':'<span class="muted">—</span>')+'</td>'
       +'<td class="muted" style="font-size:11px">'+escapeHtml(addr)+'</td>'
       +'<td>'+bookingsCell+'</td>'
-      +'<td onclick="event.stopPropagation()"><button onclick="openPersonEdit(\''+p.id+'\')" style="padding:3px 10px;border:1px solid var(--accent);border-radius:4px;background:var(--bg-success);color:var(--text-success);cursor:pointer;font-size:11px;font-family:inherit">Edit</button></td>'
+      +editBtn
       +'</tr>';
   }).join('');
 }
@@ -1034,6 +1041,7 @@ function findActiveBookingForPerson(name){
 function escapeHtml(s){return String(s||'').replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]))}
 
 function openPersonEdit(personId){
+  if(!can('edit_bookings')){alert('You do not have permission to edit guests.');return}
   editingPersonId=personId||null;
   const p=personId?allPersons.find(x=>x.id===personId):null;
   document.getElementById('personModalTitle').textContent=p?'Edit guest':'New guest';
@@ -1114,6 +1122,7 @@ function renderPersonHistory(p){
 }
 
 async function savePerson(){
+  if(!can('edit_bookings')){alert('You do not have permission to save guests.');return}
   const name=document.getElementById('pName').value.trim();
   if(!name){alert('Name is required');return}
   const fields={
@@ -1148,6 +1157,7 @@ async function savePerson(){
 }
 
 async function deletePerson(){
+  if(!can('edit_bookings')){alert('You do not have permission to delete guests.');return}
   if(!editingPersonId)return;
   const p=allPersons.find(x=>x.id===editingPersonId);
   if(!p)return;
@@ -1210,7 +1220,7 @@ function onPersonNameInput(){
 }
 
 // ============================================================
-// CHARTS (v13.7) — pure SVG, no dependencies
+// CHARTS (v13.9) — pure SVG, no dependencies
 // ============================================================
 
 // Reusable bar chart: data = [{label, value, subtitle?}]
@@ -1519,7 +1529,7 @@ function renderHoursCharts(filtered){
 }
 
 // ============================================================
-// CLEANING EFFICIENCY ANALYSIS (v13.7)
+// CLEANING EFFICIENCY ANALYSIS (v13.9)
 // ============================================================
 // Compares cleaner hours against guest-nights per property, per week/month.
 // USE WITH CAUTION: Hours include breaks, transport, repairs — not just cleaning.
@@ -1872,7 +1882,7 @@ function _dateFromIsoWeek(year,week){
 }
 
 // ============================================================
-// MORE MENU (v13.7)
+// MORE MENU (v13.9)
 // ============================================================
 function toggleMoreMenu(e){
   if(e){e.stopPropagation();e.preventDefault()}
@@ -1899,7 +1909,7 @@ function closeMoreMenu(){
 }
 
 // ============================================================
-// FAKTURAGRUNNLAG / INVOICING (v13.7)
+// FAKTURAGRUNNLAG / INVOICING (v13.9)
 // ============================================================
 let invoicingInitialized=false;
 
@@ -2223,9 +2233,10 @@ function exportInvoicingCSV(){
 }
 
 // ============================================================
-// ADD GUEST FROM BOOKING (v13.7)
+// ADD GUEST FROM BOOKING (v13.9)
 // ============================================================
 function addBookingToGuests(bookingId){
+  if(!can('edit_bookings')){alert('You do not have permission to add guests.');return}
   const b=allBookings.find(x=>x.id===bookingId);
   if(!b){alert('Booking not found');return}
   // Open Guest-editor with booking data pre-filled
@@ -2247,7 +2258,7 @@ function addBookingToGuests(bookingId){
 }
 
 // ============================================================
-// GUEST BOOKINGS HISTORY (v13.7)
+// GUEST BOOKINGS HISTORY (v13.9)
 // ============================================================
 function showGuestBookings(name){
   if(!name)return;
@@ -2319,7 +2330,7 @@ function showGuestBookings(name){
 }
 
 // ============================================================
-// HOURS IMPORT (v13.7)
+// HOURS IMPORT (v13.9)
 // ============================================================
 let importHoursData=[];
 
@@ -2469,7 +2480,7 @@ async function runImportHours(){
 }
 
 // ============================================================
-// CLEANING DIAGNOSTICS (v13.7)
+// CLEANING DIAGNOSTICS (v13.9)
 // ============================================================
 function showCleaningDiagnostics(){
   const today=new Date();today.setHours(0,0,0,0);
@@ -2581,7 +2592,7 @@ function showCleaningDiagnostics(){
 }
 
 // ============================================================
-// BATTERY REFRESH (v13.7)
+// BATTERY REFRESH (v13.9)
 // ============================================================
 const BATTERY_FILE_PATH='Batteristatus/RoomBattery.csv';
 

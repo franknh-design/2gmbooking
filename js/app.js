@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v13.7 — app.js (Core)
+// 2GM Booking v13.9 — app.js (Core)
 // Auth, Graph API, Data, Rendering, Bookings
 // ============================================================
 
@@ -208,6 +208,7 @@ function applyPermissions(){
   const showBlock=(id,vis)=>{const e=el(id);if(e)e.style.display=vis?'block':'none'};
   // Header buttons
   show('btnNewBooking',can('edit_bookings'));
+  show('btnNewGuest',can('edit_bookings'));
   show('btnArchive',can('archive')||can('view_bookings'));
   show('btnUpcoming',can('view_bookings'));
   show('btnHours',can('view_hours')||can('edit_hours'));
@@ -1244,7 +1245,7 @@ msalInstance.initialize().then(()=>{
 });
 
 // ============================================================
-// AUTO-REFRESH (v13.7)
+// AUTO-REFRESH (v13.9)
 // ============================================================
 
 // Build a fingerprint that tells us if data has changed without full reload
@@ -1311,3 +1312,15 @@ window.addEventListener('DOMContentLoaded',()=>{
   // Delay startup so initial loadData completes first
   setTimeout(()=>{_startAutoRefresh()},5000);
 });
+
+// Show current user's permissions (right-click Sign Out button to trigger)
+function showMyPermissions(){
+  const perms=(currentUser.permissions||[]).sort();
+  const hasEdit=perms.includes('edit_bookings');
+  const msg='Logged in as: '+currentUser.email
+    +'\nDisplay name: '+currentUser.displayName
+    +'\n\nPermissions ('+perms.length+'):\n• '+perms.join('\n• ')
+    +'\n\nCan edit bookings/guests: '+(hasEdit?'YES':'NO')
+    +(hasEdit?'\n\nIf this user should be read-only, their Permissions field in the Users list needs to be corrected. It should only contain "view_bookings".':'');
+  alert(msg);
+}
