@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v13.9 — modules.js
+// 2GM Booking v13.10 — modules.js
 // Hours, Archive, Import/Export, Admin (checkbox permissions)
 // ============================================================
 
@@ -794,9 +794,10 @@ function renderRatesPanel(){
   if(prevVal&&[...rpSel.options].some(o=>o.value===prevVal))rpSel.value=prevVal;
   renderRoomRates();
 
-  // Split custom rates into Nightly and Checkout
-  const nightlyRates=allRates.filter(r=>(r.FeeType||'').toLowerCase()!=='checkout');
+  // Split custom rates into Nightly, Checkout, Percent
+  const nightlyRates=allRates.filter(r=>{const t=(r.FeeType||'').toLowerCase();return t!=='checkout'&&t!=='percent'});
   const checkoutRates=allRates.filter(r=>(r.FeeType||'').toLowerCase()==='checkout');
+  const percentRates=allRates.filter(r=>(r.FeeType||'').toLowerCase()==='percent');
 
   const customList=document.getElementById('ratesCustomList');
   let customHtml='';
@@ -813,11 +814,22 @@ function renderRatesPanel(){
   // Checkout section
   customHtml+='<div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--border-tertiary)"><strong style="font-size:13px">🧹 Checkout fees (utvask)</strong> <span class="muted" style="font-size:11px">one-time fee added at checkout</span></div>';
   if(!checkoutRates.length){
-    customHtml+='<div class="muted" style="font-size:13px;padding:8px">No checkout fees configured. Add a rate with FeeType=Checkout in the Rates list to enable.</div>';
+    customHtml+='<div class="muted" style="font-size:13px;padding:8px">No checkout fees configured.</div>';
   }else{
     customHtml+='<table style="font-size:13px;width:100%;margin-top:6px"><thead><tr><th>Company</th><th>Property</th><th style="width:100px">Fee</th><th style="width:30px"></th></tr></thead><tbody>'
       +checkoutRates.map(r=>{
         return'<tr style="background:rgba(123,97,255,.04)"><td>'+(r.Company||'<span class="muted">All companies</span>')+'</td><td>'+(r.Property||'<span class="muted">All</span>')+'</td><td style="text-align:right;font-weight:500">'+(r.DailyRate||0)+' kr</td>'
+          +'<td><button onclick="deleteRate(\''+r.id+'\')" style="width:20px;height:20px;border-radius:50%;border:1px solid var(--border-tertiary);background:var(--bg-primary);color:var(--text-danger);cursor:pointer;font-size:11px;padding:0">✕</button></td></tr>';
+      }).join('')+'</tbody></table>';
+  }
+  // Percent section (month-based, replaces Checkout for that company)
+  customHtml+='<div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--border-tertiary)"><strong style="font-size:13px">📊 Percent of month</strong> <span class="muted" style="font-size:11px">% of company\'s monthly revenue, replaces flat checkout fee</span></div>';
+  if(!percentRates.length){
+    customHtml+='<div class="muted" style="font-size:13px;padding:8px">No percent-based fees configured.</div>';
+  }else{
+    customHtml+='<table style="font-size:13px;width:100%;margin-top:6px"><thead><tr><th>Company</th><th>Property</th><th style="width:100px">%</th><th style="width:30px"></th></tr></thead><tbody>'
+      +percentRates.map(r=>{
+        return'<tr style="background:rgba(239,159,39,.06)"><td>'+(r.Company||'<span class="muted">All companies</span>')+'</td><td>'+(r.Property||'<span class="muted">All</span>')+'</td><td style="text-align:right;font-weight:500">'+(r.DailyRate||0)+' %</td>'
           +'<td><button onclick="deleteRate(\''+r.id+'\')" style="width:20px;height:20px;border-radius:50%;border:1px solid var(--border-tertiary);background:var(--bg-primary);color:var(--text-danger);cursor:pointer;font-size:11px;padding:0">✕</button></td></tr>';
       }).join('')+'</tbody></table>';
   }
@@ -888,18 +900,22 @@ async function addCustomRate(){
   const feeType=document.getElementById('rFeeType').value||'Nightly';
   const rate=parseFloat(document.getElementById('rRate').value);
 
-  // For Checkout fees, Person is not meaningful — only Company + Property
+  // Validation rules per fee type
   if(feeType==='Checkout'){
     if(!propName){alert('Property is required for checkout fees');return}
+  }else if(feeType==='Percent'){
+    if(!company){alert('Company is required for percent-based fees');return}
+    if(rate<=0||rate>100){alert('Percent must be between 0 and 100');return}
   }else{
     if(!company&&!person){alert('Company or person name required');return}
   }
   if(!rate||rate<=0){alert('Rate must be a positive number');return}
 
+  const titleSuffix=feeType==='Percent'?rate+'%':rate+'kr'+(feeType==='Checkout'?' (utvask)':'');
   const fields={
-    Title:(person||company||'Checkout')+' — '+(propName||'All')+' — '+rate+'kr'+(feeType==='Checkout'?' (utvask)':''),
+    Title:(person||company||'Checkout')+' — '+(propName||'All')+' — '+titleSuffix,
     Company:company||'',
-    Person_Name:feeType==='Checkout'?'':(person||''),
+    Person_Name:(feeType==='Checkout'||feeType==='Percent')?'':(person||''),
     Property:propName||'',
     DailyRate:rate,
     FeeType:feeType
@@ -927,7 +943,7 @@ async function deleteRate(id){
 }
 
 // ============================================================
-// PERSONS / CUSTOMERS (v13.9)
+// PERSONS / CUSTOMERS (v13.10)
 // ============================================================
 let editingPersonId=null;
 
@@ -1220,7 +1236,7 @@ function onPersonNameInput(){
 }
 
 // ============================================================
-// CHARTS (v13.9) — pure SVG, no dependencies
+// CHARTS (v13.10) — pure SVG, no dependencies
 // ============================================================
 
 // Reusable bar chart: data = [{label, value, subtitle?}]
@@ -1529,7 +1545,7 @@ function renderHoursCharts(filtered){
 }
 
 // ============================================================
-// CLEANING EFFICIENCY ANALYSIS (v13.9)
+// CLEANING EFFICIENCY ANALYSIS (v13.10)
 // ============================================================
 // Compares cleaner hours against guest-nights per property, per week/month.
 // USE WITH CAUTION: Hours include breaks, transport, repairs — not just cleaning.
@@ -1882,7 +1898,7 @@ function _dateFromIsoWeek(year,week){
 }
 
 // ============================================================
-// MORE MENU (v13.9)
+// MORE MENU (v13.10)
 // ============================================================
 function toggleMoreMenu(e){
   if(e){e.stopPropagation();e.preventDefault()}
@@ -1909,7 +1925,7 @@ function closeMoreMenu(){
 }
 
 // ============================================================
-// FAKTURAGRUNNLAG / INVOICING (v13.9)
+// FAKTURAGRUNNLAG / INVOICING (v13.10)
 // ============================================================
 let invoicingInitialized=false;
 
@@ -2014,7 +2030,8 @@ function renderInvoicing(){
     }
     // CHECKOUT FEE: only for Completed bookings where Check_Out falls within period
     // and Include_Checkout_Fee is not explicitly false
-    if(b.Status==='Completed'&&b.Check_Out){
+    // Skip if this company has a Percent-based fee (handled per-company below)
+    if(b.Status==='Completed'&&b.Check_Out&&!hasPercentFee(b.Company,selectedProperty?selectedProperty.Title:'')){
       const checkoutDate=new Date(b.Check_Out);checkoutDate.setHours(0,0,0,0);
       const feeEnabled=(b.Include_Checkout_Fee===undefined||b.Include_Checkout_Fee===null||b.Include_Checkout_Fee===true||b.Include_Checkout_Fee==='true'||b.Include_Checkout_Fee===1);
       if(feeEnabled&&checkoutDate>=fromDate&&checkoutDate<=toDate){
@@ -2038,25 +2055,68 @@ function renderInvoicing(){
     }
   });
 
+  // PERCENT-BASED FEES: compute per-company total of nights × rate and add a % fee line
+  const propTitleForPercent=selectedProperty?selectedProperty.Title:'';
+  const companyNightSum={};
+  items.filter(i=>i.lineType==='nights').forEach(i=>{
+    const c=(i.company||'').trim();
+    if(!c)return;
+    if(!companyNightSum[c])companyNightSum[c]=0;
+    companyNightSum[c]+=i.total;
+  });
+  Object.keys(companyNightSum).forEach(c=>{
+    const pct=getPercentFeeRate(c,propTitleForPercent);
+    if(pct>0){
+      const feeAmount=Math.round(companyNightSum[c]*pct);
+      // Attach to a synthetic booking-like object so row-click still works with first company booking
+      const firstBooking=items.find(i=>i.company===c);
+      items.push({
+        booking:firstBooking?firstBooking.booking:{id:''},
+        room:'—',
+        name:c+' (monthly fee)',
+        company:c,
+        nights:1,
+        rate:feeAmount,
+        total:feeAmount,
+        source:(pct*100)+'% of '+companyNightSum[c].toLocaleString('nb-NO')+' kr',
+        nearMiss:null,
+        lineType:'percent',
+        checkoutDate:null
+      });
+    }
+  });
+
+  // Apply company filter (if set)
+  const companyFilter=document.getElementById('invCompanyFilter').value||'__ALL__';
+  const filteredItems=companyFilter==='__ALL__'?items:items.filter(i=>i.company===companyFilter);
+
+  // Populate company filter dropdown (preserve current selection)
+  const allCompanies=[...new Set(items.map(i=>i.company||'(no company)'))].sort();
+  const cfSel=document.getElementById('invCompanyFilter');
+  const prevVal=cfSel.value;
+  cfSel.innerHTML='<option value="__ALL__">All companies</option>'+allCompanies.map(c=>'<option value="'+c+'">'+c+'</option>').join('');
+  if(prevVal&&[...cfSel.options].some(o=>o.value===prevVal))cfSel.value=prevVal;
+  const finalItems=(cfSel.value==='__ALL__')?items:items.filter(i=>i.company===cfSel.value);
+
   // Warnings for missing rates
-  const missingRate=items.filter(i=>!i.rate&&i.lineType==='nights');
+  const missingRate=finalItems.filter(i=>!i.rate&&i.lineType==='nights');
   const warnings=missingRate.length?'<div style="margin-bottom:12px;padding:8px 12px;background:var(--bg-warning);border:1px solid #EF9F27;border-radius:6px;font-size:12px;color:var(--text-warning)">⚠ '+missingRate.length+' booking'+(missingRate.length!==1?'s':'')+' without rates — these are not included in totals. Check rate configuration.</div>':'';
 
-  if(!items.length){
-    body.innerHTML='<div style="text-align:center;padding:40px;color:var(--text-secondary)">No bookings in this period on '+(selectedProperty?selectedProperty.Title:'selected property')+'.</div>';
+  if(!finalItems.length){
+    body.innerHTML='<div style="text-align:center;padding:40px;color:var(--text-secondary)">No bookings in this period'+(cfSel.value!=='__ALL__'?' for '+escapeHtml(cfSel.value):'')+' on '+(selectedProperty?selectedProperty.Title:'selected property')+'.</div>';
     return;
   }
 
   let html=warnings;
 
-  // Grand totals — separate nights from checkout fees
-  const nightItems=items.filter(i=>i.lineType==='nights');
-  const feeItems=items.filter(i=>i.lineType==='checkout');
+  // Grand totals — separate nights from checkout/percent fees
+  const nightItems=finalItems.filter(i=>i.lineType==='nights');
+  const feeItems=finalItems.filter(i=>i.lineType==='checkout'||i.lineType==='percent');
   const totalNights=nightItems.reduce((a,i)=>a+i.nights,0);
   const nightRevenue=nightItems.reduce((a,i)=>a+i.total,0);
   const feeRevenue=feeItems.reduce((a,i)=>a+i.total,0);
   const totalRevenue=nightRevenue+feeRevenue;
-  const totalBookings=new Set(items.map(i=>i.booking.id)).size;
+  const totalBookings=new Set(nightItems.map(i=>i.booking.id)).size;
   html+='<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:14px">'
     +'<div style="background:#fff;padding:10px;border-radius:8px;border:.5px solid var(--border-tertiary)"><div style="font-size:11px;color:var(--text-tertiary)">Bookings</div><div style="font-size:20px;font-weight:500">'+totalBookings+'</div></div>'
     +'<div style="background:#fff;padding:10px;border-radius:8px;border:.5px solid var(--border-tertiary)"><div style="font-size:11px;color:var(--text-tertiary)">Guest-nights</div><div style="font-size:20px;font-weight:500">'+totalNights+'</div></div>'
@@ -2065,11 +2125,11 @@ function renderInvoicing(){
 
   // Grouped rendering
   if(groupBy==='none'){
-    html+=_renderInvoicingFlat(items);
+    html+=_renderInvoicingFlat(finalItems);
   }else{
     const keyFn=groupBy==='company'?(i=>i.company||'(no company)'):(i=>i.name||'(no name)');
     const groups={};
-    items.forEach(i=>{const k=keyFn(i);if(!groups[k])groups[k]=[];groups[k].push(i)});
+    finalItems.forEach(i=>{const k=keyFn(i);if(!groups[k])groups[k]=[];groups[k].push(i)});
     const sortedKeys=Object.keys(groups).sort((a,b)=>{
       const tA=groups[a].reduce((s,i)=>s+i.total,0);
       const tB=groups[b].reduce((s,i)=>s+i.total,0);
@@ -2080,25 +2140,44 @@ function renderInvoicing(){
       const grp=groups[k];
       const gNightsItems=grp.filter(i=>i.lineType==='nights');
       const gFees=grp.filter(i=>i.lineType==='checkout');
+      const gPercent=grp.filter(i=>i.lineType==='percent');
       const gNights=gNightsItems.reduce((s,i)=>s+i.nights,0);
       const gTotal=grp.reduce((s,i)=>s+i.total,0);
-      const gBookings=new Set(grp.map(i=>i.booking.id)).size;
-      const feeSuffix=gFees.length?' · '+gFees.length+' utvask':'';
+      const gBookings=new Set(gNightsItems.map(i=>i.booking.id)).size;
+      const feeSuffix=(gFees.length?' · '+gFees.length+' utvask':'')+(gPercent.length?' · % fee':'');
+      const exportBtn=(groupBy==='company'&&k!=='(no company)')
+        ?'<button onclick="event.stopPropagation();exportInvoicingCSV(\''+k.replace(/'/g,"\\'")+'\')" style="padding:3px 10px;border:1px solid var(--accent);border-radius:4px;background:var(--bg-success);color:var(--text-success);cursor:pointer;font-size:11px;font-family:inherit;margin-left:10px" title="Export '+escapeHtml(k)+'">↓ Export</button>'
+        :'';
       html+='<div style="padding:10px 14px;background:var(--bg-secondary);border-bottom:1px solid var(--border-tertiary);display:flex;justify-content:space-between;align-items:center">'
         +'<div><strong>'+escapeHtml(k)+'</strong> <span class="muted" style="font-size:11px;margin-left:8px">'+gBookings+' booking'+(gBookings!==1?'s':'')+feeSuffix+'</span></div>'
-        +'<div style="font-size:13px"><strong>'+gNights+'</strong> nights · <strong style="color:var(--text-success)">'+gTotal.toLocaleString('nb-NO')+' kr</strong></div>'
+        +'<div style="font-size:13px;display:flex;align-items:center"><strong>'+gNights+'</strong>&nbsp;nights · <strong style="color:var(--text-success);margin-left:4px">'+gTotal.toLocaleString('nb-NO')+' kr</strong>'+exportBtn+'</div>'
         +'</div>';
       html+='<table style="width:100%;font-size:12px"><thead><tr style="background:var(--bg-tertiary)"><th style="padding:6px 10px;text-align:left">Guest</th><th style="padding:6px 10px;text-align:left">Company</th><th style="padding:6px 10px;text-align:left">Room</th><th style="padding:6px 10px;text-align:left">Period</th><th style="padding:6px 10px;text-align:right">Nights</th><th style="padding:6px 10px;text-align:right">Rate</th><th style="padding:6px 10px;text-align:right">Total</th><th style="padding:6px 10px;text-align:left">Rate source</th></tr></thead><tbody>';
       grp.forEach(i=>{
         const isCheckout=i.lineType==='checkout';
-        const ci=formatDate(i.booking.Check_In);
+        const isPercent=i.lineType==='percent';
+        const ci=i.booking.Check_In?formatDate(i.booking.Check_In):'';
         const co=i.booking.Check_Out?formatDate(i.booking.Check_Out):'Open';
-        const period=isCheckout?'🧹 Checkout '+formatDate(i.checkoutDate):ci+' → '+co;
-        const nightsCell=isCheckout?'—':i.nights;
-        const rateCell=isCheckout?'<em style="color:var(--text-tertiary)">Utvask</em>':(i.rate?i.rate.toLocaleString('nb-NO')+' kr':'<span style="color:var(--text-danger)">— missing</span>');
+        let period;
+        if(isPercent)period='📊 Monthly percent fee';
+        else if(isCheckout)period='🧹 Checkout '+formatDate(i.checkoutDate);
+        else period=ci+' → '+co;
+        const nightsCell=(isCheckout||isPercent)?'—':i.nights;
+        let rateCell;
+        if(isPercent)rateCell='<em style="color:var(--text-tertiary)">%-basert</em>';
+        else if(isCheckout)rateCell='<em style="color:var(--text-tertiary)">Utvask</em>';
+        else rateCell=(i.rate?i.rate.toLocaleString('nb-NO')+' kr':'<span style="color:var(--text-danger)">— missing</span>');
         const totalCell=i.total?i.total.toLocaleString('nb-NO')+' kr':'—';
-        const sourceCell=isCheckout?'<span style="color:#7B61FF">🧹 Checkout fee</span>':(i.nearMiss?'<span title="'+escapeHtml(i.nearMiss)+'" style="color:var(--text-warning)">⚠ '+escapeHtml(i.source)+'</span>':escapeHtml(i.source));
-        const rowStyle=isCheckout?'border-top:.5px solid var(--border-tertiary);cursor:pointer;background:rgba(123,97,255,.04)':'border-top:.5px solid var(--border-tertiary);cursor:pointer';
+        let sourceCell;
+        if(isPercent)sourceCell='<span style="color:#EF9F27">📊 '+escapeHtml(i.source)+'</span>';
+        else if(isCheckout)sourceCell='<span style="color:#7B61FF">🧹 Checkout fee</span>';
+        else sourceCell=(i.nearMiss?'<span title="'+escapeHtml(i.nearMiss)+'" style="color:var(--text-warning)">⚠ '+escapeHtml(i.source)+'</span>':escapeHtml(i.source));
+        let rowStyle;
+        if(isPercent)rowStyle='border-top:.5px solid var(--border-tertiary);cursor:default;background:rgba(239,159,39,.06)';
+        else if(isCheckout)rowStyle='border-top:.5px solid var(--border-tertiary);cursor:pointer;background:rgba(123,97,255,.04)';
+        else rowStyle='border-top:.5px solid var(--border-tertiary);cursor:pointer';
+        const hoverBg=isPercent?'rgba(239,159,39,.12)':(isCheckout?'rgba(123,97,255,.12)':'var(--bg-secondary)');
+        const restBg=isPercent?'rgba(239,159,39,.06)':(isCheckout?'rgba(123,97,255,.04)':'');
         // Flag company mismatch when grouping by company: if company field differs from group key, highlight
         const groupKey=k;
         const actualCompany=i.company||'(no company)';
@@ -2106,8 +2185,13 @@ function renderInvoicing(){
         const companyCell=companyMismatch
           ?'<span style="color:var(--text-danger);font-weight:500" title="Mismatch with group">⚠ '+escapeHtml(actualCompany)+'</span>'
           :escapeHtml(actualCompany);
-        const nameCell=isCheckout?'<span style="color:var(--text-tertiary)">↳ '+guestMarkedName(i.name)+'</span>':guestMarkedName(i.name);
-        html+='<tr onclick="openEditBooking(\''+i.booking.id+'\')" style="'+rowStyle+'" onmouseover="this.style.background=\''+(isCheckout?'rgba(123,97,255,.12)':'var(--bg-secondary)')+'\'" onmouseout="this.style.background=\''+(isCheckout?'rgba(123,97,255,.04)':'')+'\'">'
+        let nameCell;
+        if(isPercent)nameCell='<span style="color:var(--text-warning);font-weight:500">'+escapeHtml(i.name)+'</span>';
+        else if(isCheckout)nameCell='<span style="color:var(--text-tertiary)">↳ '+guestMarkedName(i.name)+'</span>';
+        else nameCell=guestMarkedName(i.name);
+        // Percent rows are not clickable (no booking to edit)
+        const clickAttr=isPercent?'':'onclick="openEditBooking(\''+i.booking.id+'\')"';
+        html+='<tr '+clickAttr+' style="'+rowStyle+'" onmouseover="this.style.background=\''+hoverBg+'\'" onmouseout="this.style.background=\''+restBg+'\'">'
           +'<td style="padding:6px 10px">'+nameCell+'</td>'
           +'<td style="padding:6px 10px">'+companyCell+'</td>'
           +'<td style="padding:6px 10px;font-weight:500">'+escapeHtml(i.room)+'</td>'
@@ -2157,7 +2241,7 @@ function _renderInvoicingFlat(items){
   return html;
 }
 
-function exportInvoicingCSV(){
+function exportInvoicingCSV(companyFilterName){
   const monthVal=document.getElementById('invMonth').value;
   const yearVal=document.getElementById('invYear').value;
   const fromVal=document.getElementById('invFrom').value;
@@ -2174,13 +2258,22 @@ function exportInvoicingCSV(){
     toDate=new Date(y,m+1,0,23,59,59);
     periodStr=y+'_'+String(m+1).padStart(2,'0');
   }
+  // If not given explicitly, fall back to current dropdown filter (or __ALL__)
+  if(companyFilterName===undefined){
+    const cf=document.getElementById('invCompanyFilter');
+    companyFilterName=cf&&cf.value!=='__ALL__'?cf.value:null;
+  }
   const currentRoomIds=new Set(rooms.map(r=>r.id));
   const rows=[];
+  const companyNightSum={};
+  const propTitleForPercent=selectedProperty?selectedProperty.Title:'';
   allBookings.forEach(b=>{
     const rid=String(b.RoomLookupId||'');
     if(!currentRoomIds.has(rid))return;
     if(!b.Check_In)return;
     if(b.Status==='Cancelled')return;
+    // Apply company filter
+    if(companyFilterName&&(b.Company||'')!==companyFilterName)return;
     const ci=new Date(b.Check_In);ci.setHours(0,0,0,0);
     const co=b.Check_Out?new Date(b.Check_Out):new Date();co.setHours(0,0,0,0);
     if(co<fromDate||ci>toDate)return;
@@ -2199,13 +2292,16 @@ function exportInvoicingCSV(){
         nights*(cost.rate||0),
         cost.source||''
       ]);
+      // Track for percent calculation
+      const c=(b.Company||'').trim();
+      if(c){companyNightSum[c]=(companyNightSum[c]||0)+nights*(cost.rate||0)}
     }
-    // Checkout fee line
-    if(b.Status==='Completed'&&b.Check_Out){
+    // Checkout fee line (skip if company has Percent fee)
+    if(b.Status==='Completed'&&b.Check_Out&&!hasPercentFee(b.Company,propTitleForPercent)){
       const checkoutDate=new Date(b.Check_Out);checkoutDate.setHours(0,0,0,0);
       const feeEnabled=(b.Include_Checkout_Fee===undefined||b.Include_Checkout_Fee===null||b.Include_Checkout_Fee===true||b.Include_Checkout_Fee==='true'||b.Include_Checkout_Fee===1);
       if(feeEnabled&&checkoutDate>=fromDate&&checkoutDate<=toDate){
-        const fee=getCheckoutFee(b.Company,selectedProperty?selectedProperty.Title:'');
+        const fee=getCheckoutFee(b.Company,propTitleForPercent);
         if(fee>0){
           rows.push([
             b.Person_Name||'',
@@ -2222,6 +2318,24 @@ function exportInvoicingCSV(){
       }
     }
   });
+  // Percent-based fee lines
+  Object.keys(companyNightSum).forEach(c=>{
+    const pct=getPercentFeeRate(c,propTitleForPercent);
+    if(pct>0){
+      const feeAmount=Math.round(companyNightSum[c]*pct);
+      rows.push([
+        c+' (monthly fee)',
+        c,
+        '',
+        periodStr,
+        '',
+        0,
+        feeAmount,
+        feeAmount,
+        (pct*100)+'% of '+companyNightSum[c]+' kr'
+      ]);
+    }
+  });
   rows.sort((a,b)=>a[1].localeCompare(b[1],'nb')||a[0].localeCompare(b[0],'nb'));
   // Totals
   const totalN=rows.reduce((s,r)=>s+(typeof r[5]==='number'?r[5]:0),0);
@@ -2229,11 +2343,12 @@ function exportInvoicingCSV(){
   rows.push(['','','','','Total',totalN,'',totalT,'']);
   const headers=['Guest','Company','Room','Check-in','Check-out','Nights','Rate','Total','Rate source'];
   const propName=(selectedProperty?selectedProperty.Title:'').replace(/\s+/g,'_');
-  downloadCSV('Fakturagrunnlag_'+propName+'_'+periodStr,headers,rows);
+  const companyPart=companyFilterName?'_'+companyFilterName.replace(/\s+/g,'_'):'';
+  downloadCSV('Fakturagrunnlag_'+propName+companyPart+'_'+periodStr,headers,rows);
 }
 
 // ============================================================
-// ADD GUEST FROM BOOKING (v13.9)
+// ADD GUEST FROM BOOKING (v13.10)
 // ============================================================
 function addBookingToGuests(bookingId){
   if(!can('edit_bookings')){alert('You do not have permission to add guests.');return}
@@ -2258,7 +2373,7 @@ function addBookingToGuests(bookingId){
 }
 
 // ============================================================
-// GUEST BOOKINGS HISTORY (v13.9)
+// GUEST BOOKINGS HISTORY (v13.10)
 // ============================================================
 function showGuestBookings(name){
   if(!name)return;
@@ -2330,7 +2445,7 @@ function showGuestBookings(name){
 }
 
 // ============================================================
-// HOURS IMPORT (v13.9)
+// HOURS IMPORT (v13.10)
 // ============================================================
 let importHoursData=[];
 
@@ -2480,7 +2595,7 @@ async function runImportHours(){
 }
 
 // ============================================================
-// CLEANING DIAGNOSTICS (v13.9)
+// CLEANING DIAGNOSTICS (v13.10)
 // ============================================================
 function showCleaningDiagnostics(){
   const today=new Date();today.setHours(0,0,0,0);
@@ -2592,7 +2707,7 @@ function showCleaningDiagnostics(){
 }
 
 // ============================================================
-// BATTERY REFRESH (v13.9)
+// BATTERY REFRESH (v13.10)
 // ============================================================
 const BATTERY_FILE_PATH='Batteristatus/RoomBattery.csv';
 

@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v13.9 — app.js (Core)
+// 2GM Booking v13.10 — app.js (Core)
 // Auth, Graph API, Data, Rendering, Bookings
 // ============================================================
 
@@ -463,6 +463,28 @@ function getCheckoutFee(company,propertyTitle){
   const r=checkoutRates.find(rt=>(rt.Property||'').toLowerCase()===pt&&!(rt.Company));
   if(r)return Number(r.DailyRate)||0;
   return 0;
+}
+
+// Look up percent-based fee for a company (e.g. Jobzone 10% of month).
+// Priority: Company+Property > Company. Returns percent as decimal (0.10 for 10%) or 0 if not configured.
+function getPercentFeeRate(company,propertyTitle){
+  const co=(company||'').toLowerCase().trim();
+  if(!co)return 0;
+  const pt=(propertyTitle||'').toLowerCase().trim();
+  const percentRates=allRates.filter(r=>(r.FeeType||'').toLowerCase()==='percent'&&r.DailyRate);
+  if(!percentRates.length)return 0;
+  // 1. Company + specific property
+  const r1=percentRates.find(rt=>(rt.Company||'').toLowerCase()===co&&(rt.Property||'').toLowerCase()===pt);
+  if(r1)return (Number(r1.DailyRate)||0)/100;
+  // 2. Company any property
+  const r2=percentRates.find(rt=>(rt.Company||'').toLowerCase()===co&&!(rt.Property));
+  if(r2)return (Number(r2.DailyRate)||0)/100;
+  return 0;
+}
+
+// Does this company have a percent-based fee configured? (used to skip flat checkout fee)
+function hasPercentFee(company,propertyTitle){
+  return getPercentFeeRate(company,propertyTitle)>0;
 }
 
 // Detect rate config issues: rate exists for this name but property mismatch, or fuzzy company name
@@ -1245,7 +1267,7 @@ msalInstance.initialize().then(()=>{
 });
 
 // ============================================================
-// AUTO-REFRESH (v13.9)
+// AUTO-REFRESH (v13.10)
 // ============================================================
 
 // Build a fingerprint that tells us if data has changed without full reload
