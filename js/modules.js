@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v12.19 — modules.js
+// 2GM Booking v13.0 — modules.js
 // Hours, Archive, Import/Export, Admin (checkbox permissions)
 // ============================================================
 
@@ -899,7 +899,7 @@ async function deleteRate(id){
 }
 
 // ============================================================
-// PERSONS / CUSTOMERS (v12.19)
+// PERSONS / CUSTOMERS (v13.0)
 // ============================================================
 let editingPersonId=null;
 
@@ -1182,7 +1182,7 @@ function onPersonNameInput(){
 }
 
 // ============================================================
-// CHARTS (v12.19) — pure SVG, no dependencies
+// CHARTS (v13.0) — pure SVG, no dependencies
 // ============================================================
 
 // Reusable bar chart: data = [{label, value, subtitle?}]
@@ -1491,7 +1491,7 @@ function renderHoursCharts(filtered){
 }
 
 // ============================================================
-// CLEANING EFFICIENCY ANALYSIS (v12.19)
+// CLEANING EFFICIENCY ANALYSIS (v13.0)
 // ============================================================
 // Compares cleaner hours against guest-nights per property, per week/month.
 // USE WITH CAUTION: Hours include breaks, transport, repairs — not just cleaning.
@@ -1844,7 +1844,7 @@ function _dateFromIsoWeek(year,week){
 }
 
 // ============================================================
-// MORE MENU (v12.19)
+// MORE MENU (v13.0)
 // ============================================================
 function toggleMoreMenu(e){
   if(e){e.stopPropagation();e.preventDefault()}
@@ -1871,7 +1871,7 @@ function closeMoreMenu(){
 }
 
 // ============================================================
-// FAKTURAGRUNNLAG / INVOICING (v12.19)
+// FAKTURAGRUNNLAG / INVOICING (v13.0)
 // ============================================================
 let invoicingInitialized=false;
 
@@ -1958,24 +1958,50 @@ function renderInvoicing(){
     // Check overlap
     if(co<fromDate||ci>toDate)return;
     const nights=_nightsInPeriod(b,fromDate,toDate);
-    if(nights<=0)return;
     const cost=calcBookingCost(b,selectedProperty?selectedProperty.Title:'');
     const room=allRooms.find(r=>r.id===rid);
-    items.push({
-      booking:b,
-      room:room?room.Title:'?',
-      name:b.Person_Name||'',
-      company:b.Company||'',
-      nights,
-      rate:cost.rate,
-      total:nights*cost.rate,
-      source:cost.source,
-      nearMiss:cost.nearMiss
-    });
+    if(nights>0){
+      items.push({
+        booking:b,
+        room:room?room.Title:'?',
+        name:b.Person_Name||'',
+        company:b.Company||'',
+        nights,
+        rate:cost.rate,
+        total:nights*cost.rate,
+        source:cost.source,
+        nearMiss:cost.nearMiss,
+        lineType:'nights'
+      });
+    }
+    // CHECKOUT FEE: only for Completed bookings where Check_Out falls within period
+    // and Include_Checkout_Fee is not explicitly false
+    if(b.Status==='Completed'&&b.Check_Out){
+      const checkoutDate=new Date(b.Check_Out);checkoutDate.setHours(0,0,0,0);
+      const feeEnabled=(b.Include_Checkout_Fee===undefined||b.Include_Checkout_Fee===null||b.Include_Checkout_Fee===true||b.Include_Checkout_Fee==='true'||b.Include_Checkout_Fee===1);
+      if(feeEnabled&&checkoutDate>=fromDate&&checkoutDate<=toDate){
+        const fee=getCheckoutFee(b.Company,selectedProperty?selectedProperty.Title:'');
+        if(fee>0){
+          items.push({
+            booking:b,
+            room:room?room.Title:'?',
+            name:b.Person_Name||'',
+            company:b.Company||'',
+            nights:1,
+            rate:fee,
+            total:fee,
+            source:'Checkout fee',
+            nearMiss:null,
+            lineType:'checkout',
+            checkoutDate:b.Check_Out
+          });
+        }
+      }
+    }
   });
 
   // Warnings for missing rates
-  const missingRate=items.filter(i=>!i.rate);
+  const missingRate=items.filter(i=>!i.rate&&i.lineType==='nights');
   const warnings=missingRate.length?'<div style="margin-bottom:12px;padding:8px 12px;background:var(--bg-warning);border:1px solid #EF9F27;border-radius:6px;font-size:12px;color:var(--text-warning)">⚠ '+missingRate.length+' booking'+(missingRate.length!==1?'s':'')+' without rates — these are not included in totals. Check rate configuration.</div>':'';
 
   if(!items.length){
@@ -1985,14 +2011,18 @@ function renderInvoicing(){
 
   let html=warnings;
 
-  // Grand totals
-  const totalNights=items.reduce((a,i)=>a+i.nights,0);
-  const totalRevenue=items.reduce((a,i)=>a+i.total,0);
-  const totalBookings=items.length;
+  // Grand totals — separate nights from checkout fees
+  const nightItems=items.filter(i=>i.lineType==='nights');
+  const feeItems=items.filter(i=>i.lineType==='checkout');
+  const totalNights=nightItems.reduce((a,i)=>a+i.nights,0);
+  const nightRevenue=nightItems.reduce((a,i)=>a+i.total,0);
+  const feeRevenue=feeItems.reduce((a,i)=>a+i.total,0);
+  const totalRevenue=nightRevenue+feeRevenue;
+  const totalBookings=new Set(items.map(i=>i.booking.id)).size;
   html+='<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:14px">'
     +'<div style="background:#fff;padding:10px;border-radius:8px;border:.5px solid var(--border-tertiary)"><div style="font-size:11px;color:var(--text-tertiary)">Bookings</div><div style="font-size:20px;font-weight:500">'+totalBookings+'</div></div>'
     +'<div style="background:#fff;padding:10px;border-radius:8px;border:.5px solid var(--border-tertiary)"><div style="font-size:11px;color:var(--text-tertiary)">Guest-nights</div><div style="font-size:20px;font-weight:500">'+totalNights+'</div></div>'
-    +'<div style="background:#fff;padding:10px;border-radius:8px;border:.5px solid var(--border-tertiary)"><div style="font-size:11px;color:var(--text-tertiary)">Total revenue</div><div style="font-size:20px;font-weight:500;color:var(--text-success)">'+totalRevenue.toLocaleString('nb-NO')+' kr</div></div>'
+    +'<div style="background:#fff;padding:10px;border-radius:8px;border:.5px solid var(--border-tertiary)"><div style="font-size:11px;color:var(--text-tertiary)">Total revenue</div><div style="font-size:20px;font-weight:500;color:var(--text-success)">'+totalRevenue.toLocaleString('nb-NO')+' kr</div>'+(feeRevenue>0?'<div style="font-size:10px;color:var(--text-tertiary);margin-top:2px">Nights: '+nightRevenue.toLocaleString('nb-NO')+' kr + Utvask: '+feeRevenue.toLocaleString('nb-NO')+' kr</div>':'')+'</div>'
     +'</div>';
 
   // Grouped rendering
@@ -2010,19 +2040,27 @@ function renderInvoicing(){
     html+='<div style="background:#fff;border-radius:8px;border:.5px solid var(--border-tertiary);overflow:hidden">';
     sortedKeys.forEach(k=>{
       const grp=groups[k];
-      const gNights=grp.reduce((s,i)=>s+i.nights,0);
+      const gNightsItems=grp.filter(i=>i.lineType==='nights');
+      const gFees=grp.filter(i=>i.lineType==='checkout');
+      const gNights=gNightsItems.reduce((s,i)=>s+i.nights,0);
       const gTotal=grp.reduce((s,i)=>s+i.total,0);
+      const gBookings=new Set(grp.map(i=>i.booking.id)).size;
+      const feeSuffix=gFees.length?' · '+gFees.length+' utvask':'';
       html+='<div style="padding:10px 14px;background:var(--bg-secondary);border-bottom:1px solid var(--border-tertiary);display:flex;justify-content:space-between;align-items:center">'
-        +'<div><strong>'+escapeHtml(k)+'</strong> <span class="muted" style="font-size:11px;margin-left:8px">'+grp.length+' booking'+(grp.length!==1?'s':'')+'</span></div>'
+        +'<div><strong>'+escapeHtml(k)+'</strong> <span class="muted" style="font-size:11px;margin-left:8px">'+gBookings+' booking'+(gBookings!==1?'s':'')+feeSuffix+'</span></div>'
         +'<div style="font-size:13px"><strong>'+gNights+'</strong> nights · <strong style="color:var(--text-success)">'+gTotal.toLocaleString('nb-NO')+' kr</strong></div>'
         +'</div>';
       html+='<table style="width:100%;font-size:12px"><thead><tr style="background:var(--bg-tertiary)"><th style="padding:6px 10px;text-align:left">Guest</th><th style="padding:6px 10px;text-align:left">Company</th><th style="padding:6px 10px;text-align:left">Room</th><th style="padding:6px 10px;text-align:left">Period</th><th style="padding:6px 10px;text-align:right">Nights</th><th style="padding:6px 10px;text-align:right">Rate</th><th style="padding:6px 10px;text-align:right">Total</th><th style="padding:6px 10px;text-align:left">Rate source</th></tr></thead><tbody>';
       grp.forEach(i=>{
+        const isCheckout=i.lineType==='checkout';
         const ci=formatDate(i.booking.Check_In);
         const co=i.booking.Check_Out?formatDate(i.booking.Check_Out):'Open';
-        const rateCell=i.rate?i.rate.toLocaleString('nb-NO')+' kr':'<span style="color:var(--text-danger)">— missing</span>';
+        const period=isCheckout?'🧹 Checkout '+formatDate(i.checkoutDate):ci+' → '+co;
+        const nightsCell=isCheckout?'—':i.nights;
+        const rateCell=isCheckout?'<em style="color:var(--text-tertiary)">Utvask</em>':(i.rate?i.rate.toLocaleString('nb-NO')+' kr':'<span style="color:var(--text-danger)">— missing</span>');
         const totalCell=i.total?i.total.toLocaleString('nb-NO')+' kr':'—';
-        const sourceCell=i.nearMiss?'<span title="'+escapeHtml(i.nearMiss)+'" style="color:var(--text-warning)">⚠ '+escapeHtml(i.source)+'</span>':escapeHtml(i.source);
+        const sourceCell=isCheckout?'<span style="color:#7B61FF">🧹 Checkout fee</span>':(i.nearMiss?'<span title="'+escapeHtml(i.nearMiss)+'" style="color:var(--text-warning)">⚠ '+escapeHtml(i.source)+'</span>':escapeHtml(i.source));
+        const rowStyle=isCheckout?'border-top:.5px solid var(--border-tertiary);cursor:pointer;background:rgba(123,97,255,.04)':'border-top:.5px solid var(--border-tertiary);cursor:pointer';
         // Flag company mismatch when grouping by company: if company field differs from group key, highlight
         const groupKey=k;
         const actualCompany=i.company||'(no company)';
@@ -2030,12 +2068,13 @@ function renderInvoicing(){
         const companyCell=companyMismatch
           ?'<span style="color:var(--text-danger);font-weight:500" title="Mismatch with group">⚠ '+escapeHtml(actualCompany)+'</span>'
           :escapeHtml(actualCompany);
-        html+='<tr onclick="openEditBooking(\''+i.booking.id+'\')" style="border-top:.5px solid var(--border-tertiary);cursor:pointer" onmouseover="this.style.background=\'var(--bg-secondary)\'" onmouseout="this.style.background=\'\'">'
-          +'<td style="padding:6px 10px">'+guestMarkedName(i.name)+'</td>'
+        const nameCell=isCheckout?'<span style="color:var(--text-tertiary)">↳ '+guestMarkedName(i.name)+'</span>':guestMarkedName(i.name);
+        html+='<tr onclick="openEditBooking(\''+i.booking.id+'\')" style="'+rowStyle+'" onmouseover="this.style.background=\''+(isCheckout?'rgba(123,97,255,.12)':'var(--bg-secondary)')+'\'" onmouseout="this.style.background=\''+(isCheckout?'rgba(123,97,255,.04)':'')+'\'">'
+          +'<td style="padding:6px 10px">'+nameCell+'</td>'
           +'<td style="padding:6px 10px">'+companyCell+'</td>'
           +'<td style="padding:6px 10px;font-weight:500">'+escapeHtml(i.room)+'</td>'
-          +'<td style="padding:6px 10px">'+ci+' → '+co+'</td>'
-          +'<td style="padding:6px 10px;text-align:right">'+i.nights+'</td>'
+          +'<td style="padding:6px 10px">'+period+'</td>'
+          +'<td style="padding:6px 10px;text-align:right">'+nightsCell+'</td>'
           +'<td style="padding:6px 10px;text-align:right">'+rateCell+'</td>'
           +'<td style="padding:6px 10px;text-align:right;font-weight:500">'+totalCell+'</td>'
           +'<td style="padding:6px 10px;font-size:11px;color:var(--text-tertiary)">'+sourceCell+'</td>'
@@ -2108,25 +2147,47 @@ function exportInvoicingCSV(){
     const co=b.Check_Out?new Date(b.Check_Out):new Date();co.setHours(0,0,0,0);
     if(co<fromDate||ci>toDate)return;
     const nights=_nightsInPeriod(b,fromDate,toDate);
-    if(nights<=0)return;
     const cost=calcBookingCost(b,selectedProperty?selectedProperty.Title:'');
     const room=allRooms.find(r=>r.id===rid);
-    rows.push([
-      b.Person_Name||'',
-      b.Company||'',
-      room?room.Title:'',
-      formatDate(b.Check_In),
-      b.Check_Out?formatDate(b.Check_Out):'Open',
-      nights,
-      cost.rate||0,
-      nights*(cost.rate||0),
-      cost.source||''
-    ]);
+    if(nights>0){
+      rows.push([
+        b.Person_Name||'',
+        b.Company||'',
+        room?room.Title:'',
+        formatDate(b.Check_In),
+        b.Check_Out?formatDate(b.Check_Out):'Open',
+        nights,
+        cost.rate||0,
+        nights*(cost.rate||0),
+        cost.source||''
+      ]);
+    }
+    // Checkout fee line
+    if(b.Status==='Completed'&&b.Check_Out){
+      const checkoutDate=new Date(b.Check_Out);checkoutDate.setHours(0,0,0,0);
+      const feeEnabled=(b.Include_Checkout_Fee===undefined||b.Include_Checkout_Fee===null||b.Include_Checkout_Fee===true||b.Include_Checkout_Fee==='true'||b.Include_Checkout_Fee===1);
+      if(feeEnabled&&checkoutDate>=fromDate&&checkoutDate<=toDate){
+        const fee=getCheckoutFee(b.Company,selectedProperty?selectedProperty.Title:'');
+        if(fee>0){
+          rows.push([
+            b.Person_Name||'',
+            b.Company||'',
+            room?room.Title:'',
+            'Checkout '+formatDate(b.Check_Out),
+            '',
+            0,
+            fee,
+            fee,
+            'Utvask'
+          ]);
+        }
+      }
+    }
   });
   rows.sort((a,b)=>a[1].localeCompare(b[1],'nb')||a[0].localeCompare(b[0],'nb'));
   // Totals
-  const totalN=rows.reduce((s,r)=>s+r[5],0);
-  const totalT=rows.reduce((s,r)=>s+r[7],0);
+  const totalN=rows.reduce((s,r)=>s+(typeof r[5]==='number'?r[5]:0),0);
+  const totalT=rows.reduce((s,r)=>s+(typeof r[7]==='number'?r[7]:0),0);
   rows.push(['','','','','Total',totalN,'',totalT,'']);
   const headers=['Guest','Company','Room','Check-in','Check-out','Nights','Rate','Total','Rate source'];
   const propName=(selectedProperty?selectedProperty.Title:'').replace(/\s+/g,'_');
@@ -2134,7 +2195,7 @@ function exportInvoicingCSV(){
 }
 
 // ============================================================
-// ADD GUEST FROM BOOKING (v12.19)
+// ADD GUEST FROM BOOKING (v13.0)
 // ============================================================
 function addBookingToGuests(bookingId){
   const b=allBookings.find(x=>x.id===bookingId);
@@ -2158,7 +2219,7 @@ function addBookingToGuests(bookingId){
 }
 
 // ============================================================
-// GUEST BOOKINGS HISTORY (v12.19)
+// GUEST BOOKINGS HISTORY (v13.0)
 // ============================================================
 function showGuestBookings(name){
   if(!name)return;
@@ -2230,7 +2291,7 @@ function showGuestBookings(name){
 }
 
 // ============================================================
-// HOURS IMPORT (v12.19)
+// HOURS IMPORT (v13.0)
 // ============================================================
 let importHoursData=[];
 
@@ -2380,7 +2441,7 @@ async function runImportHours(){
 }
 
 // ============================================================
-// CLEANING DIAGNOSTICS (v12.19)
+// CLEANING DIAGNOSTICS (v13.0)
 // ============================================================
 function showCleaningDiagnostics(){
   const today=new Date();today.setHours(0,0,0,0);

@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v12.19 — app.js (Core)
+// 2GM Booking v13.0 — app.js (Core)
 // Auth, Graph API, Data, Rendering, Bookings
 // ============================================================
 
@@ -311,22 +311,24 @@ function getDailyRate(personName,company,propertyTitle,roomId){
   const pt=(propertyTitle||'').toLowerCase();
 
   // 1. Person + specific property (fuzzy name, exact property)
-  let rate=allRates.find(r=>_nameMatch(r.Person_Name,personName)&&(r.Property||'').toLowerCase()===pt&&r.DailyRate);
+  // Exclude rates with FeeType=Checkout (those are one-time fees, not nightly)
+  const isNightly=r=>(r.FeeType||'').toLowerCase()!=='checkout';
+  let rate=allRates.find(r=>isNightly(r)&&_nameMatch(r.Person_Name,personName)&&(r.Property||'').toLowerCase()===pt&&r.DailyRate);
   if(rate)return{rate:rate.DailyRate,source:'Person+Property',matchedName:rate.Person_Name};
 
   // 2. Person any property (fuzzy)
-  rate=allRates.find(r=>_nameMatch(r.Person_Name,personName)&&!(r.Property)&&r.DailyRate);
+  rate=allRates.find(r=>isNightly(r)&&_nameMatch(r.Person_Name,personName)&&!(r.Property)&&r.DailyRate);
   if(rate)return{rate:rate.DailyRate,source:'Person',matchedName:rate.Person_Name};
 
   // 3. Company + specific property
   if(co){
-    rate=allRates.find(r=>(r.Company||'').toLowerCase()===co&&(r.Property||'').toLowerCase()===pt&&r.DailyRate);
+    rate=allRates.find(r=>isNightly(r)&&(r.Company||'').toLowerCase()===co&&(r.Property||'').toLowerCase()===pt&&r.DailyRate);
     if(rate)return{rate:rate.DailyRate,source:'Company+Property'};
   }
 
   // 4. Company any property
   if(co){
-    rate=allRates.find(r=>(r.Company||'').toLowerCase()===co&&!(r.Property)&&r.DailyRate);
+    rate=allRates.find(r=>isNightly(r)&&(r.Company||'').toLowerCase()===co&&!(r.Property)&&r.DailyRate);
     if(rate)return{rate:rate.DailyRate,source:'Company'};
   }
 
@@ -343,6 +345,30 @@ function getDailyRate(personName,company,propertyTitle,roomId){
   // No rate found — but check for near-misses and flag them
   const nearMiss=_findRateNearMiss(personName,company,propertyTitle);
   return{rate:0,source:'No rate set',nearMiss:nearMiss};
+}
+
+// Look up checkout fee (one-time cleaning fee at end of stay)
+// Priority: 1) Company+Property  2) Company  3) Property  4) 0 (no fee)
+function getCheckoutFee(company,propertyTitle){
+  const co=(company||'').toLowerCase().trim();
+  const pt=(propertyTitle||'').toLowerCase().trim();
+  // Only consider rates explicitly marked as Checkout fee
+  const checkoutRates=allRates.filter(r=>(r.FeeType||'').toLowerCase()==='checkout'&&r.DailyRate);
+  if(!checkoutRates.length)return 0;
+  // 1. Company + specific property
+  if(co){
+    const r=checkoutRates.find(rt=>(rt.Company||'').toLowerCase()===co&&(rt.Property||'').toLowerCase()===pt);
+    if(r)return Number(r.DailyRate)||0;
+  }
+  // 2. Company any property
+  if(co){
+    const r=checkoutRates.find(rt=>(rt.Company||'').toLowerCase()===co&&!(rt.Property));
+    if(r)return Number(r.DailyRate)||0;
+  }
+  // 3. Property default
+  const r=checkoutRates.find(rt=>(rt.Property||'').toLowerCase()===pt&&!(rt.Company));
+  if(r)return Number(r.DailyRate)||0;
+  return 0;
 }
 
 // Detect rate config issues: rate exists for this name but property mismatch, or fuzzy company name
@@ -402,22 +428,45 @@ function datesCell(b){
 
 function renderRow(room,booking){
   const n=booking?booking.Person_Name:'';const c=booking?(booking.Company||''):'';
+  // For empty rooms: find next upcoming booking
+  let emptyCell='<span class="empty-text">—</span>';
+  if(!booking){
+    const upcoming=findNextUpcomingForRoom(room.id);
+    if(upcoming){
+      emptyCell='<span class="empty-text">—</span> <span style="font-size:10px;color:#7B61FF;font-style:italic" title="Upcoming booking">📅 '+escapeHtml(upcoming.Person_Name||'')+(upcoming.Check_In?' · '+formatDate(upcoming.Check_In):'')+'</span>';
+    }
+  }
   return'<tr onclick="showDetail(\''+room.id+'\')">'
     +'<td>'+doorTagBtn(booking)+'</td><td>'+cleanBtn(booking)+'</td>'
     +'<td style="font-variant-numeric:tabular-nums;font-weight:500">'+room.Title+'</td>'
-    +'<td>'+(n?guestMarkedName(n):'<span class="empty-text">—</span>')+(booking&&booking.Notes?'<span class="note-dot"></span>':'')+'</td>'
+    +'<td>'+(n?guestMarkedName(n):emptyCell)+(booking&&booking.Notes?'<span class="note-dot"></span>':'')+'</td>'
     +'<td class="muted">'+c+'</td>'
     +'<td style="text-align:right;font-variant-numeric:tabular-nums">'+batCell(room.Door_Battery_Level)+'</td>'
     +'<td style="font-variant-numeric:tabular-nums">'+datesCell(booking)+'</td></tr>';
 }
 
+// Find the soonest Upcoming booking for a given room
+function findNextUpcomingForRoom(roomId){
+  const now=new Date();now.setHours(0,0,0,0);
+  const ups=allBookings.filter(b=>String(b.RoomLookupId)===String(roomId)&&b.Status==='Upcoming'&&b.Check_In);
+  ups.sort((a,b)=>new Date(a.Check_In)-new Date(b.Check_In));
+  return ups.find(b=>{const d=new Date(b.Check_In);d.setHours(0,0,0,0);return d>=now})||null;
+}
+
 function renderRowWithProperty(room,booking,propName){
   const n=booking?booking.Person_Name:'';const washNext=booking?getNextWashDate(booking):'';
+  let emptyCell='<span class="empty-text">—</span>';
+  if(!booking){
+    const upcoming=findNextUpcomingForRoom(room.id);
+    if(upcoming){
+      emptyCell='<span class="empty-text">—</span> <span style="font-size:10px;color:#7B61FF;font-style:italic">📅 '+escapeHtml(upcoming.Person_Name||'')+(upcoming.Check_In?' · '+formatDate(upcoming.Check_In):'')+'</span>';
+    }
+  }
   return'<tr onclick="showDetail(\''+room.id+'\')">'
     +'<td>'+cleanBtn(booking)+'</td>'
     +'<td style="font-variant-numeric:tabular-nums;font-weight:500">'+room.Title+'</td>'
     +'<td class="muted" style="font-size:11px">'+propName+'</td>'
-    +'<td>'+(n?guestMarkedName(n):'<span class="empty-text">—</span>')+'</td>'
+    +'<td>'+(n?guestMarkedName(n):emptyCell)+'</td>'
     +'<td>'+washNext+'</td>'
     +'<td style="font-variant-numeric:tabular-nums">'+(booking?datesCell(booking):'')+'</td></tr>';
 }
@@ -588,6 +637,8 @@ function showDetail(roomId){
     p.innerHTML='<div class="detail-grid"><div class="detail-main">'+infoHtml+'</div><div class="detail-actions">'+btns+'</div></div>';
   }
   p.classList.add('open');
+  // Scroll to bring detail panel into view (it's now above the floor tables)
+  setTimeout(()=>{p.scrollIntoView({behavior:'smooth',block:'nearest'})},50);
 }
 function closeDetail(){document.getElementById('detailPanel').classList.remove('open');selectedRoom=null;selectedBooking=null}
 
@@ -645,10 +696,13 @@ function openNewBooking(preselectedRoomId){
   document.getElementById('fName').value='';document.getElementById('fCompany').value='';
   document.getElementById('fCheckIn').value=toISODate(new Date());document.getElementById('fCheckOut').value='';
   document.getElementById('fStatus').value='Upcoming';document.getElementById('fNotes').value='';
+  document.getElementById('fIncludeCheckoutFee').checked=true;
   document.getElementById('fNameInfo').innerHTML='';
+  document.getElementById('fOverlapWarning').style.display='none';
+  attachOverlapListeners();
+  checkBookingOverlap();
   const modal=document.getElementById('bookingModal');
   modal.classList.add('open');
-  // Scroll modal content to top so user sees Room field first
   const modalContent=modal.querySelector('.modal');
   if(modalContent)modalContent.scrollTop=0;
   modal.scrollTop=0;
@@ -662,15 +716,65 @@ function openEditBooking(bookingId){
   document.getElementById('fCheckIn').value=b.Check_In?toISODate(b.Check_In):'';
   document.getElementById('fCheckOut').value=b.Check_Out?toISODate(b.Check_Out):'';
   document.getElementById('fStatus').value=b.Status||'Upcoming';document.getElementById('fNotes').value=b.Notes||'';
+  // Checkout fee: default true if not explicitly stored as false
+  const fee=b.Include_Checkout_Fee;
+  document.getElementById('fIncludeCheckoutFee').checked=(fee===undefined||fee===null||fee===true||fee==='true'||fee===1);
   document.getElementById('fNameInfo').innerHTML='';
+  document.getElementById('fOverlapWarning').style.display='none';
+  attachOverlapListeners();
+  checkBookingOverlap();
   const modal=document.getElementById('bookingModal');
   modal.classList.add('open');
-  // Scroll modal content to top
   const modalContent=modal.querySelector('.modal');
   if(modalContent)modalContent.scrollTop=0;
   modal.scrollTop=0;
 }
 function closeBookingModal(){document.getElementById('bookingModal').classList.remove('open');editingBookingId=null}
+
+// Attach change-listeners to room/date fields to check for overlap in real time
+let _overlapAttached=false;
+function attachOverlapListeners(){
+  if(_overlapAttached)return;_overlapAttached=true;
+  ['fRoom','fCheckIn','fCheckOut'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el)el.addEventListener('change',checkBookingOverlap);
+  });
+}
+
+// Check if current modal values overlap with other bookings on same room
+function checkBookingOverlap(){
+  const warn=document.getElementById('fOverlapWarning');if(!warn)return;
+  const roomId=document.getElementById('fRoom').value;
+  const ciStr=document.getElementById('fCheckIn').value;
+  const coStr=document.getElementById('fCheckOut').value;
+  if(!roomId||!ciStr){warn.style.display='none';return}
+  const ci=new Date(ciStr+'T00:00:00');const co=coStr?new Date(coStr+'T23:59:59'):null;
+  // Find other bookings on this room (not this one if editing)
+  const conflicts=allBookings.filter(b=>{
+    if(b.id===editingBookingId)return false;
+    if(String(b.RoomLookupId)!==String(roomId))return false;
+    if(b.Status==='Cancelled'||b.Status==='Completed')return false;
+    if(!b.Check_In)return false;
+    const bi=new Date(b.Check_In);const bo=b.Check_Out?new Date(b.Check_Out):null;
+    // Overlap: ci <= bo AND (co >= bi OR co is null)
+    if(co){
+      if(bo)return ci<=bo&&co>=bi;
+      return co>=bi; // other is open-ended, overlap if our end is after its start
+    }else{
+      // our booking is open-ended
+      if(bo)return ci<=bo;
+      return true; // both open-ended = definite overlap
+    }
+  });
+  if(!conflicts.length){warn.style.display='none';return}
+  const lines=conflicts.map(c=>{
+    const name=c.Person_Name||'(unnamed)';
+    const period=formatDate(c.Check_In)+' → '+(c.Check_Out?formatDate(c.Check_Out):'Open');
+    return '• <strong>'+escapeHtml(name)+'</strong> ('+c.Status+') · '+period;
+  });
+  warn.innerHTML='<strong>⚠ Double-booking warning</strong> — this room already has '+conflicts.length+' overlapping booking'+(conflicts.length!==1?'s':'')+':<br>'+lines.join('<br>');
+  warn.style.display='block';
+}
 
 function findAvailableRoom(){
   const checkIn=document.getElementById('fCheckIn').value;
@@ -747,6 +851,7 @@ async function saveBooking(){
   }
 
   const fields={Person_Name:name,Company:company,Check_In:checkIn+'T15:00:00Z',Status:status,Door_Tag_Status:'Needs-print',Cleaning_Status:'None',Property_Name:selectedProperty.Title,Floor:room?room.Floor:1,Notes:notes||null};
+  fields.Include_Checkout_Fee=document.getElementById('fIncludeCheckoutFee').checked;
   if(checkOut)fields.Check_Out=checkOut+'T12:00:00Z';else fields.Check_Out=null;
   fields.RoomLookupId=parseInt(roomId);
   const btn=document.getElementById('bookingSaveBtn');btn.disabled=true;btn.textContent='Saving...';
