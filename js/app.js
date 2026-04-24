@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v13.16.1 — app.js (Core)
+// 2GM Booking v13.18 — app.js (Core)
 // Auth, Graph API, Data, Rendering, Bookings
 // ============================================================
 
@@ -598,8 +598,11 @@ function getRoomFullTenant(room,date){
 function computeFullTenantForPeriod(property,fromDate,toDate){
   if(!property)return null;
   const company=(property.FullTenant_Company||'').trim();
-  const rate=Number(property.FullTenant_RatePerRoom)||0;
-  if(!company||!rate)return null;
+  if(!company)return null;
+  const propertyRate=Number(property.FullTenant_RatePerRoom)||0;
+  // Rate unit: 'Per day' (default, legacy) or 'Per month'
+  const rateUnitRaw=(property.FullTenant_RateUnit||'Per day').toString().toLowerCase().trim();
+  const isMonthly=rateUnitRaw.indexOf('month')>=0;
   const agreementStart=property.FullTenant_StartDate?new Date(property.FullTenant_StartDate):new Date(1970,0,1);
   const agreementEnd=property.FullTenant_EndDate?new Date(property.FullTenant_EndDate):new Date(2100,0,1);
   agreementStart.setHours(0,0,0,0);
@@ -612,11 +615,63 @@ function computeFullTenantForPeriod(property,fromDate,toDate){
   if(effFrom>effTo)return null;
   // Count days (inclusive)
   const days=Math.floor((effTo-effFrom)/86400000)+1;
-  // Count rooms on this property
-  const rooms=allRooms.filter(r=>String(r.PropertyLookupId)===String(property.id)).length;
+  // Rooms on this property
+  const propRooms=allRooms.filter(r=>String(r.PropertyLookupId)===String(property.id));
+  const rooms=propRooms.length;
   if(rooms===0)return null;
-  const total=Math.round(rate*rooms*days*100)/100;
-  return{days,rooms,rate,total,company,effectiveFrom:effFrom,effectiveTo:effTo};
+  // Two pricing models:
+  // A) Property has FullTenant_RatePerRoom set → uniform rate × rooms (Rigg 44 style)
+  // B) Property rate is empty → sum each room's NightlyRate (Strandveien style, per-room)
+  const useUniformRate=propertyRate>0;
+  const sumRoomNightlyRates=propRooms.reduce((s,r)=>s+(Number(r.NightlyRate)||0),0);
+  const usePerRoomRates=!useUniformRate&&sumRoomNightlyRates>0;
+  if(!useUniformRate&&!usePerRoomRates)return null;
+  let total,unitLabel,detailLabel,rate;
+  // Pre-compute month fraction for both monthly modes
+  let monthFraction=0;
+  const breakdown=[];
+  if(isMonthly){
+    let cursor=new Date(effFrom.getFullYear(),effFrom.getMonth(),1);
+    while(cursor<=effTo){
+      const monthStart=new Date(cursor.getFullYear(),cursor.getMonth(),1);
+      const monthEnd=new Date(cursor.getFullYear(),cursor.getMonth()+1,0,23,59,59);
+      const periodInMonthStart=new Date(Math.max(monthStart.getTime(),effFrom.getTime()));
+      const periodInMonthEnd=new Date(Math.min(monthEnd.getTime(),effTo.getTime()));
+      if(periodInMonthStart<=periodInMonthEnd){
+        const daysInMonth=monthEnd.getDate();
+        const periodDaysInMonth=Math.floor((periodInMonthEnd-periodInMonthStart)/86400000)+1;
+        monthFraction+=periodDaysInMonth/daysInMonth;
+        breakdown.push(periodDaysInMonth+'/'+daysInMonth);
+      }
+      cursor=new Date(cursor.getFullYear(),cursor.getMonth()+1,1);
+    }
+  }
+  if(useUniformRate){
+    rate=propertyRate;
+    if(isMonthly){
+      total=Math.round(rate*rooms*monthFraction*100)/100;
+      unitLabel='/mnd';
+      detailLabel=rooms+' rom × '+rate.toLocaleString('nb-NO')+' kr/mnd × '+monthFraction.toFixed(3)+' mnd ('+breakdown.join(' + ')+')';
+    }else{
+      total=Math.round(rate*rooms*days*100)/100;
+      unitLabel='/dag';
+      detailLabel=rooms+' rom × '+rate.toLocaleString('nb-NO')+' kr/dag × '+days+' dager';
+    }
+  }else{
+    // Per-room pricing model: sum each room's NightlyRate
+    rate=sumRoomNightlyRates; // total per day for all rooms combined
+    const roomsWithRate=propRooms.filter(r=>Number(r.NightlyRate)>0).length;
+    if(isMonthly){
+      total=Math.round(sumRoomNightlyRates*monthFraction*100)/100;
+      unitLabel='/mnd (per rom)';
+      detailLabel='Sum '+roomsWithRate+'/'+rooms+' rom-priser ('+sumRoomNightlyRates.toLocaleString('nb-NO')+' kr/mnd) × '+monthFraction.toFixed(3)+' mnd';
+    }else{
+      total=Math.round(sumRoomNightlyRates*days*100)/100;
+      unitLabel='/dag (per rom)';
+      detailLabel='Sum '+roomsWithRate+'/'+rooms+' rom-priser ('+sumRoomNightlyRates.toLocaleString('nb-NO')+' kr/dag) × '+days+' dager';
+    }
+  }
+  return{days,rooms,rate,total,company,effectiveFrom:effFrom,effectiveTo:effTo,isMonthly,unitLabel,detailLabel,usePerRoomRates};
 }
 
 function renderRow(room,booking){
@@ -1367,7 +1422,7 @@ msalInstance.initialize().then(()=>{
 });
 
 // ============================================================
-// AUTO-REFRESH (v13.16.1)
+// AUTO-REFRESH (v13.18)
 // ============================================================
 
 // Build a fingerprint that tells us if data has changed without full reload
@@ -1456,6 +1511,7 @@ function showFullTenantDebug(){
   lines.push('Property ID: '+p.id);
   lines.push('FullTenant_Company: "'+(p.FullTenant_Company||'')+'" (type: '+typeof p.FullTenant_Company+')');
   lines.push('FullTenant_RatePerRoom: '+p.FullTenant_RatePerRoom+' (type: '+typeof p.FullTenant_RatePerRoom+')');
+  lines.push('FullTenant_RateUnit: '+(p.FullTenant_RateUnit||'(default: Per day)'));
   lines.push('FullTenant_StartDate: '+p.FullTenant_StartDate);
   lines.push('FullTenant_EndDate: '+(p.FullTenant_EndDate||'(empty = no end)'));
   lines.push('');

@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v13.16.1 — modules.js
+// 2GM Booking v13.18 — modules.js
 // Hours, Archive, Import/Export, Admin (checkbox permissions)
 // ============================================================
 
@@ -943,7 +943,7 @@ async function deleteRate(id){
 }
 
 // ============================================================
-// PERSONS / CUSTOMERS (v13.16.1)
+// PERSONS / CUSTOMERS (v13.18)
 // ============================================================
 let editingPersonId=null;
 
@@ -1240,7 +1240,7 @@ function onPersonNameInput(){
 }
 
 // ============================================================
-// CHARTS (v13.16.1) — pure SVG, no dependencies
+// CHARTS (v13.18) — pure SVG, no dependencies
 // ============================================================
 
 // Reusable bar chart: data = [{label, value, subtitle?}]
@@ -1549,7 +1549,7 @@ function renderHoursCharts(filtered){
 }
 
 // ============================================================
-// CLEANING EFFICIENCY ANALYSIS (v13.16.1)
+// CLEANING EFFICIENCY ANALYSIS (v13.18)
 // ============================================================
 // Compares cleaner hours against guest-nights per property, per week/month.
 // USE WITH CAUTION: Hours include breaks, transport, repairs — not just cleaning.
@@ -1902,7 +1902,7 @@ function _dateFromIsoWeek(year,week){
 }
 
 // ============================================================
-// MORE MENU (v13.16.1)
+// MORE MENU (v13.18)
 // ============================================================
 function toggleMoreMenu(e){
   if(e){e.stopPropagation();e.preventDefault()}
@@ -1929,7 +1929,7 @@ function closeMoreMenu(){
 }
 
 // ============================================================
-// FAKTURAGRUNNLAG / INVOICING (v13.16.1)
+// FAKTURAGRUNNLAG / INVOICING (v13.18)
 // ============================================================
 let invoicingInitialized=false;
 
@@ -2104,7 +2104,7 @@ function renderInvoicing(){
       nights:ft.days,
       rate:ft.rate*ft.rooms,
       total:ft.total,
-      source:ft.rooms+' rooms × '+ft.rate.toLocaleString('nb-NO')+' kr × '+ft.days+' days'+(excluded?' · '+excluded+' individual bookings hidden':''),
+      source:ft.detailLabel+(excluded?' · '+excluded+' individual bookings hidden':''),
       nearMiss:null,
       lineType:'fulltenant',
       checkoutDate:null
@@ -2416,10 +2416,10 @@ function exportInvoicingCSV(companyFilterName){
       prop?prop.Title:'',           // room column = property
       '',                           // check-in
       '',                           // check-out
-      ft.days,                      // days as nights
-      ft.rate*ft.rooms,             // rate per day (all rooms)
+      ft.days,                      // days in period
+      ft.rate,                      // rate (per day or per month — see source label)
       ft.total,                     // total
-      ft.rooms+' rooms × '+ft.rate+' kr × '+ft.days+' days'
+      ft.detailLabel
     ]);
   });
 
@@ -2455,7 +2455,7 @@ function exportInvoicingCSV(companyFilterName){
 }
 
 // ============================================================
-// ADD GUEST FROM BOOKING (v13.16.1)
+// ADD GUEST FROM BOOKING (v13.18)
 // ============================================================
 function addBookingToGuests(bookingId){
   if(!can('edit_bookings')){alert('You do not have permission to add guests.');return}
@@ -2480,7 +2480,7 @@ function addBookingToGuests(bookingId){
 }
 
 // ============================================================
-// GUEST BOOKINGS HISTORY (v13.16.1)
+// GUEST BOOKINGS HISTORY (v13.18)
 // ============================================================
 function showGuestBookings(name){
   if(!name)return;
@@ -2552,7 +2552,7 @@ function showGuestBookings(name){
 }
 
 // ============================================================
-// HOURS IMPORT (v13.16.1)
+// HOURS IMPORT (v13.18)
 // ============================================================
 let importHoursData=[];
 
@@ -2702,7 +2702,7 @@ async function runImportHours(){
 }
 
 // ============================================================
-// CLEANING DIAGNOSTICS (v13.16.1)
+// CLEANING DIAGNOSTICS (v13.18)
 // ============================================================
 function showCleaningDiagnostics(){
   const today=new Date();today.setHours(0,0,0,0);
@@ -2814,7 +2814,7 @@ function showCleaningDiagnostics(){
 }
 
 // ============================================================
-// BATTERY REFRESH (v13.16.1)
+// BATTERY REFRESH (v13.18)
 // ============================================================
 const BATTERY_FILE_PATH='Batteristatus/RoomBattery.csv';
 
@@ -2893,7 +2893,7 @@ async function refreshBatteryStatus(){
 }
 
 // ============================================================
-// COMPANIES MANAGEMENT (v13.16.1)
+// COMPANIES MANAGEMENT (v13.18)
 // ============================================================
 let editingCompanyId=null;
 
@@ -3103,7 +3103,7 @@ async function quickAddCompany(name){
 }
 
 // ============================================================
-// BRREG LOOKUP (v13.16.1)
+// BRREG LOOKUP (v13.18)
 // ============================================================
 // Fetches company information from Brønnøysundregistrene open API.
 // https://data.brreg.no/enhetsregisteret/api/enheter/{orgnr}
@@ -3171,7 +3171,7 @@ async function lookupBrreg(){
 }
 
 // ============================================================
-// PDF EXPORT VIA PRINT (v13.16.1)
+// PDF EXPORT VIA PRINT (v13.18)
 // ============================================================
 // Opens a print-friendly window containing the same data as exportInvoicingCSV.
 // Browser's print dialog allows "Save as PDF" as the destination.
@@ -3272,7 +3272,7 @@ function exportInvoicingPDF(companyFilterName){
     const prop=properties.find(p=>String(p.id)===String(pid));
     const key=ft.company;
     if(!groups[key])groups[key]={nights:[],fees:[],percent:null,fullTenant:null};
-    groups[key].fullTenant={property:prop?prop.Title:'',rooms:ft.rooms,days:ft.days,rate:ft.rate,total:ft.total};
+    groups[key].fullTenant={property:prop?prop.Title:'',rooms:ft.rooms,days:ft.days,rate:ft.rate,total:ft.total,detailLabel:ft.detailLabel};
   });
 
   const groupKeys=Object.keys(groups).sort();
@@ -3298,7 +3298,7 @@ function exportInvoicingPDF(companyFilterName){
     if(g.fullTenant){
       const ft=g.fullTenant;
       groupTotal+=ft.total;
-      tableRows+='<tr class="ft-row"><td colspan="4"><strong>🔒 Full-tenant lease — '+escapeHtml(ft.property)+'</strong><br><small>'+ft.rooms+' rom × '+fmtKr(ft.rate)+' × '+ft.days+' dager</small></td><td class="num"><strong>'+fmtKr(ft.total)+'</strong></td></tr>';
+      tableRows+='<tr class="ft-row"><td colspan="4"><strong>🔒 Full-tenant lease — '+escapeHtml(ft.property)+'</strong><br><small>'+escapeHtml(ft.detailLabel||'')+'</small></td><td class="num"><strong>'+fmtKr(ft.total)+'</strong></td></tr>';
     }
 
     // Night bookings
