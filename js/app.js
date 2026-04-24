@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v13.4 — app.js (Core)
+// 2GM Booking v13.5 — app.js (Core)
 // Auth, Graph API, Data, Rendering, Bookings
 // ============================================================
 
@@ -70,24 +70,52 @@ async function getSiteId(){if(siteId)return siteId;const r=await graphGet('/site
 async function getListId(name){if(LIST_IDS[name])return LIST_IDS[name];throw new Error('List not found: '+name)}
 async function getListItems(listName){const s=await getSiteId();const lid=await getListId(listName);let all=[];let url='/sites/'+s+'/lists/'+lid+'/items?$expand=fields&$top=500';while(url){const r=await graphGet(url);all=all.concat(r.value.map(i=>({id:i.id,...i.fields})));url=r['@odata.nextLink']?r['@odata.nextLink'].replace('https://graph.microsoft.com/v1.0',''):null}return all}
 
-// Fetch a text file from the SharePoint site's default document library.
-// pathInLibrary: e.g. 'Batteristatus/RoomBattery.csv' (no leading slash)
+// Fetch a text file from a SharePoint document library.
+// If pathInLibrary starts with a library name that's not the default, tries that library specifically.
+// Example: 'Batteristatus/RoomBattery.csv' — first tries default lib with that path, then tries 'Batteristatus' as its own library.
 async function fetchSiteFileText(pathInLibrary){
   const s=await getSiteId();
   await getToken();
-  // Use the /drive/root:/path: endpoint to locate the file item
-  const itemUrl='https://graph.microsoft.com/v1.0/sites/'+s+'/drive/root:/'+encodeURI(pathInLibrary);
-  const itemResp=await fetch(itemUrl,{headers:{Authorization:'Bearer '+accessToken}});
-  if(!itemResp.ok){
-    if(itemResp.status===404)throw new Error('File not found at '+pathInLibrary+'. Check that it exists in the default document library.');
-    throw new Error('Could not locate file: '+itemResp.status);
+  const errors=[];
+  // Attempt 1: Default library (Shared Documents) with the full path
+  try{
+    const url='https://graph.microsoft.com/v1.0/sites/'+s+'/drive/root:/'+encodeURI(pathInLibrary);
+    const r=await fetch(url,{headers:{Authorization:'Bearer '+accessToken}});
+    if(r.ok){
+      const item=await r.json();
+      if(item['@microsoft.graph.downloadUrl']){
+        const c=await fetch(item['@microsoft.graph.downloadUrl']);
+        if(c.ok)return c.text();
+      }
+    }
+    errors.push('Default library: '+r.status);
+  }catch(e){errors.push('Default library: '+e.message)}
+  // Attempt 2: Parse path as "LibraryName/file/path" — try as separate library
+  const firstSlash=pathInLibrary.indexOf('/');
+  if(firstSlash>0){
+    const libName=pathInLibrary.substring(0,firstSlash);
+    const remaining=pathInLibrary.substring(firstSlash+1);
+    try{
+      // Find the drive with matching name
+      const drives=await graphGet('/sites/'+s+'/drives');
+      const lib=drives.value.find(d=>d.name===libName||d.name.toLowerCase()===libName.toLowerCase());
+      if(lib){
+        const url='https://graph.microsoft.com/v1.0/drives/'+lib.id+'/root:/'+encodeURI(remaining);
+        const r=await fetch(url,{headers:{Authorization:'Bearer '+accessToken}});
+        if(r.ok){
+          const item=await r.json();
+          if(item['@microsoft.graph.downloadUrl']){
+            const c=await fetch(item['@microsoft.graph.downloadUrl']);
+            if(c.ok)return c.text();
+          }
+        }
+        errors.push('Library "'+libName+'": '+r.status);
+      }else{
+        errors.push('Library "'+libName+'" not found among: '+drives.value.map(d=>d.name).join(', '));
+      }
+    }catch(e){errors.push('Library search: '+e.message)}
   }
-  const item=await itemResp.json();
-  const downloadUrl=item['@microsoft.graph.downloadUrl'];
-  if(!downloadUrl)throw new Error('No download URL for file');
-  const contentResp=await fetch(downloadUrl);
-  if(!contentResp.ok)throw new Error('Could not download file: '+contentResp.status);
-  return contentResp.text();
+  throw new Error('File not found. Tried:\n'+errors.join('\n'));
 }
 async function createListItem(listName,fields){const s=await getSiteId();const lid=await getListId(listName);return graphPost('/sites/'+s+'/lists/'+lid+'/items',{fields})}
 async function updateListItem(listName,itemId,fields){const s=await getSiteId();const lid=await getListId(listName);return graphPatch('/sites/'+s+'/lists/'+lid+'/items/'+itemId+'/fields',fields)}
