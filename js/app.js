@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v13.6 — app.js (Core)
+// 2GM Booking v13.7 — app.js (Core)
 // Auth, Graph API, Data, Rendering, Bookings
 // ============================================================
 
@@ -1094,8 +1094,71 @@ function toggleFilter(filter){
   const labels={checkedIn:'Showing: Checked-in rooms',empty:'Showing: Empty rooms',dirty:'Showing: Rooms needing cleaning',doorTag:'Showing: Door tags needing print',battery:'Showing: Low battery rooms (<30%)'};
   document.getElementById('filterLabel').textContent=labels[filter]||'';
   document.getElementById('filterBar').classList.add('open');renderFloors();
+  // Show action button for door-tag filter
+  const actionBtn=document.getElementById('filterActionBtn');
+  if(filter==='doorTag'&&can('print_doortag')){
+    actionBtn.style.display='';
+    actionBtn.textContent='🖨 Print all';
+    actionBtn.onclick=printAllPendingDoorTags;
+  }else{
+    actionBtn.style.display='none';
+    actionBtn.onclick=null;
+  }
 }
-function clearFilter(){activeFilter=null;document.querySelectorAll('.stat').forEach(el=>el.classList.remove('active'));document.getElementById('filterBar').classList.remove('open');renderFloors()}
+function clearFilter(){
+  activeFilter=null;
+  document.querySelectorAll('.stat').forEach(el=>el.classList.remove('active'));
+  document.getElementById('filterBar').classList.remove('open');
+  const actionBtn=document.getElementById('filterActionBtn');if(actionBtn)actionBtn.style.display='none';
+  renderFloors();
+}
+
+// Print all door tags for bookings that need printing (current property or all if in All mode)
+function printAllPendingDoorTags(){
+  // Find rooms currently visible in the doorTag filter
+  const floor1=getFilteredRoomsForFloor(1);
+  const floor2=getFilteredRoomsForFloor(2);
+  const visibleRoomIds=new Set([...floor1,...floor2].map(r=>r.id));
+  // Find bookings with Door_Tag_Status=Needs-print on visible rooms
+  const pending=allBookings.filter(b=>
+    b.Door_Tag_Status==='Needs-print'&&
+    (b.Status==='Active'||b.Status==='Upcoming')&&
+    visibleRoomIds.has(String(b.RoomLookupId))
+  );
+  if(!pending.length){alert('No door tags need printing.');return}
+  if(!confirm('Print '+pending.length+' door tag'+(pending.length!==1?'s':'')+'?\n\nThey will open in a new window as a single printable document.'))return;
+  // Build a single combined document with page-breaks between each tag
+  let html='<html><head><title>Door tags</title><style>@media print{.tag{page-break-after:always}}body{margin:0;font-family:Arial,sans-serif}.tag{padding:40px;max-width:600px;margin:0 auto}</style></head><body>';
+  pending.forEach(b=>{
+    const room=allRooms.find(r=>r.id===String(b.RoomLookupId));
+    const roomTitle=room?room.Title:'?';
+    const prop=properties.find(p=>String(p.id)===String(room?room.PropertyLookupId:''));
+    const propTitle=prop?prop.Title:'';
+    html+='<div class="tag">'
+      +'<div style="text-align:center;margin-bottom:30px"><div style="font-size:72px;font-weight:700;letter-spacing:2px">'+roomTitle+'</div><div style="font-size:14px;color:#888;margin-top:4px">'+propTitle+'</div></div>'
+      +'<div style="border-top:2px solid #2C2C2A;padding-top:20px"><h2 style="font-size:18px;margin:0 0 16px">Welcome, '+(b.Person_Name||'')+'</h2>'
+      +'<table style="font-size:14px;width:100%"><tr><td style="padding:6px 0;color:#888;width:120px">Company</td><td>'+(b.Company||'—')+'</td></tr>'
+      +'<tr><td style="padding:6px 0;color:#888">Check-in</td><td>After 15:00 — '+formatDate(b.Check_In)+'</td></tr>'
+      +'<tr><td style="padding:6px 0;color:#888">Check-out</td><td>'+(b.Check_Out?'Before 12:00 — '+formatDate(b.Check_Out):'Open-ended')+'</td></tr></table></div>'
+      +'</div>';
+  });
+  html+='</body></html>';
+  const w=window.open('','_blank');
+  w.document.write(html);
+  w.document.close();
+  setTimeout(()=>w.print(),300);
+  // Mark them all as printed (in background, with throttling)
+  (async()=>{
+    for(let i=0;i<pending.length;i++){
+      try{
+        await updateListItem('Bookings',pending[i].id,{Door_Tag_Status:'Printed'});
+        const l=allBookings.find(x=>x.id===pending[i].id);if(l)l.Door_Tag_Status='Printed';
+      }catch(e){console.error(e)}
+      if(i%10===9)await new Promise(r=>setTimeout(r,300));
+    }
+    refreshLocal();updateStats();
+  })();
+}
 
 function getFilteredRoomsForFloor(floor){
   // For dirty filter: show rooms from all assigned properties (not just selected)
@@ -1181,7 +1244,7 @@ msalInstance.initialize().then(()=>{
 });
 
 // ============================================================
-// AUTO-REFRESH (v13.6)
+// AUTO-REFRESH (v13.7)
 // ============================================================
 
 // Build a fingerprint that tells us if data has changed without full reload
