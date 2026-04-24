@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v13.10 — modules.js
+// 2GM Booking v13.11 — modules.js
 // Hours, Archive, Import/Export, Admin (checkbox permissions)
 // ============================================================
 
@@ -943,7 +943,7 @@ async function deleteRate(id){
 }
 
 // ============================================================
-// PERSONS / CUSTOMERS (v13.10)
+// PERSONS / CUSTOMERS (v13.11)
 // ============================================================
 let editingPersonId=null;
 
@@ -1236,7 +1236,7 @@ function onPersonNameInput(){
 }
 
 // ============================================================
-// CHARTS (v13.10) — pure SVG, no dependencies
+// CHARTS (v13.11) — pure SVG, no dependencies
 // ============================================================
 
 // Reusable bar chart: data = [{label, value, subtitle?}]
@@ -1545,7 +1545,7 @@ function renderHoursCharts(filtered){
 }
 
 // ============================================================
-// CLEANING EFFICIENCY ANALYSIS (v13.10)
+// CLEANING EFFICIENCY ANALYSIS (v13.11)
 // ============================================================
 // Compares cleaner hours against guest-nights per property, per week/month.
 // USE WITH CAUTION: Hours include breaks, transport, repairs — not just cleaning.
@@ -1898,7 +1898,7 @@ function _dateFromIsoWeek(year,week){
 }
 
 // ============================================================
-// MORE MENU (v13.10)
+// MORE MENU (v13.11)
 // ============================================================
 function toggleMoreMenu(e){
   if(e){e.stopPropagation();e.preventDefault()}
@@ -1925,7 +1925,7 @@ function closeMoreMenu(){
 }
 
 // ============================================================
-// FAKTURAGRUNNLAG / INVOICING (v13.10)
+// FAKTURAGRUNNLAG / INVOICING (v13.11)
 // ============================================================
 let invoicingInitialized=false;
 
@@ -2031,7 +2031,9 @@ function renderInvoicing(){
     // CHECKOUT FEE: only for Completed bookings where Check_Out falls within period
     // and Include_Checkout_Fee is not explicitly false
     // Skip if this company has a Percent-based fee (handled per-company below)
-    if(b.Status==='Completed'&&b.Check_Out&&!hasPercentFee(b.Company,selectedProperty?selectedProperty.Title:'')){
+    // Skip if Continuation=true (mid-stay room change — only one utvask per logical stay)
+    const isContinuation=(b.Continuation===true||b.Continuation==='true'||b.Continuation===1);
+    if(b.Status==='Completed'&&b.Check_Out&&!isContinuation&&!hasPercentFee(b.Company,selectedProperty?selectedProperty.Title:'')){
       const checkoutDate=new Date(b.Check_Out);checkoutDate.setHours(0,0,0,0);
       const feeEnabled=(b.Include_Checkout_Fee===undefined||b.Include_Checkout_Fee===null||b.Include_Checkout_Fee===true||b.Include_Checkout_Fee==='true'||b.Include_Checkout_Fee===1);
       if(feeEnabled&&checkoutDate>=fromDate&&checkoutDate<=toDate){
@@ -2296,8 +2298,9 @@ function exportInvoicingCSV(companyFilterName){
       const c=(b.Company||'').trim();
       if(c){companyNightSum[c]=(companyNightSum[c]||0)+nights*(cost.rate||0)}
     }
-    // Checkout fee line (skip if company has Percent fee)
-    if(b.Status==='Completed'&&b.Check_Out&&!hasPercentFee(b.Company,propTitleForPercent)){
+    // Checkout fee line (skip if company has Percent fee, skip if Continuation)
+    const isContinuationExp=(b.Continuation===true||b.Continuation==='true'||b.Continuation===1);
+    if(b.Status==='Completed'&&b.Check_Out&&!isContinuationExp&&!hasPercentFee(b.Company,propTitleForPercent)){
       const checkoutDate=new Date(b.Check_Out);checkoutDate.setHours(0,0,0,0);
       const feeEnabled=(b.Include_Checkout_Fee===undefined||b.Include_Checkout_Fee===null||b.Include_Checkout_Fee===true||b.Include_Checkout_Fee==='true'||b.Include_Checkout_Fee===1);
       if(feeEnabled&&checkoutDate>=fromDate&&checkoutDate<=toDate){
@@ -2348,7 +2351,7 @@ function exportInvoicingCSV(companyFilterName){
 }
 
 // ============================================================
-// ADD GUEST FROM BOOKING (v13.10)
+// ADD GUEST FROM BOOKING (v13.11)
 // ============================================================
 function addBookingToGuests(bookingId){
   if(!can('edit_bookings')){alert('You do not have permission to add guests.');return}
@@ -2373,7 +2376,7 @@ function addBookingToGuests(bookingId){
 }
 
 // ============================================================
-// GUEST BOOKINGS HISTORY (v13.10)
+// GUEST BOOKINGS HISTORY (v13.11)
 // ============================================================
 function showGuestBookings(name){
   if(!name)return;
@@ -2445,7 +2448,7 @@ function showGuestBookings(name){
 }
 
 // ============================================================
-// HOURS IMPORT (v13.10)
+// HOURS IMPORT (v13.11)
 // ============================================================
 let importHoursData=[];
 
@@ -2595,7 +2598,7 @@ async function runImportHours(){
 }
 
 // ============================================================
-// CLEANING DIAGNOSTICS (v13.10)
+// CLEANING DIAGNOSTICS (v13.11)
 // ============================================================
 function showCleaningDiagnostics(){
   const today=new Date();today.setHours(0,0,0,0);
@@ -2707,7 +2710,7 @@ function showCleaningDiagnostics(){
 }
 
 // ============================================================
-// BATTERY REFRESH (v13.10)
+// BATTERY REFRESH (v13.11)
 // ============================================================
 const BATTERY_FILE_PATH='Batteristatus/RoomBattery.csv';
 

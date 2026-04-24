@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v13.10 — app.js (Core)
+// 2GM Booking v13.11 — app.js (Core)
 // Auth, Graph API, Data, Rendering, Bookings
 // ============================================================
 
@@ -719,6 +719,7 @@ function showDetail(roomId){
         +'<tr><td>Door tag</td><td>'+dt+'</td></tr>'
         +'<tr><td>Cleaning</td><td>'+cl+'</td></tr>'
         +(booking.Notes?'<tr><td>Notes</td><td>'+booking.Notes+'</td></tr>':'')
+        +((booking.Continuation===true||booking.Continuation==='true'||booking.Continuation===1)?'<tr><td>🔗 Continuation</td><td><span style="color:#7B61FF;font-weight:500">Yes — utvask skipped</span></td></tr>':'')
         +'</table>'
         +(can('view_prices')?(function(){
           const cost=calcBookingCost(booking,propName);
@@ -885,6 +886,7 @@ function openNewBooking(preselectedRoomId){
   document.getElementById('fStatus').value='Active';
   document.getElementById('fNotes').value='';
   document.getElementById('fIncludeCheckoutFee').checked=true;
+  document.getElementById('fContinuation').checked=false;
   document.getElementById('fNameInfo').innerHTML='';
   // Show auto-select hint in room-info area
   const roomInfo=document.getElementById('fRoomInfo');
@@ -921,6 +923,8 @@ function openEditBooking(bookingId){
   // Checkout fee: default true if not explicitly stored as false
   const fee=b.Include_Checkout_Fee;
   document.getElementById('fIncludeCheckoutFee').checked=(fee===undefined||fee===null||fee===true||fee==='true'||fee===1);
+  const cont=b.Continuation;
+  document.getElementById('fContinuation').checked=(cont===true||cont==='true'||cont===1);
   document.getElementById('fNameInfo').innerHTML='';
   document.getElementById('fOverlapWarning').style.display='none';
   attachOverlapListeners();
@@ -1077,6 +1081,7 @@ async function saveBooking(){
   const propNameForSave=roomProp?roomProp.Title:(selectedProperty?selectedProperty.Title:'');
   const fields={Person_Name:name,Company:company,Check_In:checkIn+'T15:00:00Z',Status:status,Door_Tag_Status:'Needs-print',Cleaning_Status:'None',Property_Name:propNameForSave,Floor:room?room.Floor:1,Notes:notes||null};
   fields.Include_Checkout_Fee=document.getElementById('fIncludeCheckoutFee').checked;
+  fields.Continuation=document.getElementById('fContinuation').checked;
   if(checkOut)fields.Check_Out=checkOut+'T12:00:00Z';else fields.Check_Out=null;
   fields.RoomLookupId=parseInt(roomId);
   const btn=document.getElementById('bookingSaveBtn');btn.disabled=true;btn.textContent='Saving...';
@@ -1267,7 +1272,7 @@ msalInstance.initialize().then(()=>{
 });
 
 // ============================================================
-// AUTO-REFRESH (v13.10)
+// AUTO-REFRESH (v13.11)
 // ============================================================
 
 // Build a fingerprint that tells us if data has changed without full reload
