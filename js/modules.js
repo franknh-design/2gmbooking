@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v13.11 — modules.js
+// 2GM Booking v13.12 — modules.js
 // Hours, Archive, Import/Export, Admin (checkbox permissions)
 // ============================================================
 
@@ -943,7 +943,7 @@ async function deleteRate(id){
 }
 
 // ============================================================
-// PERSONS / CUSTOMERS (v13.11)
+// PERSONS / CUSTOMERS (v13.12)
 // ============================================================
 let editingPersonId=null;
 
@@ -1236,7 +1236,7 @@ function onPersonNameInput(){
 }
 
 // ============================================================
-// CHARTS (v13.11) — pure SVG, no dependencies
+// CHARTS (v13.12) — pure SVG, no dependencies
 // ============================================================
 
 // Reusable bar chart: data = [{label, value, subtitle?}]
@@ -1545,7 +1545,7 @@ function renderHoursCharts(filtered){
 }
 
 // ============================================================
-// CLEANING EFFICIENCY ANALYSIS (v13.11)
+// CLEANING EFFICIENCY ANALYSIS (v13.12)
 // ============================================================
 // Compares cleaner hours against guest-nights per property, per week/month.
 // USE WITH CAUTION: Hours include breaks, transport, repairs — not just cleaning.
@@ -1898,7 +1898,7 @@ function _dateFromIsoWeek(year,week){
 }
 
 // ============================================================
-// MORE MENU (v13.11)
+// MORE MENU (v13.12)
 // ============================================================
 function toggleMoreMenu(e){
   if(e){e.stopPropagation();e.preventDefault()}
@@ -1925,7 +1925,7 @@ function closeMoreMenu(){
 }
 
 // ============================================================
-// FAKTURAGRUNNLAG / INVOICING (v13.11)
+// FAKTURAGRUNNLAG / INVOICING (v13.12)
 // ============================================================
 let invoicingInitialized=false;
 
@@ -2014,12 +2014,17 @@ function renderInvoicing(){
     const nights=_nightsInPeriod(b,fromDate,toDate);
     const cost=calcBookingCost(b,selectedProperty?selectedProperty.Title:'');
     const room=allRooms.find(r=>r.id===rid);
+    const effectiveCo=getEffectiveCompany(b);
+    const origCo=(b.Company||'').trim();
+    const hasBillingOverride=(b.Billing_Company||'').trim()&&(b.Billing_Company||'').trim()!==origCo;
     if(nights>0){
       items.push({
         booking:b,
         room:room?room.Title:'?',
         name:b.Person_Name||'',
-        company:b.Company||'',
+        company:effectiveCo,
+        guestCompany:origCo,
+        hasBillingOverride,
         nights,
         rate:cost.rate,
         total:nights*cost.rate,
@@ -2033,17 +2038,19 @@ function renderInvoicing(){
     // Skip if this company has a Percent-based fee (handled per-company below)
     // Skip if Continuation=true (mid-stay room change — only one utvask per logical stay)
     const isContinuation=(b.Continuation===true||b.Continuation==='true'||b.Continuation===1);
-    if(b.Status==='Completed'&&b.Check_Out&&!isContinuation&&!hasPercentFee(b.Company,selectedProperty?selectedProperty.Title:'')){
+    if(b.Status==='Completed'&&b.Check_Out&&!isContinuation&&!hasPercentFee(effectiveCo,selectedProperty?selectedProperty.Title:'')){
       const checkoutDate=new Date(b.Check_Out);checkoutDate.setHours(0,0,0,0);
       const feeEnabled=(b.Include_Checkout_Fee===undefined||b.Include_Checkout_Fee===null||b.Include_Checkout_Fee===true||b.Include_Checkout_Fee==='true'||b.Include_Checkout_Fee===1);
       if(feeEnabled&&checkoutDate>=fromDate&&checkoutDate<=toDate){
-        const fee=getCheckoutFee(b.Company,selectedProperty?selectedProperty.Title:'');
+        const fee=getCheckoutFee(effectiveCo,selectedProperty?selectedProperty.Title:'');
         if(fee>0){
           items.push({
             booking:b,
             room:room?room.Title:'?',
             name:b.Person_Name||'',
-            company:b.Company||'',
+            company:effectiveCo,
+            guestCompany:origCo,
+            hasBillingOverride,
             nights:1,
             rate:fee,
             total:fee,
@@ -2184,9 +2191,15 @@ function renderInvoicing(){
         const groupKey=k;
         const actualCompany=i.company||'(no company)';
         const companyMismatch=groupBy==='company'&&actualCompany!==groupKey;
-        const companyCell=companyMismatch
-          ?'<span style="color:var(--text-danger);font-weight:500" title="Mismatch with group">⚠ '+escapeHtml(actualCompany)+'</span>'
-          :escapeHtml(actualCompany);
+        let companyCell;
+        if(companyMismatch){
+          companyCell='<span style="color:var(--text-danger);font-weight:500" title="Mismatch with group">⚠ '+escapeHtml(actualCompany)+'</span>';
+        }else if(i.hasBillingOverride&&i.guestCompany){
+          // Show billing co with guest co in subtle text: "Konsulenthuset Y ← SalMar"
+          companyCell=escapeHtml(actualCompany)+' <span style="color:var(--text-tertiary);font-size:11px" title="Guest works for '+escapeHtml(i.guestCompany)+'">← '+escapeHtml(i.guestCompany)+'</span>';
+        }else{
+          companyCell=escapeHtml(actualCompany);
+        }
         let nameCell;
         if(isPercent)nameCell='<span style="color:var(--text-warning);font-weight:500">'+escapeHtml(i.name)+'</span>';
         else if(isCheckout)nameCell='<span style="color:var(--text-tertiary)">↳ '+guestMarkedName(i.name)+'</span>';
@@ -2274,18 +2287,22 @@ function exportInvoicingCSV(companyFilterName){
     if(!currentRoomIds.has(rid))return;
     if(!b.Check_In)return;
     if(b.Status==='Cancelled')return;
-    // Apply company filter
-    if(companyFilterName&&(b.Company||'')!==companyFilterName)return;
+    const effectiveCo=getEffectiveCompany(b);
+    // Apply company filter — filter against effective (billing) company
+    if(companyFilterName&&effectiveCo!==companyFilterName)return;
     const ci=new Date(b.Check_In);ci.setHours(0,0,0,0);
     const co=b.Check_Out?new Date(b.Check_Out):new Date();co.setHours(0,0,0,0);
     if(co<fromDate||ci>toDate)return;
     const nights=_nightsInPeriod(b,fromDate,toDate);
     const cost=calcBookingCost(b,selectedProperty?selectedProperty.Title:'');
     const room=allRooms.find(r=>r.id===rid);
+    const origCo=(b.Company||'').trim();
+    const billingCo=effectiveCo!==origCo?effectiveCo:'';
     if(nights>0){
       rows.push([
         b.Person_Name||'',
-        b.Company||'',
+        origCo,
+        billingCo,
         room?room.Title:'',
         formatDate(b.Check_In),
         b.Check_Out?formatDate(b.Check_Out):'Open',
@@ -2294,21 +2311,21 @@ function exportInvoicingCSV(companyFilterName){
         nights*(cost.rate||0),
         cost.source||''
       ]);
-      // Track for percent calculation
-      const c=(b.Company||'').trim();
-      if(c){companyNightSum[c]=(companyNightSum[c]||0)+nights*(cost.rate||0)}
+      // Track for percent calculation by effective company
+      if(effectiveCo){companyNightSum[effectiveCo]=(companyNightSum[effectiveCo]||0)+nights*(cost.rate||0)}
     }
     // Checkout fee line (skip if company has Percent fee, skip if Continuation)
     const isContinuationExp=(b.Continuation===true||b.Continuation==='true'||b.Continuation===1);
-    if(b.Status==='Completed'&&b.Check_Out&&!isContinuationExp&&!hasPercentFee(b.Company,propTitleForPercent)){
+    if(b.Status==='Completed'&&b.Check_Out&&!isContinuationExp&&!hasPercentFee(effectiveCo,propTitleForPercent)){
       const checkoutDate=new Date(b.Check_Out);checkoutDate.setHours(0,0,0,0);
       const feeEnabled=(b.Include_Checkout_Fee===undefined||b.Include_Checkout_Fee===null||b.Include_Checkout_Fee===true||b.Include_Checkout_Fee==='true'||b.Include_Checkout_Fee===1);
       if(feeEnabled&&checkoutDate>=fromDate&&checkoutDate<=toDate){
-        const fee=getCheckoutFee(b.Company,propTitleForPercent);
+        const fee=getCheckoutFee(effectiveCo,propTitleForPercent);
         if(fee>0){
           rows.push([
             b.Person_Name||'',
-            b.Company||'',
+            origCo,
+            billingCo,
             room?room.Title:'',
             'Checkout '+formatDate(b.Check_Out),
             '',
@@ -2321,15 +2338,16 @@ function exportInvoicingCSV(companyFilterName){
       }
     }
   });
-  // Percent-based fee lines
+  // Percent-based fee lines (by effective/billing company)
   Object.keys(companyNightSum).forEach(c=>{
     const pct=getPercentFeeRate(c,propTitleForPercent);
     if(pct>0){
       const feeAmount=Math.round(companyNightSum[c]*pct);
       rows.push([
         c+' (monthly fee)',
-        c,
-        '',
+        '',            // guest company
+        c,             // billing company
+        '',            // room
         periodStr,
         '',
         0,
@@ -2339,19 +2357,20 @@ function exportInvoicingCSV(companyFilterName){
       ]);
     }
   });
-  rows.sort((a,b)=>a[1].localeCompare(b[1],'nb')||a[0].localeCompare(b[0],'nb'));
-  // Totals
-  const totalN=rows.reduce((s,r)=>s+(typeof r[5]==='number'?r[5]:0),0);
-  const totalT=rows.reduce((s,r)=>s+(typeof r[7]==='number'?r[7]:0),0);
-  rows.push(['','','','','Total',totalN,'',totalT,'']);
-  const headers=['Guest','Company','Room','Check-in','Check-out','Nights','Rate','Total','Rate source'];
+  // Sort by billing company, then guest name
+  rows.sort((a,b)=>((a[2]||a[1])+'').localeCompare(((b[2]||b[1])+''),'nb')||(a[0]+'').localeCompare((b[0]+''),'nb'));
+  // Totals (nights col moved from [5] to [6], total col from [7] to [8])
+  const totalN=rows.reduce((s,r)=>s+(typeof r[6]==='number'?r[6]:0),0);
+  const totalT=rows.reduce((s,r)=>s+(typeof r[8]==='number'?r[8]:0),0);
+  rows.push(['','','','','','Total',totalN,'',totalT,'']);
+  const headers=['Guest','Company (guest)','Billing company','Room','Check-in','Check-out','Nights','Rate','Total','Rate source'];
   const propName=(selectedProperty?selectedProperty.Title:'').replace(/\s+/g,'_');
   const companyPart=companyFilterName?'_'+companyFilterName.replace(/\s+/g,'_'):'';
   downloadCSV('Fakturagrunnlag_'+propName+companyPart+'_'+periodStr,headers,rows);
 }
 
 // ============================================================
-// ADD GUEST FROM BOOKING (v13.11)
+// ADD GUEST FROM BOOKING (v13.12)
 // ============================================================
 function addBookingToGuests(bookingId){
   if(!can('edit_bookings')){alert('You do not have permission to add guests.');return}
@@ -2376,7 +2395,7 @@ function addBookingToGuests(bookingId){
 }
 
 // ============================================================
-// GUEST BOOKINGS HISTORY (v13.11)
+// GUEST BOOKINGS HISTORY (v13.12)
 // ============================================================
 function showGuestBookings(name){
   if(!name)return;
@@ -2448,7 +2467,7 @@ function showGuestBookings(name){
 }
 
 // ============================================================
-// HOURS IMPORT (v13.11)
+// HOURS IMPORT (v13.12)
 // ============================================================
 let importHoursData=[];
 
@@ -2598,7 +2617,7 @@ async function runImportHours(){
 }
 
 // ============================================================
-// CLEANING DIAGNOSTICS (v13.11)
+// CLEANING DIAGNOSTICS (v13.12)
 // ============================================================
 function showCleaningDiagnostics(){
   const today=new Date();today.setHours(0,0,0,0);
@@ -2710,7 +2729,7 @@ function showCleaningDiagnostics(){
 }
 
 // ============================================================
-// BATTERY REFRESH (v13.11)
+// BATTERY REFRESH (v13.12)
 // ============================================================
 const BATTERY_FILE_PATH='Batteristatus/RoomBattery.csv';
 

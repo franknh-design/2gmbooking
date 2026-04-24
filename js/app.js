@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v13.11 — app.js (Core)
+// 2GM Booking v13.12 — app.js (Core)
 // Auth, Graph API, Data, Rendering, Bookings
 // ============================================================
 
@@ -157,6 +157,14 @@ async function loadCurrentUser(){
 }
 
 function can(perm){return currentUser.permissions.includes(perm)}
+
+// Returns the effective billing company for a booking (falls back to Company if no Billing_Company set)
+function getEffectiveCompany(b){
+  if(!b)return '';
+  const bc=(b.Billing_Company||'').trim();
+  if(bc)return bc;
+  return (b.Company||'').trim();
+}
 
 // Check if a name exists in the Persons/Guests list (fuzzy match)
 function isKnownGuest(name){
@@ -514,7 +522,9 @@ function calcBookingNights(booking){
 
 function calcBookingCost(booking,propertyTitle){
   const nights=calcBookingNights(booking);
-  const rateInfo=getDailyRate(booking.Person_Name,booking.Company,propertyTitle,booking.RoomLookupId);
+  // Rate follows billing company (if set), otherwise guest's own company
+  const effectiveCompany=getEffectiveCompany(booking);
+  const rateInfo=getDailyRate(booking.Person_Name,effectiveCompany,propertyTitle,booking.RoomLookupId);
   return{nights,rate:rateInfo.rate,total:nights*rateInfo.rate,source:rateInfo.source,matchedName:rateInfo.matchedName||null,nearMiss:rateInfo.nearMiss||null};
 }
 
@@ -720,6 +730,7 @@ function showDetail(roomId){
         +'<tr><td>Cleaning</td><td>'+cl+'</td></tr>'
         +(booking.Notes?'<tr><td>Notes</td><td>'+booking.Notes+'</td></tr>':'')
         +((booking.Continuation===true||booking.Continuation==='true'||booking.Continuation===1)?'<tr><td>🔗 Continuation</td><td><span style="color:#7B61FF;font-weight:500">Yes — utvask skipped</span></td></tr>':'')
+        +((booking.Billing_Company||'').trim()&&(booking.Billing_Company||'').trim()!==(booking.Company||'').trim()?'<tr><td>💳 Billing</td><td><span style="color:var(--accent);font-weight:500">'+escapeHtml(booking.Billing_Company)+'</span> <span style="color:var(--text-tertiary);font-size:11px">(rate &amp; invoice follow billing company)</span></td></tr>':'')
         +'</table>'
         +(can('view_prices')?(function(){
           const cost=calcBookingCost(booking,propName);
@@ -881,6 +892,7 @@ function openNewBooking(preselectedRoomId){
   }
   populateRoomSelect(roomToSelect);
   document.getElementById('fName').value='';document.getElementById('fCompany').value='';
+  document.getElementById('fBillingCompany').value='';
   document.getElementById('fCheckIn').value=todayStr;document.getElementById('fCheckOut').value='';
   // Default to Active if check-in is today, Upcoming otherwise
   document.getElementById('fStatus').value='Active';
@@ -917,6 +929,7 @@ function openEditBooking(bookingId){
   document.getElementById('bookingSaveBtn').textContent='Save changes';
   populateRoomSelect(String(b.RoomLookupId));
   document.getElementById('fName').value=b.Person_Name||'';document.getElementById('fCompany').value=b.Company||'';
+  document.getElementById('fBillingCompany').value=b.Billing_Company||'';
   document.getElementById('fCheckIn').value=b.Check_In?toISODate(b.Check_In):'';
   document.getElementById('fCheckOut').value=b.Check_Out?toISODate(b.Check_Out):'';
   document.getElementById('fStatus').value=b.Status||'Upcoming';document.getElementById('fNotes').value=b.Notes||'';
@@ -1051,6 +1064,7 @@ async function saveBooking(){
   const roomId=document.getElementById('fRoom').value;
   const name=document.getElementById('fName').value.trim();
   const company=document.getElementById('fCompany').value.trim();
+  const billingCompany=document.getElementById('fBillingCompany').value.trim();
   const checkIn=document.getElementById('fCheckIn').value;
   const checkOut=document.getElementById('fCheckOut').value;
   const status=document.getElementById('fStatus').value;
@@ -1079,7 +1093,7 @@ async function saveBooking(){
   // Property_Name: find from room's property (works even in "All properties" mode)
   const roomProp=room?properties.find(pr=>String(pr.id)===String(room.PropertyLookupId)):null;
   const propNameForSave=roomProp?roomProp.Title:(selectedProperty?selectedProperty.Title:'');
-  const fields={Person_Name:name,Company:company,Check_In:checkIn+'T15:00:00Z',Status:status,Door_Tag_Status:'Needs-print',Cleaning_Status:'None',Property_Name:propNameForSave,Floor:room?room.Floor:1,Notes:notes||null};
+  const fields={Person_Name:name,Company:company,Billing_Company:billingCompany||null,Check_In:checkIn+'T15:00:00Z',Status:status,Door_Tag_Status:'Needs-print',Cleaning_Status:'None',Property_Name:propNameForSave,Floor:room?room.Floor:1,Notes:notes||null};
   fields.Include_Checkout_Fee=document.getElementById('fIncludeCheckoutFee').checked;
   fields.Continuation=document.getElementById('fContinuation').checked;
   if(checkOut)fields.Check_Out=checkOut+'T12:00:00Z';else fields.Check_Out=null;
@@ -1272,7 +1286,7 @@ msalInstance.initialize().then(()=>{
 });
 
 // ============================================================
-// AUTO-REFRESH (v13.11)
+// AUTO-REFRESH (v13.12)
 // ============================================================
 
 // Build a fingerprint that tells us if data has changed without full reload
