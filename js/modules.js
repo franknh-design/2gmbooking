@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v12.16 — modules.js
+// 2GM Booking v12.17 — modules.js
 // Hours, Archive, Import/Export, Admin (checkbox permissions)
 // ============================================================
 
@@ -45,7 +45,7 @@ function renderIncoming(){
     if(daysUntil<=3)badge='<span class="pill danger">'+daysUntil+'d</span>';
     else if(daysUntil<=7)badge='<span class="pill warning">'+daysUntil+'d</span>';
     return'<tr onclick="showDetail(\''+(room?room.id:'')+'\')">'
-      +'<td style="font-weight:500">'+roomTitle+'</td><td>'+b.Person_Name+'</td><td class="muted">'+(b.Company||'')+'</td>'
+      +'<td style="font-weight:500">'+roomTitle+'</td><td>'+guestMarkedName(b.Person_Name||'')+'</td><td class="muted">'+(b.Company||'')+'</td>'
       +'<td>'+formatDate(b.Check_In)+' '+badge+'</td><td>'+(b.Check_Out?formatDate(b.Check_Out):'Open-ended')+'</td>'
       +'<td><span class="pill" style="background:var(--bg-warning);color:var(--text-warning)">Upcoming</span></td>'
       +'<td><button onclick="event.stopPropagation();checkInFromUpcoming(\''+b.id+'\')" style="padding:3px 10px;border:1px solid var(--accent);border-radius:4px;background:var(--accent);color:#fff;cursor:pointer;font-size:11px;font-family:inherit;margin-right:4px" title="Check in now">Check in</button>'
@@ -105,7 +105,7 @@ function renderArchive(){
   if(!pageItems.length){body.innerHTML='<tr><td colspan="7" class="loading">No bookings found</td></tr>';renderArchivePagination(0,1);return}
   body.innerHTML=pageItems.map(b=>{
     const sc={Completed:'background:var(--bg-secondary);color:var(--text-secondary)',Cancelled:'background:var(--bg-danger);color:var(--text-danger)',Active:'background:var(--bg-success);color:var(--text-success)',Upcoming:'background:var(--bg-warning);color:var(--text-warning)'}[b.Status]||'';
-    return'<tr><td style="font-weight:500">'+getRoomTitle(b)+'</td><td>'+(b.Person_Name||'—')+'</td><td class="muted">'+(b.Company||'')+'</td><td>'+formatDate(b.Check_In)+'</td><td>'+(b.Check_Out?formatDate(b.Check_Out):'Open-ended')+'</td><td><span class="pill" style="'+sc+'">'+b.Status+'</span></td>'
+    return'<tr><td style="font-weight:500">'+getRoomTitle(b)+'</td><td>'+(b.Person_Name?guestMarkedName(b.Person_Name):'—')+'</td><td class="muted">'+(b.Company||'')+'</td><td>'+formatDate(b.Check_In)+'</td><td>'+(b.Check_Out?formatDate(b.Check_Out):'Open-ended')+'</td><td><span class="pill" style="'+sc+'">'+b.Status+'</span></td>'
       +'<td>'+(b.Status==='Completed'||b.Status==='Cancelled'?'<button onclick="reopenBooking(\''+b.id+'\')" style="padding:3px 10px;border:1px solid var(--accent);border-radius:4px;background:var(--bg-success);color:var(--text-success);cursor:pointer;font-size:11px;font-family:inherit">Reopen</button>':'')+'</td></tr>';
   }).join('');
   renderArchivePagination(archived.length,totalPages);
@@ -899,7 +899,7 @@ async function deleteRate(id){
 }
 
 // ============================================================
-// PERSONS / CUSTOMERS (v12.16)
+// PERSONS / CUSTOMERS (v12.17)
 // ============================================================
 let editingPersonId=null;
 
@@ -1019,7 +1019,70 @@ function openPersonEdit(personId){
   document.getElementById('pCompanyAddress').value=p?(p.Company_Address||''):'';
   document.getElementById('pNotes').value=p?(p.Notes||''):'';
   document.getElementById('pDeleteRow').style.display=p?'':'none';
-  document.getElementById('personModal').classList.add('open');
+  // Render booking history for this person
+  renderPersonHistory(p);
+  const modal=document.getElementById('personModal');
+  modal.classList.add('open');
+  const mc=modal.querySelector('.modal');if(mc)mc.scrollTop=0;
+  modal.scrollTop=0;
+}
+
+function renderPersonHistory(p){
+  const section=document.getElementById('pHistorySection');
+  const body=document.getElementById('pHistoryBody');
+  const summary=document.getElementById('pHistorySummary');
+  if(!p||!section){if(section)section.style.display='none';return}
+  const name=_personName(p);
+  if(!name){section.style.display='none';return}
+  // Fuzzy-match all bookings for this person
+  const lower=name.toLowerCase().trim();
+  const words=lower.split(/[\s,]+/).filter(w=>w.length>1);
+  const matching=allBookings.filter(b=>{
+    const bn=(b.Person_Name||'').toLowerCase().trim();
+    if(bn===lower)return true;
+    if(words.length<2)return false;
+    const bwords=bn.split(/[\s,]+/).filter(w=>w.length>1);
+    if(bwords.length<2)return false;
+    return words.every(w=>bn.indexOf(w)>=0)||bwords.every(w=>lower.indexOf(w)>=0);
+  }).sort((a,b)=>new Date(b.Check_In||0)-new Date(a.Check_In||0));
+  if(!matching.length){section.style.display='none';return}
+  section.style.display='';
+  let totalNights=0,totalRevenue=0;
+  matching.forEach(b=>{
+    if(b.Status==='Cancelled')return;
+    if(!b.Check_In)return;
+    const ci=new Date(b.Check_In);const co=b.Check_Out?new Date(b.Check_Out):new Date();
+    const n=Math.max(0,Math.round((co-ci)/864e5));
+    totalNights+=n;
+    const cost=calcBookingCost(b,b.Property_Name||'');
+    totalRevenue+=n*(cost.rate||0);
+  });
+  summary.textContent=matching.length+' booking'+(matching.length!==1?'s':'')+' · '+totalNights+' nights · '+totalRevenue.toLocaleString('nb-NO')+' kr';
+  let html='<table style="width:100%;font-size:11px"><thead><tr style="background:var(--bg-tertiary)">'
+    +'<th style="padding:5px 8px;text-align:left">Room</th>'
+    +'<th style="padding:5px 8px;text-align:left">Property</th>'
+    +'<th style="padding:5px 8px;text-align:left">Period</th>'
+    +'<th style="padding:5px 8px;text-align:right">Nights</th>'
+    +'<th style="padding:5px 8px;text-align:left">Status</th>'
+    +'</tr></thead><tbody>';
+  matching.forEach(b=>{
+    const room=allRooms.find(r=>r.id===String(b.RoomLookupId));
+    const roomTitle=room?room.Title:'?';
+    const ci=b.Check_In?new Date(b.Check_In):null;
+    const co=b.Check_Out?new Date(b.Check_Out):(b.Status==='Active'?new Date():null);
+    const nights=ci&&co?Math.max(0,Math.round((co-ci)/864e5)):0;
+    const statusColor={Completed:'background:var(--bg-secondary);color:var(--text-secondary)',Cancelled:'background:var(--bg-danger);color:var(--text-danger)',Active:'background:var(--bg-success);color:var(--text-success)',Upcoming:'background:var(--bg-warning);color:var(--text-warning)'}[b.Status]||'';
+    const period=(ci?formatDate(b.Check_In):'—')+' → '+(b.Check_Out?formatDate(b.Check_Out):(b.Status==='Active'?'Open':'—'));
+    html+='<tr onclick="document.getElementById(\'personModal\').classList.remove(\'open\');openEditBooking(\''+b.id+'\')" style="border-top:.5px solid var(--border-tertiary);cursor:pointer" onmouseover="this.style.background=\'var(--bg-secondary)\'" onmouseout="this.style.background=\'\'">'
+      +'<td style="padding:5px 8px;font-weight:500">'+escapeHtml(roomTitle)+'</td>'
+      +'<td style="padding:5px 8px">'+escapeHtml(b.Property_Name||'')+'</td>'
+      +'<td style="padding:5px 8px">'+period+'</td>'
+      +'<td style="padding:5px 8px;text-align:right">'+nights+'</td>'
+      +'<td style="padding:5px 8px"><span class="pill" style="'+statusColor+';font-size:10px">'+b.Status+'</span></td>'
+      +'</tr>';
+  });
+  html+='</tbody></table>';
+  body.innerHTML=html;
 }
 
 async function savePerson(){
@@ -1119,7 +1182,7 @@ function onPersonNameInput(){
 }
 
 // ============================================================
-// CHARTS (v12.16) — pure SVG, no dependencies
+// CHARTS (v12.17) — pure SVG, no dependencies
 // ============================================================
 
 // Reusable bar chart: data = [{label, value, subtitle?}]
@@ -1428,7 +1491,7 @@ function renderHoursCharts(filtered){
 }
 
 // ============================================================
-// CLEANING EFFICIENCY ANALYSIS (v12.16)
+// CLEANING EFFICIENCY ANALYSIS (v12.17)
 // ============================================================
 // Compares cleaner hours against guest-nights per property, per week/month.
 // USE WITH CAUTION: Hours include breaks, transport, repairs — not just cleaning.
@@ -1781,7 +1844,7 @@ function _dateFromIsoWeek(year,week){
 }
 
 // ============================================================
-// MORE MENU (v12.16)
+// MORE MENU (v12.17)
 // ============================================================
 function toggleMoreMenu(e){
   if(e){e.stopPropagation();e.preventDefault()}
@@ -1808,7 +1871,7 @@ function closeMoreMenu(){
 }
 
 // ============================================================
-// FAKTURAGRUNNLAG / INVOICING (v12.16)
+// FAKTURAGRUNNLAG / INVOICING (v12.17)
 // ============================================================
 let invoicingInitialized=false;
 
@@ -1968,7 +2031,7 @@ function renderInvoicing(){
           ?'<span style="color:var(--text-danger);font-weight:500" title="Mismatch with group">⚠ '+escapeHtml(actualCompany)+'</span>'
           :escapeHtml(actualCompany);
         html+='<tr onclick="openEditBooking(\''+i.booking.id+'\')" style="border-top:.5px solid var(--border-tertiary);cursor:pointer" onmouseover="this.style.background=\'var(--bg-secondary)\'" onmouseout="this.style.background=\'\'">'
-          +'<td style="padding:6px 10px">'+escapeHtml(i.name)+'</td>'
+          +'<td style="padding:6px 10px">'+guestMarkedName(i.name)+'</td>'
           +'<td style="padding:6px 10px">'+companyCell+'</td>'
           +'<td style="padding:6px 10px;font-weight:500">'+escapeHtml(i.room)+'</td>'
           +'<td style="padding:6px 10px">'+ci+' → '+co+'</td>'
@@ -2004,7 +2067,7 @@ function _renderInvoicingFlat(items){
     const rateCell=i.rate?i.rate.toLocaleString('nb-NO')+' kr':'<span style="color:var(--text-danger)">— missing</span>';
     const totalCell=i.total?i.total.toLocaleString('nb-NO')+' kr':'—';
     html+='<tr onclick="openEditBooking(\''+i.booking.id+'\')" style="border-top:.5px solid var(--border-tertiary);cursor:pointer" onmouseover="this.style.background=\'var(--bg-secondary)\'" onmouseout="this.style.background=\'\'">'
-      +'<td style="padding:6px 10px">'+escapeHtml(i.name)+'</td>'
+      +'<td style="padding:6px 10px">'+guestMarkedName(i.name)+'</td>'
       +'<td style="padding:6px 10px">'+escapeHtml(i.company)+'</td>'
       +'<td style="padding:6px 10px;font-weight:500">'+escapeHtml(i.room)+'</td>'
       +'<td style="padding:6px 10px">'+ci+' → '+co+'</td>'
@@ -2071,7 +2134,7 @@ function exportInvoicingCSV(){
 }
 
 // ============================================================
-// ADD GUEST FROM BOOKING (v12.16)
+// ADD GUEST FROM BOOKING (v12.17)
 // ============================================================
 function addBookingToGuests(bookingId){
   const b=allBookings.find(x=>x.id===bookingId);
@@ -2095,7 +2158,7 @@ function addBookingToGuests(bookingId){
 }
 
 // ============================================================
-// GUEST BOOKINGS HISTORY (v12.16)
+// GUEST BOOKINGS HISTORY (v12.17)
 // ============================================================
 function showGuestBookings(name){
   if(!name)return;

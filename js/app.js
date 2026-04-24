@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v12.16 — app.js (Core)
+// 2GM Booking v12.17 — app.js (Core)
 // Auth, Graph API, Data, Rendering, Bookings
 // ============================================================
 
@@ -105,6 +105,30 @@ async function loadCurrentUser(){
 }
 
 function can(perm){return currentUser.permissions.includes(perm)}
+
+// Check if a name exists in the Persons/Guests list (fuzzy match)
+function isKnownGuest(name){
+  if(!name||!allPersons||!allPersons.length)return false;
+  const lower=name.toLowerCase().trim();
+  if(!lower)return false;
+  const words=lower.split(/[\s,]+/).filter(w=>w.length>1);
+  return allPersons.some(p=>{
+    const pn=(p.Name||p.Title||'').toLowerCase().trim();
+    if(!pn)return false;
+    if(pn===lower)return true;
+    if(words.length<2)return false;
+    const pwords=pn.split(/[\s,]+/).filter(w=>w.length>1);
+    if(pwords.length<2)return false;
+    return words.every(w=>pn.indexOf(w)>=0)||pwords.every(w=>lower.indexOf(w)>=0);
+  });
+}
+
+// Wrap a name in known-guest indicator if applicable
+function guestMarkedName(name){
+  if(!name)return '';
+  const escaped=name.replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));
+  return isKnownGuest(name)?'<span class="known-guest">'+escaped+'</span>':escaped;
+}
 
 // Update which nav button is highlighted as active
 function updateNavActiveState(){
@@ -381,7 +405,7 @@ function renderRow(room,booking){
   return'<tr onclick="showDetail(\''+room.id+'\')">'
     +'<td>'+doorTagBtn(booking)+'</td><td>'+cleanBtn(booking)+'</td>'
     +'<td style="font-variant-numeric:tabular-nums;font-weight:500">'+room.Title+'</td>'
-    +'<td>'+(n||'<span class="empty-text">—</span>')+(booking&&booking.Notes?'<span class="note-dot"></span>':'')+'</td>'
+    +'<td>'+(n?guestMarkedName(n):'<span class="empty-text">—</span>')+(booking&&booking.Notes?'<span class="note-dot"></span>':'')+'</td>'
     +'<td class="muted">'+c+'</td>'
     +'<td style="text-align:right;font-variant-numeric:tabular-nums">'+batCell(room.Door_Battery_Level)+'</td>'
     +'<td style="font-variant-numeric:tabular-nums">'+datesCell(booking)+'</td></tr>';
@@ -393,7 +417,7 @@ function renderRowWithProperty(room,booking,propName){
     +'<td>'+cleanBtn(booking)+'</td>'
     +'<td style="font-variant-numeric:tabular-nums;font-weight:500">'+room.Title+'</td>'
     +'<td class="muted" style="font-size:11px">'+propName+'</td>'
-    +'<td>'+(n||'<span class="empty-text">—</span>')+'</td>'
+    +'<td>'+(n?guestMarkedName(n):'<span class="empty-text">—</span>')+'</td>'
     +'<td>'+washNext+'</td>'
     +'<td style="font-variant-numeric:tabular-nums">'+(booking?datesCell(booking):'')+'</td></tr>';
 }
