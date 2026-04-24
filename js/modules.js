@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v13.3 — modules.js
+// 2GM Booking v13.4 — modules.js
 // Hours, Archive, Import/Export, Admin (checkbox permissions)
 // ============================================================
 
@@ -927,7 +927,7 @@ async function deleteRate(id){
 }
 
 // ============================================================
-// PERSONS / CUSTOMERS (v13.3)
+// PERSONS / CUSTOMERS (v13.4)
 // ============================================================
 let editingPersonId=null;
 
@@ -1210,7 +1210,7 @@ function onPersonNameInput(){
 }
 
 // ============================================================
-// CHARTS (v13.3) — pure SVG, no dependencies
+// CHARTS (v13.4) — pure SVG, no dependencies
 // ============================================================
 
 // Reusable bar chart: data = [{label, value, subtitle?}]
@@ -1519,7 +1519,7 @@ function renderHoursCharts(filtered){
 }
 
 // ============================================================
-// CLEANING EFFICIENCY ANALYSIS (v13.3)
+// CLEANING EFFICIENCY ANALYSIS (v13.4)
 // ============================================================
 // Compares cleaner hours against guest-nights per property, per week/month.
 // USE WITH CAUTION: Hours include breaks, transport, repairs — not just cleaning.
@@ -1872,7 +1872,7 @@ function _dateFromIsoWeek(year,week){
 }
 
 // ============================================================
-// MORE MENU (v13.3)
+// MORE MENU (v13.4)
 // ============================================================
 function toggleMoreMenu(e){
   if(e){e.stopPropagation();e.preventDefault()}
@@ -1899,7 +1899,7 @@ function closeMoreMenu(){
 }
 
 // ============================================================
-// FAKTURAGRUNNLAG / INVOICING (v13.3)
+// FAKTURAGRUNNLAG / INVOICING (v13.4)
 // ============================================================
 let invoicingInitialized=false;
 
@@ -2223,7 +2223,7 @@ function exportInvoicingCSV(){
 }
 
 // ============================================================
-// ADD GUEST FROM BOOKING (v13.3)
+// ADD GUEST FROM BOOKING (v13.4)
 // ============================================================
 function addBookingToGuests(bookingId){
   const b=allBookings.find(x=>x.id===bookingId);
@@ -2247,7 +2247,7 @@ function addBookingToGuests(bookingId){
 }
 
 // ============================================================
-// GUEST BOOKINGS HISTORY (v13.3)
+// GUEST BOOKINGS HISTORY (v13.4)
 // ============================================================
 function showGuestBookings(name){
   if(!name)return;
@@ -2319,7 +2319,7 @@ function showGuestBookings(name){
 }
 
 // ============================================================
-// HOURS IMPORT (v13.3)
+// HOURS IMPORT (v13.4)
 // ============================================================
 let importHoursData=[];
 
@@ -2469,7 +2469,7 @@ async function runImportHours(){
 }
 
 // ============================================================
-// CLEANING DIAGNOSTICS (v13.3)
+// CLEANING DIAGNOSTICS (v13.4)
 // ============================================================
 function showCleaningDiagnostics(){
   const today=new Date();today.setHours(0,0,0,0);
@@ -2578,4 +2578,83 @@ function showCleaningDiagnostics(){
 
   document.getElementById('diagBody').innerHTML=html;
   document.getElementById('diagModal').classList.add('open');
+}
+
+// ============================================================
+// BATTERY REFRESH (v13.4)
+// ============================================================
+const BATTERY_FILE_PATH='Batteristatus/RoomBattery.csv';
+
+async function refreshBatteryStatus(){
+  const btn=document.querySelector('[data-battery-refresh-btn]');
+  if(btn){btn.disabled=true;btn.textContent='⏳ Loading CSV...'}
+  try{
+    // 1. Fetch CSV content
+    const csvText=await fetchSiteFileText(BATTERY_FILE_PATH);
+    if(!csvText||!csvText.trim())throw new Error('CSV file is empty');
+
+    // 2. Parse CSV — accept comma, semicolon, or tab as separator
+    const lines=csvText.split(/\r?\n/).filter(l=>l.trim());
+    if(lines.length<2)throw new Error('CSV has no data rows (only header or blank)');
+    const firstLine=lines[0];
+    // Detect separator: priority semicolon, then tab, then comma
+    let sep=';';
+    if(firstLine.indexOf(';')>=0)sep=';';
+    else if(firstLine.indexOf('\t')>=0)sep='\t';
+    else if(firstLine.indexOf(',')>=0)sep=',';
+    else throw new Error('Could not detect CSV separator');
+
+    const headers=lines[0].split(sep).map(h=>h.trim().toLowerCase().replace(/['"]/g,''));
+    // Find room column (RomNr/Room/Rom) and battery column (Verdi/Battery/%)
+    const colRoom=headers.findIndex(h=>h==='romnr'||h==='room'||h==='rom'||h==='roomnr');
+    const colBat=headers.findIndex(h=>h==='verdi'||h==='battery'||h==='battery_level'||h==='%'||h==='batteri');
+    if(colRoom===-1||colBat===-1){
+      throw new Error('CSV must have columns RomNr and Verdi (or Room/Battery). Found: '+headers.join(', '));
+    }
+
+    // 3. Parse each row into {roomTitle, batteryPct}
+    const entries=[];
+    for(let i=1;i<lines.length;i++){
+      const cols=lines[i].split(sep).map(c=>c.trim().replace(/^['"]|['"]$/g,''));
+      const roomTitle=cols[colRoom]||'';
+      let batRaw=cols[colBat]||'';
+      // Handle Norwegian decimal: "92,5" → 92.5, but we expect integer percent
+      batRaw=batRaw.replace(',','.');
+      const bat=parseFloat(batRaw);
+      if(!roomTitle||isNaN(bat))continue;
+      entries.push({roomTitle,bat:Math.round(bat)});
+    }
+    if(!entries.length)throw new Error('No valid rows parsed from CSV');
+
+    // 4. Match against allRooms (by Title, exact string match — trimmed)
+    if(btn)btn.textContent='⏳ Updating rooms ('+entries.length+')...';
+    let updated=0,skipped=0,unchanged=0;
+    const notFound=[];
+    for(let i=0;i<entries.length;i++){
+      const e=entries[i];
+      const room=allRooms.find(r=>(r.Title||'').toString().trim()===e.roomTitle.trim());
+      if(!room){notFound.push(e.roomTitle);skipped++;continue}
+      // Skip if value hasn't changed
+      if(Number(room.Door_Battery_Level)===e.bat){unchanged++;continue}
+      try{
+        await updateListItem('Rooms',room.id,{Door_Battery_Level:e.bat});
+        room.Door_Battery_Level=e.bat;
+        updated++;
+      }catch(err){console.error('Failed to update room '+e.roomTitle+':',err);skipped++}
+      // Throttle every 10 to avoid rate limiting
+      if(i%10===9)await new Promise(res=>setTimeout(res,300));
+    }
+
+    // 5. Show summary + re-render
+    let summary='✓ Battery status updated: '+updated+' changed, '+unchanged+' unchanged';
+    if(skipped)summary+=', '+skipped+' skipped';
+    if(notFound.length)summary+='\n\nRooms not found in system: '+notFound.slice(0,20).join(', ')+(notFound.length>20?' (and '+(notFound.length-20)+' more)':'');
+    alert(summary);
+    if(typeof renderFloors==='function')renderFloors();
+    if(typeof updateStats==='function')updateStats();
+  }catch(e){
+    alert('Battery refresh failed:\n\n'+e.message+'\n\nExpected file location: Default document library > '+BATTERY_FILE_PATH);
+  }finally{
+    if(btn){btn.disabled=false;btn.textContent='🔋 Refresh battery'}
+  }
 }

@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v13.3 — app.js (Core)
+// 2GM Booking v13.4 — app.js (Core)
 // Auth, Graph API, Data, Rendering, Bookings
 // ============================================================
 
@@ -69,6 +69,26 @@ async function graphDelete(ep){await getToken();const r=await fetch('https://gra
 async function getSiteId(){if(siteId)return siteId;const r=await graphGet('/sites/'+SITE_HOST+':'+SITE_PATH);siteId=r.id;return siteId}
 async function getListId(name){if(LIST_IDS[name])return LIST_IDS[name];throw new Error('List not found: '+name)}
 async function getListItems(listName){const s=await getSiteId();const lid=await getListId(listName);let all=[];let url='/sites/'+s+'/lists/'+lid+'/items?$expand=fields&$top=500';while(url){const r=await graphGet(url);all=all.concat(r.value.map(i=>({id:i.id,...i.fields})));url=r['@odata.nextLink']?r['@odata.nextLink'].replace('https://graph.microsoft.com/v1.0',''):null}return all}
+
+// Fetch a text file from the SharePoint site's default document library.
+// pathInLibrary: e.g. 'Batteristatus/RoomBattery.csv' (no leading slash)
+async function fetchSiteFileText(pathInLibrary){
+  const s=await getSiteId();
+  await getToken();
+  // Use the /drive/root:/path: endpoint to locate the file item
+  const itemUrl='https://graph.microsoft.com/v1.0/sites/'+s+'/drive/root:/'+encodeURI(pathInLibrary);
+  const itemResp=await fetch(itemUrl,{headers:{Authorization:'Bearer '+accessToken}});
+  if(!itemResp.ok){
+    if(itemResp.status===404)throw new Error('File not found at '+pathInLibrary+'. Check that it exists in the default document library.');
+    throw new Error('Could not locate file: '+itemResp.status);
+  }
+  const item=await itemResp.json();
+  const downloadUrl=item['@microsoft.graph.downloadUrl'];
+  if(!downloadUrl)throw new Error('No download URL for file');
+  const contentResp=await fetch(downloadUrl);
+  if(!contentResp.ok)throw new Error('Could not download file: '+contentResp.status);
+  return contentResp.text();
+}
 async function createListItem(listName,fields){const s=await getSiteId();const lid=await getListId(listName);return graphPost('/sites/'+s+'/lists/'+lid+'/items',{fields})}
 async function updateListItem(listName,itemId,fields){const s=await getSiteId();const lid=await getListId(listName);return graphPatch('/sites/'+s+'/lists/'+lid+'/items/'+itemId+'/fields',fields)}
 
