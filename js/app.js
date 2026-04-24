@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v13.16 — app.js (Core)
+// 2GM Booking v13.16.1 — app.js (Core)
 // Auth, Graph API, Data, Rendering, Bookings
 // ============================================================
 
@@ -1367,7 +1367,7 @@ msalInstance.initialize().then(()=>{
 });
 
 // ============================================================
-// AUTO-REFRESH (v13.16)
+// AUTO-REFRESH (v13.16.1)
 // ============================================================
 
 // Build a fingerprint that tells us if data has changed without full reload
@@ -1445,4 +1445,60 @@ function showMyPermissions(){
     +'\n\nCan edit bookings/guests: '+(hasEdit?'YES':'NO')
     +(hasEdit?'\n\nIf this user should be read-only, their Permissions field in the Users list needs to be corrected. It should only contain "view_bookings".':'');
   alert(msg);
+}
+
+// Debug helper for full-tenant calculation. Right-click "More" button to trigger.
+function showFullTenantDebug(){
+  if(!selectedProperty){alert('Please select a specific property first (not All).');return}
+  const p=selectedProperty;
+  const lines=[];
+  lines.push('=== FULL-TENANT DEBUG: '+p.Title+' ===\n');
+  lines.push('Property ID: '+p.id);
+  lines.push('FullTenant_Company: "'+(p.FullTenant_Company||'')+'" (type: '+typeof p.FullTenant_Company+')');
+  lines.push('FullTenant_RatePerRoom: '+p.FullTenant_RatePerRoom+' (type: '+typeof p.FullTenant_RatePerRoom+')');
+  lines.push('FullTenant_StartDate: '+p.FullTenant_StartDate);
+  lines.push('FullTenant_EndDate: '+(p.FullTenant_EndDate||'(empty = no end)'));
+  lines.push('');
+  // Count rooms matching this property
+  const matching=allRooms.filter(r=>String(r.PropertyLookupId)===String(p.id));
+  lines.push('Rooms with PropertyLookupId === "'+p.id+'": '+matching.length);
+  // Look for Rigg 44 rooms by name pattern
+  const allByPattern=allRooms.filter(r=>{
+    const t=(r.Title||'').toString();
+    return t.startsWith('70')||t.startsWith('80'); // adjust if room numbering differs
+  });
+  lines.push('Rooms with Title starting 70x or 80x: '+allByPattern.length);
+  // Check for any rooms where PropertyLookupId could be a problem
+  const allRoomsForReference=allRooms.length;
+  lines.push('TOTAL rooms in system: '+allRoomsForReference);
+  lines.push('');
+  // Show a few rooms with their PropertyLookupId
+  lines.push('Sample of rooms (first 5):');
+  allRooms.slice(0,5).forEach(r=>{
+    lines.push('  Room "'+r.Title+'" → PropertyLookupId="'+r.PropertyLookupId+'" (type: '+typeof r.PropertyLookupId+')');
+  });
+  lines.push('');
+  // Test the actual computation for current month
+  const now=new Date();
+  const fromDate=new Date(now.getFullYear(),now.getMonth(),1);
+  const toDate=new Date(now.getFullYear(),now.getMonth()+1,0,23,59,59);
+  lines.push('Test period: '+formatDate(fromDate)+' to '+formatDate(toDate));
+  const result=computeFullTenantForPeriod(p,fromDate,toDate);
+  if(!result){
+    lines.push('\n⚠ computeFullTenantForPeriod returned NULL');
+    lines.push('Possible reasons:');
+    lines.push('- Company is empty');
+    lines.push('- Rate is 0 or invalid');
+    lines.push('- Period is outside agreement dates');
+    lines.push('- 0 rooms matched');
+  }else{
+    lines.push('\nResult:');
+    lines.push('  days: '+result.days);
+    lines.push('  rooms: '+result.rooms);
+    lines.push('  rate: '+result.rate);
+    lines.push('  TOTAL: '+result.total+' kr');
+    lines.push('  Expected: '+(result.rooms*result.rate*result.days)+' kr');
+  }
+  console.log(lines.join('\n'));
+  alert(lines.join('\n'));
 }
