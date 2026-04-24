@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v13.15 — modules.js
+// 2GM Booking v13.16 — modules.js
 // Hours, Archive, Import/Export, Admin (checkbox permissions)
 // ============================================================
 
@@ -943,7 +943,7 @@ async function deleteRate(id){
 }
 
 // ============================================================
-// PERSONS / CUSTOMERS (v13.15)
+// PERSONS / CUSTOMERS (v13.16)
 // ============================================================
 let editingPersonId=null;
 
@@ -1240,7 +1240,7 @@ function onPersonNameInput(){
 }
 
 // ============================================================
-// CHARTS (v13.15) — pure SVG, no dependencies
+// CHARTS (v13.16) — pure SVG, no dependencies
 // ============================================================
 
 // Reusable bar chart: data = [{label, value, subtitle?}]
@@ -1549,7 +1549,7 @@ function renderHoursCharts(filtered){
 }
 
 // ============================================================
-// CLEANING EFFICIENCY ANALYSIS (v13.15)
+// CLEANING EFFICIENCY ANALYSIS (v13.16)
 // ============================================================
 // Compares cleaner hours against guest-nights per property, per week/month.
 // USE WITH CAUTION: Hours include breaks, transport, repairs — not just cleaning.
@@ -1902,7 +1902,7 @@ function _dateFromIsoWeek(year,week){
 }
 
 // ============================================================
-// MORE MENU (v13.15)
+// MORE MENU (v13.16)
 // ============================================================
 function toggleMoreMenu(e){
   if(e){e.stopPropagation();e.preventDefault()}
@@ -1929,7 +1929,7 @@ function closeMoreMenu(){
 }
 
 // ============================================================
-// FAKTURAGRUNNLAG / INVOICING (v13.15)
+// FAKTURAGRUNNLAG / INVOICING (v13.16)
 // ============================================================
 let invoicingInitialized=false;
 
@@ -2202,7 +2202,8 @@ function renderInvoicing(){
       const gBookings=new Set(gNightsItems.map(i=>i.booking.id)).size;
       const feeSuffix=(gFees.length?' · '+gFees.length+' utvask':'')+(gPercent.length?' · % fee':'');
       const exportBtn=(groupBy==='company'&&k!=='(no company)')
-        ?'<button onclick="event.stopPropagation();exportInvoicingCSV(\''+k.replace(/'/g,"\\'")+'\')" style="padding:3px 10px;border:1px solid var(--accent);border-radius:4px;background:var(--bg-success);color:var(--text-success);cursor:pointer;font-size:11px;font-family:inherit;margin-left:10px" title="Export '+escapeHtml(k)+'">↓ Export</button>'
+        ?'<button onclick="event.stopPropagation();exportInvoicingCSV(\''+k.replace(/'/g,"\\'")+'\')" style="padding:3px 10px;border:1px solid var(--accent);border-radius:4px;background:var(--bg-success);color:var(--text-success);cursor:pointer;font-size:11px;font-family:inherit;margin-left:10px" title="Export CSV for '+escapeHtml(k)+'">↓ CSV</button>'
+         +'<button onclick="event.stopPropagation();exportInvoicingPDF(\''+k.replace(/'/g,"\\'")+'\')" style="padding:3px 10px;border:1px solid #1D9E75;border-radius:4px;background:rgba(29,158,117,.1);color:#1D9E75;cursor:pointer;font-size:11px;font-family:inherit;margin-left:4px" title="Export PDF for '+escapeHtml(k)+'">📄 PDF</button>'
         :'';
       html+='<div style="padding:10px 14px;background:var(--bg-secondary);border-bottom:1px solid var(--border-tertiary);display:flex;justify-content:space-between;align-items:center">'
         +'<div><strong>'+escapeHtml(k)+'</strong> <span class="muted" style="font-size:11px;margin-left:8px">'+gBookings+' booking'+(gBookings!==1?'s':'')+feeSuffix+'</span></div>'
@@ -2454,7 +2455,7 @@ function exportInvoicingCSV(companyFilterName){
 }
 
 // ============================================================
-// ADD GUEST FROM BOOKING (v13.15)
+// ADD GUEST FROM BOOKING (v13.16)
 // ============================================================
 function addBookingToGuests(bookingId){
   if(!can('edit_bookings')){alert('You do not have permission to add guests.');return}
@@ -2479,7 +2480,7 @@ function addBookingToGuests(bookingId){
 }
 
 // ============================================================
-// GUEST BOOKINGS HISTORY (v13.15)
+// GUEST BOOKINGS HISTORY (v13.16)
 // ============================================================
 function showGuestBookings(name){
   if(!name)return;
@@ -2551,7 +2552,7 @@ function showGuestBookings(name){
 }
 
 // ============================================================
-// HOURS IMPORT (v13.15)
+// HOURS IMPORT (v13.16)
 // ============================================================
 let importHoursData=[];
 
@@ -2701,7 +2702,7 @@ async function runImportHours(){
 }
 
 // ============================================================
-// CLEANING DIAGNOSTICS (v13.15)
+// CLEANING DIAGNOSTICS (v13.16)
 // ============================================================
 function showCleaningDiagnostics(){
   const today=new Date();today.setHours(0,0,0,0);
@@ -2813,7 +2814,7 @@ function showCleaningDiagnostics(){
 }
 
 // ============================================================
-// BATTERY REFRESH (v13.15)
+// BATTERY REFRESH (v13.16)
 // ============================================================
 const BATTERY_FILE_PATH='Batteristatus/RoomBattery.csv';
 
@@ -2892,7 +2893,7 @@ async function refreshBatteryStatus(){
 }
 
 // ============================================================
-// COMPANIES MANAGEMENT (v13.15)
+// COMPANIES MANAGEMENT (v13.16)
 // ============================================================
 let editingCompanyId=null;
 
@@ -3102,7 +3103,7 @@ async function quickAddCompany(name){
 }
 
 // ============================================================
-// BRREG LOOKUP (v13.15)
+// BRREG LOOKUP (v13.16)
 // ============================================================
 // Fetches company information from Brønnøysundregistrene open API.
 // https://data.brreg.no/enhetsregisteret/api/enheter/{orgnr}
@@ -3167,4 +3168,230 @@ async function lookupBrreg(){
   }catch(e){
     status.innerHTML='<span style="color:var(--text-danger)">✕ Nettverksfeil: '+escapeHtml(e.message)+'</span>';
   }
+}
+
+// ============================================================
+// PDF EXPORT VIA PRINT (v13.16)
+// ============================================================
+// Opens a print-friendly window containing the same data as exportInvoicingCSV.
+// Browser's print dialog allows "Save as PDF" as the destination.
+function exportInvoicingPDF(companyFilterName){
+  const monthVal=document.getElementById('invMonth').value;
+  const yearVal=document.getElementById('invYear').value;
+  const fromVal=document.getElementById('invFrom').value;
+  const toVal=document.getElementById('invTo').value;
+  const useRange=!!(fromVal||toVal);
+  let fromDate,toDate,periodLabel;
+  const monthNames=['januar','februar','mars','april','mai','juni','juli','august','september','oktober','november','desember'];
+  if(useRange){
+    fromDate=fromVal?new Date(fromVal+'T00:00:00'):new Date(1970,0,1);
+    toDate=toVal?new Date(toVal+'T23:59:59'):new Date(2100,0,1);
+    periodLabel=(fromVal?formatDate(fromVal):'start')+' → '+(toVal?formatDate(toVal):'slutt');
+  }else{
+    const m=parseInt(monthVal),y=parseInt(yearVal);
+    fromDate=new Date(y,m,1);
+    toDate=new Date(y,m+1,0,23,59,59);
+    periodLabel=monthNames[m]+' '+y;
+  }
+  if(companyFilterName===undefined){
+    const cf=document.getElementById('invCompanyFilter');
+    companyFilterName=cf&&cf.value!=='__ALL__'?cf.value:null;
+  }
+  const propTitle=selectedProperty?selectedProperty.Title:'Alle eiendommer';
+  const currentRoomIds=new Set(rooms.map(r=>r.id));
+  const propTitleForPercent=selectedProperty?selectedProperty.Title:'';
+
+  // Identify full-tenant properties
+  const fullTenantByPropId={};
+  const viewedProps=selectedProperty?[selectedProperty]:properties;
+  viewedProps.forEach(p=>{
+    const ft=computeFullTenantForPeriod(p,fromDate,toDate);
+    if(ft)fullTenantByPropId[p.id]=ft;
+  });
+  const fullTenantRoomIds=new Set(
+    allRooms.filter(r=>fullTenantByPropId[r.PropertyLookupId]).map(r=>r.id)
+  );
+
+  // Collect line items — grouped by effective billing company
+  const groups={};
+  const companyNightSum={};
+  allBookings.forEach(b=>{
+    const rid=String(b.RoomLookupId||'');
+    if(!currentRoomIds.has(rid))return;
+    if(!b.Check_In)return;
+    if(b.Status==='Cancelled')return;
+    if(fullTenantRoomIds.has(rid))return;
+    const effectiveCo=getEffectiveCompany(b);
+    if(companyFilterName&&effectiveCo!==companyFilterName)return;
+    const ci=new Date(b.Check_In);ci.setHours(0,0,0,0);
+    const co=b.Check_Out?new Date(b.Check_Out):new Date();co.setHours(0,0,0,0);
+    if(co<fromDate||ci>toDate)return;
+    const nights=_nightsInPeriod(b,fromDate,toDate);
+    const cost=calcBookingCost(b,propTitleForPercent);
+    const room=allRooms.find(r=>r.id===rid);
+    const origCo=(b.Company||'').trim();
+    const key=effectiveCo||'(uten firma)';
+    if(!groups[key])groups[key]={nights:[],fees:[],percent:null,fullTenant:null};
+    if(nights>0){
+      groups[key].nights.push({
+        name:b.Person_Name||'',guestCompany:origCo,effectiveCo,
+        room:room?room.Title:'?',checkIn:b.Check_In,checkOut:b.Check_Out,
+        nightsCount:nights,rate:cost.rate||0,total:nights*(cost.rate||0),source:cost.source||''
+      });
+      if(effectiveCo){companyNightSum[effectiveCo]=(companyNightSum[effectiveCo]||0)+nights*(cost.rate||0)}
+    }
+    const isContinuation=(b.Continuation===true||b.Continuation==='true'||b.Continuation===1);
+    if(b.Status==='Completed'&&b.Check_Out&&!isContinuation&&!hasPercentFee(effectiveCo,propTitleForPercent)){
+      const checkoutDate=new Date(b.Check_Out);checkoutDate.setHours(0,0,0,0);
+      const feeEnabled=(b.Include_Checkout_Fee===undefined||b.Include_Checkout_Fee===null||b.Include_Checkout_Fee===true||b.Include_Checkout_Fee==='true'||b.Include_Checkout_Fee===1);
+      if(feeEnabled&&checkoutDate>=fromDate&&checkoutDate<=toDate){
+        const fee=getCheckoutFee(effectiveCo,propTitleForPercent);
+        if(fee>0){
+          groups[key].fees.push({
+            name:b.Person_Name||'',room:room?room.Title:'?',
+            checkoutDate:b.Check_Out,fee
+          });
+        }
+      }
+    }
+  });
+  // Percent fees
+  Object.keys(companyNightSum).forEach(c=>{
+    if(companyFilterName&&c!==companyFilterName)return;
+    const pct=getPercentFeeRate(c,propTitleForPercent);
+    if(pct>0){
+      const feeAmount=Math.round(companyNightSum[c]*pct);
+      if(!groups[c])groups[c]={nights:[],fees:[],percent:null,fullTenant:null};
+      groups[c].percent={rate:pct,base:companyNightSum[c],amount:feeAmount};
+    }
+  });
+  // Full tenant
+  Object.keys(fullTenantByPropId).forEach(pid=>{
+    const ft=fullTenantByPropId[pid];
+    if(companyFilterName&&ft.company!==companyFilterName)return;
+    const prop=properties.find(p=>String(p.id)===String(pid));
+    const key=ft.company;
+    if(!groups[key])groups[key]={nights:[],fees:[],percent:null,fullTenant:null};
+    groups[key].fullTenant={property:prop?prop.Title:'',rooms:ft.rooms,days:ft.days,rate:ft.rate,total:ft.total};
+  });
+
+  const groupKeys=Object.keys(groups).sort();
+  if(!groupKeys.length){
+    alert('Ingen data å eksportere for denne perioden.');
+    return;
+  }
+
+  // Generate HTML
+  const now=new Date();
+  const nowStr=formatDate(now)+' '+String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0');
+  const fmtKr=n=>(n||0).toLocaleString('nb-NO',{minimumFractionDigits:0,maximumFractionDigits:2})+' kr';
+
+  let grandTotal=0;
+  let bodyHtml='';
+
+  groupKeys.forEach(key=>{
+    const g=groups[key];
+    let groupTotal=0;
+    let tableRows='';
+
+    // Full tenant section (first, stands out)
+    if(g.fullTenant){
+      const ft=g.fullTenant;
+      groupTotal+=ft.total;
+      tableRows+='<tr class="ft-row"><td colspan="4"><strong>🔒 Full-tenant lease — '+escapeHtml(ft.property)+'</strong><br><small>'+ft.rooms+' rom × '+fmtKr(ft.rate)+' × '+ft.days+' dager</small></td><td class="num"><strong>'+fmtKr(ft.total)+'</strong></td></tr>';
+    }
+
+    // Night bookings
+    g.nights.forEach(n=>{
+      groupTotal+=n.total;
+      const billingInfo=n.guestCompany&&n.guestCompany!==n.effectiveCo?'<br><small class="muted">Gjest jobber for: '+escapeHtml(n.guestCompany)+'</small>':'';
+      tableRows+='<tr>'
+        +'<td>'+escapeHtml(n.name)+billingInfo+'</td>'
+        +'<td>'+escapeHtml(n.room)+'</td>'
+        +'<td>'+formatDate(n.checkIn)+' → '+(n.checkOut?formatDate(n.checkOut):'Åpen')+'</td>'
+        +'<td class="num">'+n.nightsCount+' × '+fmtKr(n.rate)+'</td>'
+        +'<td class="num">'+fmtKr(n.total)+'</td>'
+        +'</tr>';
+    });
+
+    // Checkout fees
+    g.fees.forEach(f=>{
+      groupTotal+=f.fee;
+      tableRows+='<tr class="fee-row">'
+        +'<td>↳ Utvask: '+escapeHtml(f.name)+'</td>'
+        +'<td>'+escapeHtml(f.room)+'</td>'
+        +'<td>'+formatDate(f.checkoutDate)+'</td>'
+        +'<td class="num">—</td>'
+        +'<td class="num">'+fmtKr(f.fee)+'</td>'
+        +'</tr>';
+    });
+
+    // Percent fee
+    if(g.percent){
+      groupTotal+=g.percent.amount;
+      tableRows+='<tr class="pct-row"><td colspan="4">📊 Månedsgebyr ('+(g.percent.rate*100)+'% av '+fmtKr(g.percent.base)+')</td><td class="num"><strong>'+fmtKr(g.percent.amount)+'</strong></td></tr>';
+    }
+
+    grandTotal+=groupTotal;
+
+    bodyHtml+='<section class="company-section">'
+      +'<h2>'+escapeHtml(key)+'</h2>'
+      +'<table>'
+      +'<thead><tr><th>Gjest</th><th>Rom</th><th>Periode</th><th class="num">Netter × sats</th><th class="num">Sum</th></tr></thead>'
+      +'<tbody>'+tableRows+'</tbody>'
+      +'<tfoot><tr><td colspan="4" class="num"><strong>Sum '+escapeHtml(key)+'</strong></td><td class="num"><strong>'+fmtKr(groupTotal)+'</strong></td></tr></tfoot>'
+      +'</table>'
+      +'</section>';
+  });
+
+  const title='Fakturagrunnlag — '+propTitle+(companyFilterName?' — '+companyFilterName:'')+' — '+periodLabel;
+
+  const html='<!DOCTYPE html><html><head><meta charset="UTF-8"><title>'+escapeHtml(title)+'</title>'
+    +'<style>'
+    +'*{box-sizing:border-box}'
+    +'body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#1a1a1a;margin:20mm;font-size:11pt;line-height:1.4}'
+    +'header{border-bottom:2px solid #1a1a1a;padding-bottom:12px;margin-bottom:20px}'
+    +'header h1{font-size:18pt;margin:0 0 4px}'
+    +'header .subtitle{color:#555;font-size:10pt}'
+    +'header .meta{color:#888;font-size:9pt;margin-top:6px}'
+    +'.company-section{margin-bottom:30px;page-break-inside:avoid}'
+    +'.company-section h2{font-size:13pt;margin:0 0 8px;padding:6px 10px;background:#f0f0f0;border-left:3px solid #1D9E75}'
+    +'table{width:100%;border-collapse:collapse;font-size:10pt}'
+    +'th{text-align:left;padding:6px 8px;background:#fafafa;border-bottom:1px solid #ccc;font-weight:600}'
+    +'td{padding:5px 8px;border-bottom:.5px solid #e5e5e5;vertical-align:top}'
+    +'.num{text-align:right;font-variant-numeric:tabular-nums}'
+    +'.muted{color:#888;font-size:9pt}'
+    +'.ft-row{background:rgba(29,158,117,.08)}'
+    +'.fee-row{background:rgba(123,97,255,.04);color:#555}'
+    +'.pct-row{background:rgba(239,159,39,.08)}'
+    +'tfoot td{border-top:1.5px solid #1a1a1a;border-bottom:0;padding-top:8px;font-size:11pt}'
+    +'.grand-total{margin-top:30px;padding:12px;background:#1D9E75;color:#fff;text-align:right;font-size:14pt;font-weight:600;page-break-inside:avoid}'
+    +'footer{margin-top:40px;padding-top:10px;border-top:.5px solid #ccc;color:#888;font-size:9pt;text-align:center}'
+    +'@media print{'
+    +'  body{margin:15mm}'
+    +'  @page{size:A4;margin:0}'
+    +'  .no-print{display:none}'
+    +'  header{margin-bottom:14px}'
+    +'  .company-section{margin-bottom:18px}'
+    +'}'
+    +'.print-btn{position:fixed;top:20px;right:20px;padding:10px 20px;background:#1D9E75;color:#fff;border:0;border-radius:6px;cursor:pointer;font-size:14px;box-shadow:0 2px 8px rgba(0,0,0,.2)}'
+    +'</style>'
+    +'</head><body>'
+    +'<button class="print-btn no-print" onclick="window.print()">🖨 Skriv ut / Lagre som PDF</button>'
+    +'<header>'
+    +'<h1>Fakturagrunnlag</h1>'
+    +'<div class="subtitle">'+escapeHtml(propTitle)+(companyFilterName?' · '+escapeHtml(companyFilterName):'')+' · '+escapeHtml(periodLabel)+'</div>'
+    +'<div class="meta">Generert '+nowStr+' · 2GM Booking</div>'
+    +'</header>'
+    +bodyHtml
+    +'<div class="grand-total">Totalt: '+fmtKr(grandTotal)+'</div>'
+    +'<footer>2GM Booking · genereret '+nowStr+'</footer>'
+    +'</body></html>';
+
+  const w=window.open('','_blank');
+  if(!w){alert('Popup blocked. Allow popups for this site to export PDF.');return}
+  w.document.write(html);
+  w.document.close();
+  // Auto-trigger print dialog after render
+  setTimeout(()=>{try{w.focus();w.print()}catch(e){console.error(e)}},500);
 }
