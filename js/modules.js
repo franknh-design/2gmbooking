@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v13.0 — modules.js
+// 2GM Booking v13.1 — modules.js
 // Hours, Archive, Import/Export, Admin (checkbox permissions)
 // ============================================================
 
@@ -777,35 +777,55 @@ function openRatesPanel(){
 }
 
 function renderRatesPanel(){
+  // Filter out properties without a Title (corrupt/undefined entries)
+  const validProperties=properties.filter(p=>p.Title&&p.Title.trim());
+
   // Property default rates
   const propList=document.getElementById('ratesPropertyList');
   propList.innerHTML='<table style="font-size:13px;width:100%"><thead><tr><th>Property</th><th style="width:120px">Daily rate (kr)</th></tr></thead><tbody>'
-    +properties.map(p=>{
+    +validProperties.map(p=>{
       return'<tr><td>'+p.Title+'</td><td><input type="number" value="'+(p.DailyRate||'')+'" onchange="updatePropertyRate(\''+p.id+'\',this.value)" style="width:100%;padding:4px 6px;border:1px solid var(--border-tertiary);border-radius:4px;font-size:13px;text-align:right" placeholder="0"></td></tr>';
     }).join('')+'</tbody></table>';
 
   // Room property selector — always populate
   const rpSel=document.getElementById('rRoomProperty');
   const prevVal=rpSel.value;
-  rpSel.innerHTML=properties.map(p=>'<option value="'+p.id+'">'+p.Title+'</option>').join('');
+  rpSel.innerHTML=validProperties.map(p=>'<option value="'+p.id+'">'+p.Title+'</option>').join('');
   if(prevVal&&[...rpSel.options].some(o=>o.value===prevVal))rpSel.value=prevVal;
   renderRoomRates();
 
-  // Custom rates
+  // Split custom rates into Nightly and Checkout
+  const nightlyRates=allRates.filter(r=>(r.FeeType||'').toLowerCase()!=='checkout');
+  const checkoutRates=allRates.filter(r=>(r.FeeType||'').toLowerCase()==='checkout');
+
   const customList=document.getElementById('ratesCustomList');
-  if(!allRates.length){
-    customList.innerHTML='<div class="muted" style="font-size:13px;padding:8px">No custom rates set</div>';
+  let customHtml='';
+  // Nightly section
+  if(!nightlyRates.length){
+    customHtml+='<div class="muted" style="font-size:13px;padding:8px">No custom nightly rates set</div>';
   }else{
-    customList.innerHTML='<table style="font-size:13px;width:100%"><thead><tr><th>Company</th><th>Person</th><th>Property</th><th style="width:80px">Rate</th><th style="width:30px"></th></tr></thead><tbody>'
-      +allRates.map(r=>{
+    customHtml+='<table style="font-size:13px;width:100%"><thead><tr><th>Company</th><th>Person</th><th>Property</th><th style="width:80px">Rate/night</th><th style="width:30px"></th></tr></thead><tbody>'
+      +nightlyRates.map(r=>{
         return'<tr><td>'+(r.Company||'<span class="muted">—</span>')+'</td><td>'+(r.Person_Name||'<span class="muted">—</span>')+'</td><td>'+(r.Property||'<span class="muted">All</span>')+'</td><td style="text-align:right">'+(r.DailyRate||0)+' kr</td>'
           +'<td><button onclick="deleteRate(\''+r.id+'\')" style="width:20px;height:20px;border-radius:50%;border:1px solid var(--border-tertiary);background:var(--bg-primary);color:var(--text-danger);cursor:pointer;font-size:11px;padding:0">✕</button></td></tr>';
       }).join('')+'</tbody></table>';
   }
+  // Checkout section
+  customHtml+='<div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--border-tertiary)"><strong style="font-size:13px">🧹 Checkout fees (utvask)</strong> <span class="muted" style="font-size:11px">one-time fee added at checkout</span></div>';
+  if(!checkoutRates.length){
+    customHtml+='<div class="muted" style="font-size:13px;padding:8px">No checkout fees configured. Add a rate with FeeType=Checkout in the Rates list to enable.</div>';
+  }else{
+    customHtml+='<table style="font-size:13px;width:100%;margin-top:6px"><thead><tr><th>Company</th><th>Property</th><th style="width:100px">Fee</th><th style="width:30px"></th></tr></thead><tbody>'
+      +checkoutRates.map(r=>{
+        return'<tr style="background:rgba(123,97,255,.04)"><td>'+(r.Company||'<span class="muted">All companies</span>')+'</td><td>'+(r.Property||'<span class="muted">All</span>')+'</td><td style="text-align:right;font-weight:500">'+(r.DailyRate||0)+' kr</td>'
+          +'<td><button onclick="deleteRate(\''+r.id+'\')" style="width:20px;height:20px;border-radius:50%;border:1px solid var(--border-tertiary);background:var(--bg-primary);color:var(--text-danger);cursor:pointer;font-size:11px;padding:0">✕</button></td></tr>';
+      }).join('')+'</tbody></table>';
+  }
+  customList.innerHTML=customHtml;
 
   // Property select for new rate
   const propSel=document.getElementById('rProperty');
-  propSel.innerHTML='<option value="">All properties</option>'+properties.map(p=>'<option value="'+p.Title+'">'+p.Title+'</option>').join('');
+  propSel.innerHTML='<option value="">All properties</option>'+validProperties.map(p=>'<option value="'+p.Title+'">'+p.Title+'</option>').join('');
 
   // Company datalist — from bookings + existing rates
   const companies=new Set();
@@ -865,17 +885,24 @@ async function addCustomRate(){
   const company=document.getElementById('rCompany').value.trim();
   const person=document.getElementById('rPerson').value.trim();
   const propName=document.getElementById('rProperty').value;
+  const feeType=document.getElementById('rFeeType').value||'Nightly';
   const rate=parseFloat(document.getElementById('rRate').value);
 
-  if(!company&&!person){alert('Company or person name required');return}
+  // For Checkout fees, Person is not meaningful — only Company + Property
+  if(feeType==='Checkout'){
+    if(!propName){alert('Property is required for checkout fees');return}
+  }else{
+    if(!company&&!person){alert('Company or person name required');return}
+  }
   if(!rate||rate<=0){alert('Rate must be a positive number');return}
 
   const fields={
-    Title:(person||company)+' — '+(propName||'All')+' — '+rate+'kr',
+    Title:(person||company||'Checkout')+' — '+(propName||'All')+' — '+rate+'kr'+(feeType==='Checkout'?' (utvask)':''),
     Company:company||'',
-    Person_Name:person||'',
+    Person_Name:feeType==='Checkout'?'':(person||''),
     Property:propName||'',
-    DailyRate:rate
+    DailyRate:rate,
+    FeeType:feeType
   };
 
   try{
@@ -884,6 +911,7 @@ async function addCustomRate(){
     document.getElementById('rCompany').value='';
     document.getElementById('rPerson').value='';
     document.getElementById('rRate').value='';
+    document.getElementById('rFeeType').value='Nightly';
     renderRatesPanel();
   }catch(e){alert('Failed: '+e.message)}
 }
@@ -899,7 +927,7 @@ async function deleteRate(id){
 }
 
 // ============================================================
-// PERSONS / CUSTOMERS (v13.0)
+// PERSONS / CUSTOMERS (v13.1)
 // ============================================================
 let editingPersonId=null;
 
@@ -1182,7 +1210,7 @@ function onPersonNameInput(){
 }
 
 // ============================================================
-// CHARTS (v13.0) — pure SVG, no dependencies
+// CHARTS (v13.1) — pure SVG, no dependencies
 // ============================================================
 
 // Reusable bar chart: data = [{label, value, subtitle?}]
@@ -1491,7 +1519,7 @@ function renderHoursCharts(filtered){
 }
 
 // ============================================================
-// CLEANING EFFICIENCY ANALYSIS (v13.0)
+// CLEANING EFFICIENCY ANALYSIS (v13.1)
 // ============================================================
 // Compares cleaner hours against guest-nights per property, per week/month.
 // USE WITH CAUTION: Hours include breaks, transport, repairs — not just cleaning.
@@ -1844,7 +1872,7 @@ function _dateFromIsoWeek(year,week){
 }
 
 // ============================================================
-// MORE MENU (v13.0)
+// MORE MENU (v13.1)
 // ============================================================
 function toggleMoreMenu(e){
   if(e){e.stopPropagation();e.preventDefault()}
@@ -1871,7 +1899,7 @@ function closeMoreMenu(){
 }
 
 // ============================================================
-// FAKTURAGRUNNLAG / INVOICING (v13.0)
+// FAKTURAGRUNNLAG / INVOICING (v13.1)
 // ============================================================
 let invoicingInitialized=false;
 
@@ -2195,7 +2223,7 @@ function exportInvoicingCSV(){
 }
 
 // ============================================================
-// ADD GUEST FROM BOOKING (v13.0)
+// ADD GUEST FROM BOOKING (v13.1)
 // ============================================================
 function addBookingToGuests(bookingId){
   const b=allBookings.find(x=>x.id===bookingId);
@@ -2219,7 +2247,7 @@ function addBookingToGuests(bookingId){
 }
 
 // ============================================================
-// GUEST BOOKINGS HISTORY (v13.0)
+// GUEST BOOKINGS HISTORY (v13.1)
 // ============================================================
 function showGuestBookings(name){
   if(!name)return;
@@ -2291,7 +2319,7 @@ function showGuestBookings(name){
 }
 
 // ============================================================
-// HOURS IMPORT (v13.0)
+// HOURS IMPORT (v13.1)
 // ============================================================
 let importHoursData=[];
 
@@ -2441,7 +2469,7 @@ async function runImportHours(){
 }
 
 // ============================================================
-// CLEANING DIAGNOSTICS (v13.0)
+// CLEANING DIAGNOSTICS (v13.1)
 // ============================================================
 function showCleaningDiagnostics(){
   const today=new Date();today.setHours(0,0,0,0);

@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v13.0 — app.js (Core)
+// 2GM Booking v13.1 — app.js (Core)
 // Auth, Graph API, Data, Rendering, Bookings
 // ============================================================
 
@@ -556,9 +556,27 @@ function showDetail(roomId){
   const propName=prop?prop.Title:'';
 
   if(!booking){
-    p.innerHTML='<div class="detail-grid"><div class="detail-main"><div class="detail-name">Room '+room.Title+'</div><div class="detail-sub">Empty — '+propName+'</div></div><div class="detail-actions">'
-      +(can('edit_bookings')?'<button class="primary" onclick="openNewBooking(\''+room.id+'\')">Create booking</button>':'')
-      +'<button onclick="closeDetail()">Close</button></div></div>';
+    // Check if room has an Upcoming booking (future)
+    const upcoming=findNextUpcomingForRoom(room.id);
+    let subHtml='Empty — '+propName;
+    if(upcoming){
+      const ci=upcoming.Check_In?formatDate(upcoming.Check_In):'?';
+      const name=upcoming.Person_Name||'(unnamed)';
+      const company=upcoming.Company?' · '+escapeHtml(upcoming.Company):'';
+      subHtml='<div>Empty — '+propName+'</div>'
+        +'<div style="margin-top:8px;padding:8px 10px;background:rgba(123,97,255,.08);border-left:3px solid #7B61FF;border-radius:4px;font-size:12px">'
+        +'📅 <strong>Upcoming booking:</strong> '+escapeHtml(name)+company+' · Check-in <strong>'+ci+'</strong>'
+        +'</div>';
+    }
+    let actions=(can('edit_bookings')?'<button class="primary" onclick="openNewBooking(\''+room.id+'\')">Create booking</button>':'');
+    if(upcoming&&can('edit_bookings')){
+      actions+='<button onclick="openEditBooking(\''+upcoming.id+'\')" style="background:#7B61FF;color:#fff;border-color:#7B61FF">See Upcoming</button>';
+    }
+    if(upcoming&&can('cancel_bookings')){
+      actions+='<button class="danger" onclick="cancelBookingConfirmed(\''+upcoming.id+'\')">Cancel Upcoming</button>';
+    }
+    actions+='<button onclick="closeDetail()">Close</button>';
+    p.innerHTML='<div class="detail-grid"><div class="detail-main"><div class="detail-name">Room '+room.Title+'</div><div class="detail-sub">'+subHtml+'</div></div><div class="detail-actions">'+actions+'</div></div>';
   }else{
     const dt={'None':'—','Needs-print':'✕ Needs print','Printed':'✓ Printed'}[booking.Door_Tag_Status]||'—';
     const cl={'None':'—','Dirty':'● Needs cleaning','Clean':'● Clean'}[booking.Cleaning_Status]||'—';
@@ -676,8 +694,28 @@ async function confirmCheckout(){
   try{await updateListItem('Bookings',checkoutBookingId,{Status:'Completed',Cleaning_Status:'Dirty',Check_Out:dateVal+'T12:00:00Z'});const l=allBookings.find(x=>x.id===checkoutBookingId);if(l){l.Status='Completed';l.Cleaning_Status='Dirty';l.Check_Out=dateVal+'T12:00:00Z'}closeCheckoutModal();closeDetail();refreshLocal();loadData()}catch(e){alert('Failed: '+e.message)}finally{btn.disabled=false;btn.textContent='Confirm check-out'}
 }
 async function cancelBooking(id){
-  if(!confirm('Cancel this booking?'))return;
-  try{await updateListItem('Bookings',id,{Status:'Cancelled'});const l=allBookings.find(x=>x.id===id);if(l)l.Status='Cancelled';closeDetail();refreshLocal();loadData()}catch(e){alert('Failed')}
+  return cancelBookingConfirmed(id);
+}
+
+// Detailed cancel confirmation — shows guest name and dates
+async function cancelBookingConfirmed(id){
+  const b=allBookings.find(x=>x.id===id);if(!b)return;
+  const name=b.Person_Name||'(unnamed)';
+  const ci=b.Check_In?formatDate(b.Check_In):'?';
+  const co=b.Check_Out?formatDate(b.Check_Out):'Open-ended';
+  const company=b.Company?' ('+b.Company+')':'';
+  const msg='Are you sure you want to cancel this booking?\n\n'
+    +'Guest: '+name+company+'\n'
+    +'Check-in: '+ci+'\n'
+    +'Check-out: '+co+'\n'
+    +'Status: '+b.Status+'\n\n'
+    +'This cannot be undone from the app — you would need to edit the booking manually to reactivate it.';
+  if(!confirm(msg))return;
+  try{
+    await updateListItem('Bookings',id,{Status:'Cancelled'});
+    const l=allBookings.find(x=>x.id===id);if(l)l.Status='Cancelled';
+    closeDetail();refreshLocal();loadData();
+  }catch(e){alert('Failed: '+e.message)}
 }
 
 // --- BOOKING MODAL ---
@@ -694,12 +732,16 @@ function openNewBooking(preselectedRoomId){
   document.getElementById('bookingSaveBtn').textContent='Create booking';
   populateRoomSelect(preselectedRoomId||'');
   document.getElementById('fName').value='';document.getElementById('fCompany').value='';
-  document.getElementById('fCheckIn').value=toISODate(new Date());document.getElementById('fCheckOut').value='';
-  document.getElementById('fStatus').value='Upcoming';document.getElementById('fNotes').value='';
+  const todayStr=toISODate(new Date());
+  document.getElementById('fCheckIn').value=todayStr;document.getElementById('fCheckOut').value='';
+  // Default to Active if check-in is today, Upcoming otherwise
+  document.getElementById('fStatus').value='Active';
+  document.getElementById('fNotes').value='';
   document.getElementById('fIncludeCheckoutFee').checked=true;
   document.getElementById('fNameInfo').innerHTML='';
   document.getElementById('fOverlapWarning').style.display='none';
   attachOverlapListeners();
+  attachStatusAutoSelect();
   checkBookingOverlap();
   const modal=document.getElementById('bookingModal');
   modal.classList.add('open');
@@ -738,6 +780,23 @@ function attachOverlapListeners(){
   ['fRoom','fCheckIn','fCheckOut'].forEach(id=>{
     const el=document.getElementById(id);
     if(el)el.addEventListener('change',checkBookingOverlap);
+  });
+}
+
+// Auto-set Status based on Check-in date (only for NEW bookings, not edits)
+let _statusAutoAttached=false;
+function attachStatusAutoSelect(){
+  if(_statusAutoAttached)return;_statusAutoAttached=true;
+  const ciEl=document.getElementById('fCheckIn');
+  if(!ciEl)return;
+  ciEl.addEventListener('change',()=>{
+    if(editingBookingId)return; // don't override status when editing existing
+    const val=ciEl.value;if(!val)return;
+    const sel=document.getElementById('fStatus');if(!sel)return;
+    const today=new Date();today.setHours(0,0,0,0);
+    const picked=new Date(val+'T00:00:00');picked.setHours(0,0,0,0);
+    // If check-in is today or in the past → Active. If in future → Upcoming.
+    sel.value=picked<=today?'Active':'Upcoming';
   });
 }
 
