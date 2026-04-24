@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v13.12 — app.js (Core)
+// 2GM Booking v13.13 — app.js (Core)
 // Auth, Graph API, Data, Rendering, Bookings
 // ============================================================
 
@@ -27,6 +27,7 @@ const ALL_PERMS=[
   {key:'import_export',label:'Import/Export'},
   {key:'view_prices',label:'View prices'},
   {key:'manage_rates',label:'Manage rates'},
+  {key:'manage_companies',label:'Manage companies'},
   {key:'hours_reminder',label:'Daily hours reminder'},
   {key:'view_efficiency',label:'View cleaning efficiency analysis'},
   {key:'admin',label:'User administration'}
@@ -35,7 +36,7 @@ const ALL_PERMS=[
 // --- STATE ---
 let accessToken=null,siteId=null;
 let currentUser={email:'',displayName:'',permissions:[]};
-let properties=[],rooms=[],allRooms=[],bookings=[],allBookings=[],allUsers=[],allPersons=[],allRates=[];
+let properties=[],rooms=[],allRooms=[],bookings=[],allBookings=[],allUsers=[],allPersons=[],allRates=[],allCompanies=[];
 let selectedProperty=null,selectedRoom=null,selectedBooking=null;
 let editingBookingId=null,checkoutBookingId=null;
 let activeFilter=null;
@@ -217,6 +218,7 @@ function applyPermissions(){
   // Header buttons
   show('btnNewBooking',can('edit_bookings'));
   show('btnNewGuest',can('edit_bookings'));
+  show('menuBtnCompanies',can('manage_companies')||can('admin'));
   show('btnArchive',can('archive')||can('view_bookings'));
   show('btnUpcoming',can('view_bookings'));
   show('btnHours',can('view_hours')||can('edit_hours'));
@@ -300,6 +302,7 @@ async function loadData(){
     allBookings=await getListItems('Bookings');
     try{allPersons=await getListItems('Persons')}catch(e){allPersons=[]}
     try{allRates=await getListItems('Rates')}catch(e){allRates=[]}
+    try{allCompanies=await getListItems('Companies')}catch(e){allCompanies=[]}
     if(isAll){
       // Show rooms from all properties the user has access to
       const assignedPropIds=new Set(properties.map(p=>String(p.id)));
@@ -893,6 +896,8 @@ function openNewBooking(preselectedRoomId){
   populateRoomSelect(roomToSelect);
   document.getElementById('fName').value='';document.getElementById('fCompany').value='';
   document.getElementById('fBillingCompany').value='';
+  const cw=document.getElementById('fCompanyWarn');if(cw)cw.innerHTML='';
+  const bw=document.getElementById('fBillingCompanyWarn');if(bw)bw.innerHTML='';
   document.getElementById('fCheckIn').value=todayStr;document.getElementById('fCheckOut').value='';
   // Default to Active if check-in is today, Upcoming otherwise
   document.getElementById('fStatus').value='Active';
@@ -930,6 +935,10 @@ function openEditBooking(bookingId){
   populateRoomSelect(String(b.RoomLookupId));
   document.getElementById('fName').value=b.Person_Name||'';document.getElementById('fCompany').value=b.Company||'';
   document.getElementById('fBillingCompany').value=b.Billing_Company||'';
+  if(typeof checkCompanyRegistration==='function'){
+    checkCompanyRegistration(b.Company||'','fCompanyWarn');
+    checkCompanyRegistration(b.Billing_Company||'','fBillingCompanyWarn');
+  }
   document.getElementById('fCheckIn').value=b.Check_In?toISODate(b.Check_In):'';
   document.getElementById('fCheckOut').value=b.Check_Out?toISODate(b.Check_Out):'';
   document.getElementById('fStatus').value=b.Status||'Upcoming';document.getElementById('fNotes').value=b.Notes||'';
@@ -1286,7 +1295,7 @@ msalInstance.initialize().then(()=>{
 });
 
 // ============================================================
-// AUTO-REFRESH (v13.12)
+// AUTO-REFRESH (v13.13)
 // ============================================================
 
 // Build a fingerprint that tells us if data has changed without full reload

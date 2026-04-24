@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v13.12 — modules.js
+// 2GM Booking v13.13 — modules.js
 // Hours, Archive, Import/Export, Admin (checkbox permissions)
 // ============================================================
 
@@ -943,7 +943,7 @@ async function deleteRate(id){
 }
 
 // ============================================================
-// PERSONS / CUSTOMERS (v13.12)
+// PERSONS / CUSTOMERS (v13.13)
 // ============================================================
 let editingPersonId=null;
 
@@ -1196,7 +1196,11 @@ function refreshPersonDatalists(){
     nameList.innerHTML=names.map(n=>'<option value="'+escapeHtml(n)+'">').join('');
   }
   if(compList){
-    const companies=[...new Set(allPersons.map(_personCompany).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'nb'));
+    // Merge active Companies + historical company names from bookings/persons
+    const fromCompanies=allCompanies.filter(c=>c.Active!==false).map(c=>c.Title).filter(Boolean);
+    const fromPersons=allPersons.map(_personCompany).filter(Boolean);
+    const fromBookings=allBookings.map(b=>[b.Company,b.Billing_Company]).flat().filter(Boolean);
+    const companies=[...new Set([...fromCompanies,...fromPersons,...fromBookings])].sort((a,b)=>a.localeCompare(b,'nb'));
     compList.innerHTML=companies.map(c=>'<option value="'+escapeHtml(c)+'">').join('');
   }
 }
@@ -1236,7 +1240,7 @@ function onPersonNameInput(){
 }
 
 // ============================================================
-// CHARTS (v13.12) — pure SVG, no dependencies
+// CHARTS (v13.13) — pure SVG, no dependencies
 // ============================================================
 
 // Reusable bar chart: data = [{label, value, subtitle?}]
@@ -1545,7 +1549,7 @@ function renderHoursCharts(filtered){
 }
 
 // ============================================================
-// CLEANING EFFICIENCY ANALYSIS (v13.12)
+// CLEANING EFFICIENCY ANALYSIS (v13.13)
 // ============================================================
 // Compares cleaner hours against guest-nights per property, per week/month.
 // USE WITH CAUTION: Hours include breaks, transport, repairs — not just cleaning.
@@ -1898,7 +1902,7 @@ function _dateFromIsoWeek(year,week){
 }
 
 // ============================================================
-// MORE MENU (v13.12)
+// MORE MENU (v13.13)
 // ============================================================
 function toggleMoreMenu(e){
   if(e){e.stopPropagation();e.preventDefault()}
@@ -1925,7 +1929,7 @@ function closeMoreMenu(){
 }
 
 // ============================================================
-// FAKTURAGRUNNLAG / INVOICING (v13.12)
+// FAKTURAGRUNNLAG / INVOICING (v13.13)
 // ============================================================
 let invoicingInitialized=false;
 
@@ -2370,7 +2374,7 @@ function exportInvoicingCSV(companyFilterName){
 }
 
 // ============================================================
-// ADD GUEST FROM BOOKING (v13.12)
+// ADD GUEST FROM BOOKING (v13.13)
 // ============================================================
 function addBookingToGuests(bookingId){
   if(!can('edit_bookings')){alert('You do not have permission to add guests.');return}
@@ -2395,7 +2399,7 @@ function addBookingToGuests(bookingId){
 }
 
 // ============================================================
-// GUEST BOOKINGS HISTORY (v13.12)
+// GUEST BOOKINGS HISTORY (v13.13)
 // ============================================================
 function showGuestBookings(name){
   if(!name)return;
@@ -2467,7 +2471,7 @@ function showGuestBookings(name){
 }
 
 // ============================================================
-// HOURS IMPORT (v13.12)
+// HOURS IMPORT (v13.13)
 // ============================================================
 let importHoursData=[];
 
@@ -2617,7 +2621,7 @@ async function runImportHours(){
 }
 
 // ============================================================
-// CLEANING DIAGNOSTICS (v13.12)
+// CLEANING DIAGNOSTICS (v13.13)
 // ============================================================
 function showCleaningDiagnostics(){
   const today=new Date();today.setHours(0,0,0,0);
@@ -2729,7 +2733,7 @@ function showCleaningDiagnostics(){
 }
 
 // ============================================================
-// BATTERY REFRESH (v13.12)
+// BATTERY REFRESH (v13.13)
 // ============================================================
 const BATTERY_FILE_PATH='Batteristatus/RoomBattery.csv';
 
@@ -2805,4 +2809,213 @@ async function refreshBatteryStatus(){
   }finally{
     if(btn){btn.disabled=false;btn.textContent='🔋 Refresh battery'}
   }
+}
+
+// ============================================================
+// COMPANIES MANAGEMENT (v13.13)
+// ============================================================
+let editingCompanyId=null;
+
+function openCompaniesPanel(){
+  if(!can('manage_companies')&&!can('admin')){alert('Access denied');return}
+  document.getElementById('coSearch').value='';
+  renderCompaniesList();
+  document.getElementById('companiesModal').classList.add('open');
+}
+
+function renderCompaniesList(){
+  const list=document.getElementById('companiesList');
+  const stats=document.getElementById('companiesStats');
+  const q=(document.getElementById('coSearch').value||'').toLowerCase().trim();
+  // Count usage per company: scan bookings + rates
+  const usage={};
+  allBookings.forEach(b=>{
+    const c=(b.Company||'').trim();if(c){usage[c]=usage[c]||{bookings:0,billing:0,rates:0};usage[c].bookings++}
+    const bc=(b.Billing_Company||'').trim();if(bc){usage[bc]=usage[bc]||{bookings:0,billing:0,rates:0};usage[bc].billing++}
+  });
+  allRates.forEach(r=>{
+    const c=(r.Company||'').trim();if(c){usage[c]=usage[c]||{bookings:0,billing:0,rates:0};usage[c].rates++}
+  });
+  // Build list
+  const rows=[...allCompanies].sort((a,b)=>(a.Title||'').localeCompare(b.Title||'','nb',{sensitivity:'base'}));
+  const filtered=q?rows.filter(r=>(r.Title||'').toLowerCase().includes(q)||(r.OrgNr||'').includes(q)||(r.InvoiceEmail||'').toLowerCase().includes(q)):rows;
+  const activeCount=rows.filter(r=>r.Active!==false).length;
+  stats.textContent=rows.length+' companies ('+activeCount+' active)'+(q?' — '+filtered.length+' matching':'');
+  if(!filtered.length){
+    list.innerHTML='<div style="text-align:center;padding:30px;color:var(--text-tertiary);font-size:13px">No companies yet. Click "+ New company" to add one, or "🔍 Find unlinked" to scan your existing bookings.</div>';
+    return;
+  }
+  list.innerHTML='<table style="width:100%;font-size:13px"><thead><tr style="background:var(--bg-secondary)"><th style="padding:6px 10px;text-align:left">Company</th><th style="padding:6px 10px;text-align:left">Org.nr</th><th style="padding:6px 10px;text-align:left">Invoice email</th><th style="padding:6px 10px;text-align:right">Bookings</th><th style="padding:6px 10px;text-align:right">Billing</th><th style="padding:6px 10px;text-align:right">Rates</th><th style="padding:6px 10px;text-align:left">Status</th><th style="padding:6px 10px;width:30px"></th></tr></thead><tbody>'
+    +filtered.map(r=>{
+      const u=usage[r.Title]||{bookings:0,billing:0,rates:0};
+      const isInactive=r.Active===false;
+      return '<tr onclick="openCompanyEdit(\''+r.id+'\')" style="cursor:pointer;border-top:.5px solid var(--border-tertiary);'+(isInactive?'opacity:.5':'')+'" onmouseover="this.style.background=\'var(--bg-secondary)\'" onmouseout="this.style.background=\'\'">'
+        +'<td style="padding:6px 10px;font-weight:500">'+escapeHtml(r.Title||'')+'</td>'
+        +'<td style="padding:6px 10px;font-family:monospace;font-size:12px">'+escapeHtml(r.OrgNr||'')+'</td>'
+        +'<td style="padding:6px 10px;font-size:12px">'+escapeHtml(r.InvoiceEmail||'')+'</td>'
+        +'<td style="padding:6px 10px;text-align:right">'+(u.bookings||'<span class="muted">—</span>')+'</td>'
+        +'<td style="padding:6px 10px;text-align:right">'+(u.billing||'<span class="muted">—</span>')+'</td>'
+        +'<td style="padding:6px 10px;text-align:right">'+(u.rates||'<span class="muted">—</span>')+'</td>'
+        +'<td style="padding:6px 10px">'+(isInactive?'<span class="pill" style="background:var(--bg-tertiary)">Inactive</span>':'<span class="pill" style="background:var(--bg-success);color:var(--text-success)">Active</span>')+'</td>'
+        +'<td style="padding:6px 10px"><button onclick="event.stopPropagation();openCompanyEdit(\''+r.id+'\')" style="padding:3px 8px;border:1px solid var(--border-tertiary);border-radius:4px;background:var(--bg-primary);cursor:pointer;font-size:11px">Edit</button></td>'
+        +'</tr>';
+    }).join('')+'</tbody></table>';
+}
+
+function openCompanyEdit(companyId){
+  if(!can('manage_companies')&&!can('admin')){alert('Access denied');return}
+  editingCompanyId=companyId||null;
+  const c=companyId?allCompanies.find(x=>x.id===companyId):null;
+  document.getElementById('companyEditModalTitle').textContent=c?'Edit company':'New company';
+  document.getElementById('coName').value=c?c.Title||'':'';
+  document.getElementById('coOrgNr').value=c?c.OrgNr||'':'';
+  document.getElementById('coInvoiceEmail').value=c?c.InvoiceEmail||'':'';
+  document.getElementById('coInvoiceAddress').value=c?c.InvoiceAddress||'':'';
+  document.getElementById('coContactName').value=c?c.ContactName||'':'';
+  document.getElementById('coContactPhone').value=c?c.ContactPhone||'':'';
+  document.getElementById('coNotes').value=c?c.Notes||'':'';
+  document.getElementById('coActive').value=c?(c.Active===false?'false':'true'):'true';
+  document.getElementById('coDeleteBtn').style.display=c?'':'none';
+  // Show usage info
+  if(c){
+    const name=c.Title||'';
+    const bookings=allBookings.filter(b=>(b.Company||'').trim()===name).length;
+    const billing=allBookings.filter(b=>(b.Billing_Company||'').trim()===name).length;
+    const rates=allRates.filter(r=>(r.Company||'').trim()===name).length;
+    document.getElementById('coUsageInfo').textContent='Used in: '+bookings+' bookings as Company · '+billing+' bookings as Billing · '+rates+' rates';
+  }else{
+    document.getElementById('coUsageInfo').textContent='';
+  }
+  document.getElementById('companyEditModal').classList.add('open');
+}
+
+async function saveCompany(){
+  if(!can('manage_companies')&&!can('admin')){alert('Access denied');return}
+  const name=document.getElementById('coName').value.trim();
+  if(!name){alert('Company name is required');return}
+  // Check for duplicate (unless editing this one)
+  const dup=allCompanies.find(c=>(c.Title||'').toLowerCase()===name.toLowerCase()&&c.id!==editingCompanyId);
+  if(dup){alert('A company with this name already exists: '+dup.Title);return}
+  const fields={
+    Title:name,
+    OrgNr:document.getElementById('coOrgNr').value.trim()||null,
+    InvoiceEmail:document.getElementById('coInvoiceEmail').value.trim()||null,
+    InvoiceAddress:document.getElementById('coInvoiceAddress').value.trim()||null,
+    ContactName:document.getElementById('coContactName').value.trim()||null,
+    ContactPhone:document.getElementById('coContactPhone').value.trim()||null,
+    Notes:document.getElementById('coNotes').value.trim()||null,
+    Active:document.getElementById('coActive').value==='true'
+  };
+  try{
+    if(editingCompanyId){
+      await updateListItem('Companies',editingCompanyId,fields);
+      const c=allCompanies.find(x=>x.id===editingCompanyId);
+      if(c)Object.assign(c,fields);
+    }else{
+      const result=await createListItem('Companies',fields);
+      allCompanies.push({id:result.id||'new',...fields});
+    }
+    document.getElementById('companyEditModal').classList.remove('open');
+    renderCompaniesList();
+    refreshPersonDatalists();
+  }catch(e){alert('Failed: '+e.message)}
+}
+
+async function deleteCompany(){
+  if(!editingCompanyId)return;
+  const c=allCompanies.find(x=>x.id===editingCompanyId);
+  if(!c)return;
+  const name=c.Title;
+  const usedIn=allBookings.filter(b=>(b.Company||'').trim()===name||(b.Billing_Company||'').trim()===name).length;
+  const inRates=allRates.filter(r=>(r.Company||'').trim()===name).length;
+  let msg='Delete company "'+name+'"?';
+  if(usedIn||inRates){
+    msg+='\n\nWarning: this company is used in '+usedIn+' bookings and '+inRates+' rates.\nThe text references will remain but will no longer appear in dropdowns.';
+  }
+  msg+='\n\nConsider setting it to Inactive instead.';
+  if(!confirm(msg))return;
+  try{
+    await deleteListItem('Companies',editingCompanyId);
+    allCompanies=allCompanies.filter(x=>x.id!==editingCompanyId);
+    editingCompanyId=null;
+    document.getElementById('companyEditModal').classList.remove('open');
+    renderCompaniesList();
+    refreshPersonDatalists();
+  }catch(e){alert('Failed: '+e.message)}
+}
+
+function findUnlinkedCompanies(){
+  if(!can('manage_companies')&&!can('admin')){alert('Access denied');return}
+  // Scan bookings + rates for company names not in Companies list
+  const existing=new Set(allCompanies.map(c=>(c.Title||'').toLowerCase().trim()));
+  const found={};
+  allBookings.forEach(b=>{
+    [b.Company,b.Billing_Company].forEach(name=>{
+      const n=(name||'').trim();if(!n)return;
+      if(!existing.has(n.toLowerCase())){
+        found[n]=(found[n]||0)+1;
+      }
+    });
+  });
+  allRates.forEach(r=>{
+    const n=(r.Company||'').trim();if(!n)return;
+    if(!existing.has(n.toLowerCase())){
+      found[n]=(found[n]||0)+1;
+    }
+  });
+  const names=Object.keys(found).sort((a,b)=>found[b]-found[a]);
+  if(!names.length){alert('✓ All companies used in bookings and rates are already registered in the Companies list.');return}
+  const preview=names.slice(0,20).map(n=>'• '+n+' ('+found[n]+' uses)').join('\n');
+  const extra=names.length>20?'\n\n...and '+(names.length-20)+' more':'';
+  if(!confirm('Found '+names.length+' unlinked companies in your bookings/rates:\n\n'+preview+extra+'\n\nCreate Company records for all of them now? (You can edit them individually afterwards.)'))return;
+  (async()=>{
+    let created=0,failed=0;
+    for(let i=0;i<names.length;i++){
+      try{
+        const result=await createListItem('Companies',{Title:names[i],Active:true});
+        allCompanies.push({id:result.id||'new_'+i,Title:names[i],Active:true});
+        created++;
+      }catch(e){console.error('Failed to create '+names[i]+':',e);failed++}
+      if(i%10===9)await new Promise(r=>setTimeout(r,300));
+    }
+    alert('✓ Created '+created+' companies'+(failed?', '+failed+' failed':'')+'.');
+    renderCompaniesList();
+    refreshPersonDatalists();
+  })();
+}
+
+// Check if company name exists in Companies list; show inline warning with quick-add link
+function checkCompanyRegistration(name,warnElId){
+  const el=document.getElementById(warnElId);if(!el)return;
+  const trimmed=(name||'').trim();
+  if(!trimmed){el.innerHTML='';return}
+  const match=allCompanies.find(c=>(c.Title||'').toLowerCase()===trimmed.toLowerCase());
+  if(match){
+    if(match.Active===false){
+      el.innerHTML='<span style="color:var(--text-warning)">⚠ "'+escapeHtml(match.Title)+'" is marked inactive.</span>';
+    }else{
+      el.innerHTML='';
+    }
+    return;
+  }
+  // Not registered
+  if(can('manage_companies')||can('admin')){
+    el.innerHTML='<span style="color:var(--text-warning)">⚠ "'+escapeHtml(trimmed)+'" not in Companies list. <a href="javascript:void(0)" onclick="quickAddCompany(\''+trimmed.replace(/'/g,"\\'")+'\')" style="color:var(--accent)">Add now</a></span>';
+  }else{
+    el.innerHTML='<span style="color:var(--text-tertiary)">"'+escapeHtml(trimmed)+'" is a new company (not in registry).</span>';
+  }
+}
+
+// Quickly add a company with just the name, then re-check
+async function quickAddCompany(name){
+  if(!can('manage_companies')&&!can('admin')){alert('Access denied');return}
+  try{
+    const result=await createListItem('Companies',{Title:name,Active:true});
+    allCompanies.push({id:result.id||'new',Title:name,Active:true});
+    refreshPersonDatalists();
+    // Clear warnings on both fields if they match
+    ['fCompanyWarn','fBillingCompanyWarn'].forEach(id=>{
+      const el=document.getElementById(id);if(el)el.innerHTML='<span style="color:var(--text-success)">✓ Added "'+escapeHtml(name)+'" to Companies</span>';
+    });
+  }catch(e){alert('Failed to add company: '+e.message)}
 }
