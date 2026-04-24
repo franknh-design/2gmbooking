@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v12.17 — modules.js
+// 2GM Booking v12.19 — modules.js
 // Hours, Archive, Import/Export, Admin (checkbox permissions)
 // ============================================================
 
@@ -899,7 +899,7 @@ async function deleteRate(id){
 }
 
 // ============================================================
-// PERSONS / CUSTOMERS (v12.17)
+// PERSONS / CUSTOMERS (v12.19)
 // ============================================================
 let editingPersonId=null;
 
@@ -1182,7 +1182,7 @@ function onPersonNameInput(){
 }
 
 // ============================================================
-// CHARTS (v12.17) — pure SVG, no dependencies
+// CHARTS (v12.19) — pure SVG, no dependencies
 // ============================================================
 
 // Reusable bar chart: data = [{label, value, subtitle?}]
@@ -1491,7 +1491,7 @@ function renderHoursCharts(filtered){
 }
 
 // ============================================================
-// CLEANING EFFICIENCY ANALYSIS (v12.17)
+// CLEANING EFFICIENCY ANALYSIS (v12.19)
 // ============================================================
 // Compares cleaner hours against guest-nights per property, per week/month.
 // USE WITH CAUTION: Hours include breaks, transport, repairs — not just cleaning.
@@ -1844,7 +1844,7 @@ function _dateFromIsoWeek(year,week){
 }
 
 // ============================================================
-// MORE MENU (v12.17)
+// MORE MENU (v12.19)
 // ============================================================
 function toggleMoreMenu(e){
   if(e){e.stopPropagation();e.preventDefault()}
@@ -1871,7 +1871,7 @@ function closeMoreMenu(){
 }
 
 // ============================================================
-// FAKTURAGRUNNLAG / INVOICING (v12.17)
+// FAKTURAGRUNNLAG / INVOICING (v12.19)
 // ============================================================
 let invoicingInitialized=false;
 
@@ -2134,7 +2134,7 @@ function exportInvoicingCSV(){
 }
 
 // ============================================================
-// ADD GUEST FROM BOOKING (v12.17)
+// ADD GUEST FROM BOOKING (v12.19)
 // ============================================================
 function addBookingToGuests(bookingId){
   const b=allBookings.find(x=>x.id===bookingId);
@@ -2158,7 +2158,7 @@ function addBookingToGuests(bookingId){
 }
 
 // ============================================================
-// GUEST BOOKINGS HISTORY (v12.17)
+// GUEST BOOKINGS HISTORY (v12.19)
 // ============================================================
 function showGuestBookings(name){
   if(!name)return;
@@ -2227,4 +2227,266 @@ function showGuestBookings(name){
     body.innerHTML=html;
   }
   document.getElementById('guestBookingsModal').classList.add('open');
+}
+
+// ============================================================
+// HOURS IMPORT (v12.19)
+// ============================================================
+let importHoursData=[];
+
+function closeImportHoursModal(){
+  document.getElementById('importHoursModal').classList.remove('open');
+  document.getElementById('importHoursFile').value='';
+  document.getElementById('importHoursPreview').style.display='none';
+  document.getElementById('importHoursProgress').style.display='none';
+  document.getElementById('importHoursResult').style.display='none';
+  document.getElementById('importHoursRunBtn').disabled=true;
+  importHoursData=[];
+}
+
+// Parse HH:MM time strings, validate
+function _parseTime(t){
+  if(!t)return null;t=String(t).trim();
+  const m=t.match(/^(\d{1,2}):(\d{2})$/);
+  if(!m)return null;
+  const h=parseInt(m[1]),min=parseInt(m[2]);
+  if(h<0||h>23||min<0||min>59)return null;
+  return String(h).padStart(2,'0')+':'+String(min).padStart(2,'0');
+}
+
+function parseImportHoursFile(){
+  const file=document.getElementById('importHoursFile').files[0];
+  if(!file){alert('Select a CSV file');return}
+  const reader=new FileReader();
+  reader.onload=function(e){
+    const lines=e.target.result.split(/\r?\n/).filter(l=>l.trim());
+    if(lines.length<2){alert('Need header row + at least one data row');return}
+    const sep=lines[0].includes(';')?';':',';
+    const headers=lines[0].split(sep).map(h=>h.trim().toLowerCase().replace(/['"]/g,''));
+    // Map column indices (accept Norwegian + English variants)
+    const colDate=headers.findIndex(h=>h==='date'||h==='dato');
+    const colWorker=headers.findIndex(h=>h==='worker'||h==='arbeider'||h==='ansatt'||h==='email'||h==='epost');
+    const colLocation=headers.findIndex(h=>h==='location'||h==='lokasjon'||h==='sted'||h==='property');
+    const colFrom=headers.findIndex(h=>h==='time_from'||h==='from'||h==='fra'||h==='start');
+    const colTo=headers.findIndex(h=>h==='time_to'||h==='to'||h==='til'||h==='end'||h==='slutt');
+    const colNotes=headers.findIndex(h=>h==='notes'||h==='note'||h==='merknad'||h==='kommentar');
+    if(colDate===-1||colWorker===-1||colLocation===-1||colFrom===-1||colTo===-1){
+      alert('Missing required columns (Date, Worker, Location, Time_From, Time_To). Found: '+headers.join(', '));return;
+    }
+    importHoursData=[];
+    for(let i=1;i<lines.length;i++){
+      const cols=lines[i].split(sep).map(c=>c.trim().replace(/^['"]|['"]$/g,''));
+      const dateRaw=cols[colDate]||'';
+      const worker=(cols[colWorker]||'').toLowerCase();
+      const location=cols[colLocation]||'';
+      const timeFrom=cols[colFrom]||'';
+      const timeTo=cols[colTo]||'';
+      const notes=colNotes>=0?(cols[colNotes]||''):'';
+      if(!dateRaw&&!worker&&!location)continue; // skip blank rows
+      const date=parseDate(dateRaw);
+      const tFrom=_parseTime(timeFrom);
+      const tTo=_parseTime(timeTo);
+      // Worker validation: should match a known user's email
+      const userMatch=worker?allUsers.find(u=>(u.Epost||'').toLowerCase()===worker):null;
+      let error=null;
+      if(!date)error='Invalid date';
+      else if(!worker)error='Worker required';
+      else if(!userMatch)error='Worker email not found in Users';
+      else if(!location)error='Location required';
+      else if(!tFrom)error='Invalid From time (HH:MM)';
+      else if(!tTo)error='Invalid To time (HH:MM)';
+      else if(calcHoursDiff(tFrom,tTo)<=0)error='Time_To must be after Time_From';
+      const hrs=(tFrom&&tTo)?calcHoursDiff(tFrom,tTo).toFixed(2):'—';
+      importHoursData.push({date,worker,location,timeFrom:tFrom,timeTo:tTo,notes,hrs,error,workerName:userMatch?userMatch.DisplayName:worker});
+    }
+    const valid=importHoursData.filter(r=>!r.error).length;
+    const issues=importHoursData.filter(r=>r.error).length;
+    document.getElementById('importHoursPreviewTitle').textContent=importHoursData.length+' rows — '+valid+' OK'+(issues?', '+issues+' with issues (will be skipped)':'');
+    document.getElementById('importHoursPreviewBody').innerHTML=importHoursData.slice(0,100).map(r=>
+      '<tr style="'+(r.error?'background:var(--bg-danger);color:var(--text-danger)':'')+'">'
+      +'<td>'+(r.date||'—')+'</td>'
+      +'<td>'+(r.workerName||r.worker||'—')+'</td>'
+      +'<td>'+(r.location||'—')+'</td>'
+      +'<td>'+(r.timeFrom||'—')+'</td>'
+      +'<td>'+(r.timeTo||'—')+'</td>'
+      +'<td style="text-align:right">'+r.hrs+'</td>'
+      +'<td style="font-size:10px">'+escapeHtml(r.notes||'')+'</td>'
+      +'<td style="font-size:10px">'+(r.error||'')+'</td>'
+      +'</tr>'
+    ).join('');
+    if(importHoursData.length>100){
+      document.getElementById('importHoursPreviewBody').innerHTML+='<tr><td colspan="8" style="text-align:center;font-style:italic;color:var(--text-tertiary);padding:8px">…and '+(importHoursData.length-100)+' more rows (preview limited to 100)</td></tr>';
+    }
+    document.getElementById('importHoursPreview').style.display='block';
+    document.getElementById('importHoursRunBtn').disabled=valid===0;
+  };
+  reader.readAsText(file,'UTF-8');
+}
+
+async function runImportHours(){
+  const valid=importHoursData.filter(r=>!r.error);
+  if(!valid.length)return;
+  // Check for potential duplicates against existing data
+  const dupes=valid.filter(r=>{
+    return allHours.some(h=>{
+      const hd=h.Date?toISODate(h.Date):'';
+      return hd===r.date&&(h.Worker||'').toLowerCase()===r.worker&&(h.Location||'')===r.location&&(h.Time_From||'')===r.timeFrom;
+    });
+  });
+  let confirmMsg='Import '+valid.length+' hours entries?';
+  if(dupes.length){
+    confirmMsg+='\n\n⚠ '+dupes.length+' look like duplicates of existing entries (same date/worker/location/start time). Continue anyway?';
+  }
+  if(!confirm(confirmMsg))return;
+  const bar=document.getElementById('importHoursProgressBar');
+  const text=document.getElementById('importHoursProgressText');
+  document.getElementById('importHoursProgress').style.display='block';
+  document.getElementById('importHoursRunBtn').disabled=true;
+  let success=0,failed=0;
+  const errors=[];
+  for(let i=0;i<valid.length;i++){
+    const r=valid[i];
+    text.textContent='Importing '+(i+1)+'/'+valid.length+'…';
+    bar.style.width=Math.round((i+1)/valid.length*100)+'%';
+    const fields={
+      Title:r.workerName+' — '+r.location+' — '+r.date,
+      Date:r.date+'T00:00:00Z',
+      Location:r.location,
+      Time_From:r.timeFrom,
+      Time_To:r.timeTo,
+      Worker:r.worker,
+      Notes:r.notes||''
+    };
+    try{
+      await createListItem('Hours',fields);
+      success++;
+    }catch(e){
+      failed++;
+      errors.push('Row '+(i+2)+': '+e.message);
+    }
+    // Throttle every 10 to avoid rate limiting
+    if(i%10===9)await new Promise(res=>setTimeout(res,500));
+  }
+  document.getElementById('importHoursProgress').style.display='none';
+  const result=document.getElementById('importHoursResult');
+  result.style.display='block';
+  result.style.background=failed?'var(--bg-warning)':'var(--bg-success)';
+  result.style.color=failed?'var(--text-warning)':'var(--text-success)';
+  let msg='Done! '+success+' imported'+(failed?', '+failed+' failed':'')+'.';
+  if(errors.length&&errors.length<=5)msg+='\n\nErrors: '+errors.join('; ');
+  result.textContent=msg;
+  // Reload Hours data so the new entries show up
+  if(success>0)await loadHoursData();
+}
+
+// ============================================================
+// CLEANING DIAGNOSTICS (v12.19)
+// ============================================================
+function showCleaningDiagnostics(){
+  const today=new Date();today.setHours(0,0,0,0);
+  const todayStr=formatDate(today);
+  const days=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  const dayName=days[today.getDay()];
+
+  // Group all bookings by property and analyze
+  const propGroups={};
+  allBookings.forEach(b=>{
+    const propName=b.Property_Name||'(unknown)';
+    if(!propGroups[propName])propGroups[propName]={active:0,upcoming:0,completed:0,cancelled:0,noStatus:0,washToday:0,noCheckIn:0,noRoomLink:0,bookings:[]};
+    const g=propGroups[propName];
+    if(b.Status==='Active')g.active++;
+    else if(b.Status==='Upcoming')g.upcoming++;
+    else if(b.Status==='Completed')g.completed++;
+    else if(b.Status==='Cancelled')g.cancelled++;
+    else g.noStatus++;
+    if(!b.Check_In)g.noCheckIn++;
+    if(!b.RoomLookupId)g.noRoomLink++;
+    if(b.Status==='Active'&&b.Check_In){
+      const w=calcWashDates(b.Check_In,b.Check_Out);
+      if(w.some(x=>x.isToday)){g.washToday++;g.bookings.push(b)}
+    }
+  });
+
+  let html='<div style="background:var(--bg-warning);padding:10px 12px;border-radius:6px;margin-bottom:14px;color:var(--text-warning);font-size:12px">'
+    +'<strong>Today is '+todayStr+' ('+dayName+').</strong> This shows what the system thinks needs cleaning today, and why bookings might be excluded.</div>';
+
+  // Per-property summary
+  html+='<table style="width:100%;font-size:12px;margin-bottom:18px"><thead><tr style="background:var(--bg-secondary)">'
+    +'<th style="padding:8px 10px;text-align:left">Property</th>'
+    +'<th style="padding:8px 10px;text-align:right">Active</th>'
+    +'<th style="padding:8px 10px;text-align:right">Upcoming</th>'
+    +'<th style="padding:8px 10px;text-align:right">Completed</th>'
+    +'<th style="padding:8px 10px;text-align:right">No status</th>'
+    +'<th style="padding:8px 10px;text-align:right">No Check-in</th>'
+    +'<th style="padding:8px 10px;text-align:right">No room link</th>'
+    +'<th style="padding:8px 10px;text-align:right;color:var(--text-success)">Wash today</th>'
+    +'</tr></thead><tbody>';
+  Object.keys(propGroups).sort().forEach(pn=>{
+    const g=propGroups[pn];
+    html+='<tr style="border-top:.5px solid var(--border-tertiary)">'
+      +'<td style="padding:6px 10px;font-weight:500">'+escapeHtml(pn)+'</td>'
+      +'<td style="padding:6px 10px;text-align:right">'+g.active+'</td>'
+      +'<td style="padding:6px 10px;text-align:right">'+g.upcoming+'</td>'
+      +'<td style="padding:6px 10px;text-align:right">'+g.completed+'</td>'
+      +'<td style="padding:6px 10px;text-align:right">'+(g.noStatus?'<span style="color:var(--text-danger)">'+g.noStatus+'</span>':'0')+'</td>'
+      +'<td style="padding:6px 10px;text-align:right">'+(g.noCheckIn?'<span style="color:var(--text-danger)">'+g.noCheckIn+'</span>':'0')+'</td>'
+      +'<td style="padding:6px 10px;text-align:right">'+(g.noRoomLink?'<span style="color:var(--text-danger)">'+g.noRoomLink+'</span>':'0')+'</td>'
+      +'<td style="padding:6px 10px;text-align:right;font-weight:500;color:var(--text-success)">'+g.washToday+'</td>'
+      +'</tr>';
+  });
+  html+='</tbody></table>';
+
+  // For current property: detailed analysis of every Active booking
+  if(selectedProperty){
+    const propName=selectedProperty.Title;
+    const currentRoomIds=new Set(rooms.map(r=>r.id));
+    const activeOnCurrentProp=allBookings.filter(b=>b.Status==='Active'&&currentRoomIds.has(String(b.RoomLookupId||'')));
+    html+='<h3 style="margin:0 0 8px;font-size:14px">Active bookings on '+escapeHtml(propName)+' — detailed wash analysis</h3>';
+    if(!activeOnCurrentProp.length){
+      html+='<p style="color:var(--text-secondary)">No active bookings on this property.</p>';
+    }else{
+      html+='<table style="width:100%;font-size:11px"><thead><tr style="background:var(--bg-secondary)">'
+        +'<th style="padding:6px 8px;text-align:left">Room</th>'
+        +'<th style="padding:6px 8px;text-align:left">Guest</th>'
+        +'<th style="padding:6px 8px;text-align:left">Check-in</th>'
+        +'<th style="padding:6px 8px;text-align:right">Days since</th>'
+        +'<th style="padding:6px 8px;text-align:left">Last wash</th>'
+        +'<th style="padding:6px 8px;text-align:left">Next wash</th>'
+        +'<th style="padding:6px 8px;text-align:left">Status today</th>'
+        +'</tr></thead><tbody>';
+      activeOnCurrentProp.sort((a,b)=>{
+        const ra=allRooms.find(r=>r.id===String(a.RoomLookupId));
+        const rb=allRooms.find(r=>r.id===String(b.RoomLookupId));
+        return (ra?ra.Title:'').localeCompare(rb?rb.Title:'',undefined,{numeric:true});
+      }).forEach(b=>{
+        const room=allRooms.find(r=>r.id===String(b.RoomLookupId));
+        const roomTitle=room?room.Title:'(no room)';
+        const ci=new Date(b.Check_In);ci.setHours(0,0,0,0);
+        const daysSince=Math.round((today-ci)/864e5);
+        const washes=calcWashDates(b.Check_In,b.Check_Out);
+        const past=washes.filter(w=>w.isPast);
+        const lastWash=past.length?past[past.length-1]:null;
+        const todayWash=washes.find(w=>w.isToday);
+        const nextWash=washes.find(w=>!w.isPast&&!w.isToday);
+        let statusToday='<span style="color:var(--text-tertiary)">—</span>';
+        if(todayWash)statusToday='<span style="color:var(--text-success);font-weight:500">✓ Wash today ('+todayWash.type+')</span>';
+        else if(b.Cleaning_Status==='Dirty')statusToday='<span style="color:var(--text-warning)">⚠ Marked Dirty</span>';
+        const nextStr=nextWash?formatDate(nextWash.date)+' ('+days[nextWash.date.getDay()]+') — '+nextWash.type:'<span class="muted">none</span>';
+        const lastStr=lastWash?formatDate(lastWash.date)+' — '+lastWash.type:'<span class="muted">none yet</span>';
+        html+='<tr style="border-top:.5px solid var(--border-tertiary)">'
+          +'<td style="padding:5px 8px;font-weight:500">'+escapeHtml(roomTitle)+'</td>'
+          +'<td style="padding:5px 8px">'+escapeHtml(b.Person_Name||'')+'</td>'
+          +'<td style="padding:5px 8px">'+formatDate(b.Check_In)+' ('+days[ci.getDay()]+')</td>'
+          +'<td style="padding:5px 8px;text-align:right">'+daysSince+'</td>'
+          +'<td style="padding:5px 8px">'+lastStr+'</td>'
+          +'<td style="padding:5px 8px">'+nextStr+'</td>'
+          +'<td style="padding:5px 8px">'+statusToday+'</td>'
+          +'</tr>';
+      });
+      html+='</tbody></table>';
+    }
+  }
+
+  document.getElementById('diagBody').innerHTML=html;
+  document.getElementById('diagModal').classList.add('open');
 }
