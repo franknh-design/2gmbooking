@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v13.14.1 — modules.js
+// 2GM Booking v13.15 — modules.js
 // Hours, Archive, Import/Export, Admin (checkbox permissions)
 // ============================================================
 
@@ -943,7 +943,7 @@ async function deleteRate(id){
 }
 
 // ============================================================
-// PERSONS / CUSTOMERS (v13.14.1)
+// PERSONS / CUSTOMERS (v13.15)
 // ============================================================
 let editingPersonId=null;
 
@@ -1240,7 +1240,7 @@ function onPersonNameInput(){
 }
 
 // ============================================================
-// CHARTS (v13.14.1) — pure SVG, no dependencies
+// CHARTS (v13.15) — pure SVG, no dependencies
 // ============================================================
 
 // Reusable bar chart: data = [{label, value, subtitle?}]
@@ -1549,7 +1549,7 @@ function renderHoursCharts(filtered){
 }
 
 // ============================================================
-// CLEANING EFFICIENCY ANALYSIS (v13.14.1)
+// CLEANING EFFICIENCY ANALYSIS (v13.15)
 // ============================================================
 // Compares cleaner hours against guest-nights per property, per week/month.
 // USE WITH CAUTION: Hours include breaks, transport, repairs — not just cleaning.
@@ -1902,7 +1902,7 @@ function _dateFromIsoWeek(year,week){
 }
 
 // ============================================================
-// MORE MENU (v13.14.1)
+// MORE MENU (v13.15)
 // ============================================================
 function toggleMoreMenu(e){
   if(e){e.stopPropagation();e.preventDefault()}
@@ -1929,7 +1929,7 @@ function closeMoreMenu(){
 }
 
 // ============================================================
-// FAKTURAGRUNNLAG / INVOICING (v13.14.1)
+// FAKTURAGRUNNLAG / INVOICING (v13.15)
 // ============================================================
 let invoicingInitialized=false;
 
@@ -2454,7 +2454,7 @@ function exportInvoicingCSV(companyFilterName){
 }
 
 // ============================================================
-// ADD GUEST FROM BOOKING (v13.14.1)
+// ADD GUEST FROM BOOKING (v13.15)
 // ============================================================
 function addBookingToGuests(bookingId){
   if(!can('edit_bookings')){alert('You do not have permission to add guests.');return}
@@ -2479,7 +2479,7 @@ function addBookingToGuests(bookingId){
 }
 
 // ============================================================
-// GUEST BOOKINGS HISTORY (v13.14.1)
+// GUEST BOOKINGS HISTORY (v13.15)
 // ============================================================
 function showGuestBookings(name){
   if(!name)return;
@@ -2551,7 +2551,7 @@ function showGuestBookings(name){
 }
 
 // ============================================================
-// HOURS IMPORT (v13.14.1)
+// HOURS IMPORT (v13.15)
 // ============================================================
 let importHoursData=[];
 
@@ -2701,7 +2701,7 @@ async function runImportHours(){
 }
 
 // ============================================================
-// CLEANING DIAGNOSTICS (v13.14.1)
+// CLEANING DIAGNOSTICS (v13.15)
 // ============================================================
 function showCleaningDiagnostics(){
   const today=new Date();today.setHours(0,0,0,0);
@@ -2813,7 +2813,7 @@ function showCleaningDiagnostics(){
 }
 
 // ============================================================
-// BATTERY REFRESH (v13.14.1)
+// BATTERY REFRESH (v13.15)
 // ============================================================
 const BATTERY_FILE_PATH='Batteristatus/RoomBattery.csv';
 
@@ -2892,7 +2892,7 @@ async function refreshBatteryStatus(){
 }
 
 // ============================================================
-// COMPANIES MANAGEMENT (v13.14.1)
+// COMPANIES MANAGEMENT (v13.15)
 // ============================================================
 let editingCompanyId=null;
 
@@ -2955,6 +2955,7 @@ function openCompanyEdit(companyId){
   document.getElementById('coContactPhone').value=c?c.ContactPhone||'':'';
   document.getElementById('coNotes').value=c?c.Notes||'':'';
   document.getElementById('coActive').value=c?(c.Active===false?'false':'true'):'true';
+  const brregStatus=document.getElementById('coBrregStatus');if(brregStatus)brregStatus.innerHTML='';
   document.getElementById('coDeleteBtn').style.display=c?'':'none';
   // Show usage info
   if(c){
@@ -3098,4 +3099,72 @@ async function quickAddCompany(name){
       const el=document.getElementById(id);if(el)el.innerHTML='<span style="color:var(--text-success)">✓ Added "'+escapeHtml(name)+'" to Companies</span>';
     });
   }catch(e){alert('Failed to add company: '+e.message)}
+}
+
+// ============================================================
+// BRREG LOOKUP (v13.15)
+// ============================================================
+// Fetches company information from Brønnøysundregistrene open API.
+// https://data.brreg.no/enhetsregisteret/api/enheter/{orgnr}
+async function lookupBrreg(){
+  const rawNr=(document.getElementById('coOrgNr').value||'').trim();
+  const status=document.getElementById('coBrregStatus');
+  // Strip spaces, dashes, dots
+  const orgNr=rawNr.replace(/[\s\-.]/g,'');
+  if(!/^\d{9}$/.test(orgNr)){
+    status.innerHTML='<span style="color:var(--text-danger)">⚠ Ugyldig org.nr (må være 9 sifre)</span>';
+    return;
+  }
+  status.innerHTML='<span style="color:var(--text-tertiary)">Henter fra brreg.no...</span>';
+  try{
+    const r=await fetch('https://data.brreg.no/enhetsregisteret/api/enheter/'+orgNr,{headers:{Accept:'application/json'}});
+    if(r.status===404){
+      status.innerHTML='<span style="color:var(--text-danger)">✕ Fant ikke org.nr '+orgNr+' i Enhetsregisteret</span>';
+      return;
+    }
+    if(!r.ok){
+      status.innerHTML='<span style="color:var(--text-danger)">✕ Feil fra brreg.no: '+r.status+'</span>';
+      return;
+    }
+    const data=await r.json();
+    // Warnings for problematic entities
+    const warnings=[];
+    if(data.slettedato)warnings.push('⚠ SLETTET '+data.slettedato);
+    if(data.konkurs)warnings.push('⚠ KONKURS');
+    if(data.underAvvikling)warnings.push('⚠ UNDER AVVIKLING');
+    if(data.underTvangsavviklingEllerTvangsopplosning)warnings.push('⚠ UNDER TVANGSAVVIKLING');
+    // Offer to pre-fill; confirm first if user already has data
+    const name=data.navn||'';
+    const addr=data.forretningsadresse||data.postadresse||{};
+    const addrLines=(addr.adresse||[]).join(', ');
+    const postalCode=addr.postnummer||'';
+    const city=addr.poststed||'';
+    const fullAddress=[addrLines,postalCode+' '+city].filter(x=>x.trim()).join(', ');
+    const email=data.epostadresse||'';
+    const phone=data.telefon||data.mobil||'';
+    // Check if fields have existing data
+    const existingName=document.getElementById('coName').value.trim();
+    const existingAddr=document.getElementById('coInvoiceAddress').value.trim();
+    const existingEmail=document.getElementById('coInvoiceEmail').value.trim();
+    const existingPhone=document.getElementById('coContactPhone').value.trim();
+    const hasExisting=existingName||existingAddr||existingEmail||existingPhone;
+    if(hasExisting){
+      const preview='Navn: '+name+'\nAdresse: '+fullAddress+(email?'\nEpost: '+email:'')+(phone?'\nTelefon: '+phone:'');
+      if(!confirm('Overskriv eksisterende felter med data fra brreg.no?\n\n'+preview))return;
+    }
+    // Populate fields
+    if(name)document.getElementById('coName').value=name;
+    if(fullAddress)document.getElementById('coInvoiceAddress').value=fullAddress;
+    if(email)document.getElementById('coInvoiceEmail').value=email;
+    if(phone)document.getElementById('coContactPhone').value=phone;
+    // Show status with warnings
+    const bransje=data.naeringskode1?data.naeringskode1.beskrivelse:'';
+    let msg='<span style="color:var(--text-success)">✓ Hentet: '+escapeHtml(name)+(bransje?' · '+escapeHtml(bransje):'')+'</span>';
+    if(warnings.length){
+      msg+='<div style="color:var(--text-danger);font-weight:500;margin-top:3px">'+warnings.join(' · ')+'</div>';
+    }
+    status.innerHTML=msg;
+  }catch(e){
+    status.innerHTML='<span style="color:var(--text-danger)">✕ Nettverksfeil: '+escapeHtml(e.message)+'</span>';
+  }
 }
