@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v13.1 — app.js (Core)
+// 2GM Booking v13.3 — app.js (Core)
 // Auth, Graph API, Data, Rendering, Bookings
 // ============================================================
 
@@ -175,6 +175,33 @@ function applyPermissions(){
 }
 
 // --- DATA LOADING ---
+// Reset all view state when switching properties — clear filters, close panels, etc.
+function resetViewStateForPropertyChange(){
+  // Clear active filter
+  activeFilter=null;
+  const fb=document.getElementById('filterBar');if(fb)fb.classList.remove('active');
+  // Close detail panel
+  const dp=document.getElementById('detailPanel');if(dp)dp.classList.remove('open');
+  selectedRoom=null;selectedBooking=null;
+  // Close side panels
+  ['incomingPanel','archivePanel','personsPanel','invoicingPanel'].forEach(id=>{
+    const el=document.getElementById(id);if(el)el.classList.remove('open');
+  });
+  // Remove panel-mode on main view
+  const mv=document.getElementById('mainView');if(mv)mv.classList.remove('panel-mode');
+  // If user was in Hours view, go back to main for the new property
+  if(currentView==='hours'){
+    currentView='main';
+    const hv=document.getElementById('hoursView');if(hv)hv.style.display='none';
+    if(mv)mv.style.display='';
+    const ps=document.getElementById('propertySelect');if(ps)ps.style.display='';
+  }
+  // Close More-menu if open
+  const mm=document.getElementById('moreMenu');if(mm)mm.style.display='none';
+  // Update nav-active state (all inactive after reset)
+  if(typeof updateNavActiveState==='function')updateNavActiveState();
+}
+
 async function loadProperties(){
   try{
     const allProps=await getListItems('Properties');
@@ -188,7 +215,11 @@ async function loadProperties(){
     }
     const sel=document.getElementById('propertySelect');
     sel.innerHTML=properties.map(p=>'<option value="'+p.id+'">'+p.Title+'</option>').join('');
-    sel.onchange=()=>{selectedProperty=properties.find(p=>p.id===sel.value);loadData()};
+    sel.onchange=()=>{
+      selectedProperty=properties.find(p=>p.id===sel.value);
+      resetViewStateForPropertyChange();
+      loadData();
+    };
     selectedProperty=properties[0];
   }catch(e){console.error('Error loading properties:',e)}
 }
@@ -726,19 +757,61 @@ function populateRoomSelect(preselectedRoomId){
   sel.onchange=()=>{const rm=rooms.find(r=>r.id===sel.value);document.getElementById('fFloor').value=rm?rm.Floor:''};
   const rm=rooms.find(r=>r.id===sel.value);document.getElementById('fFloor').value=rm?rm.Floor:'';
 }
+
+// Returns id of first available room for given check-in/check-out, or null
+function findFirstAvailableRoomId(checkInStr,checkOutStr){
+  if(!checkInStr)return null;
+  const newIn=new Date(checkInStr+'T00:00:00');newIn.setHours(0,0,0,0);
+  const newOut=checkOutStr?new Date(checkOutStr+'T00:00:00'):null;
+  if(newOut)newOut.setHours(0,0,0,0);
+  const sorted=[...rooms].sort((a,b)=>(a.Title||'').localeCompare(b.Title||'',undefined,{numeric:true}));
+  for(const room of sorted){
+    const hasConflict=allBookings.some(b=>{
+      if(b.Status==='Cancelled'||b.Status==='Completed')return false;
+      if(String(b.RoomLookupId)!==String(room.id))return false;
+      const bIn=new Date(b.Check_In);bIn.setHours(0,0,0,0);
+      const bOut=b.Check_Out?new Date(b.Check_Out):null;if(bOut)bOut.setHours(0,0,0,0);
+      if(!bOut)return newIn>=bIn||(newOut?newOut>bIn:true);
+      if(!newOut)return bOut>newIn||bIn>=newIn;
+      return newIn<bOut&&newOut>bIn;
+    });
+    if(!hasConflict)return room.id;
+  }
+  return null;
+}
 function openNewBooking(preselectedRoomId){
   ensureMainView();
   editingBookingId=null;document.getElementById('bookingModalTitle').textContent='New booking';
   document.getElementById('bookingSaveBtn').textContent='Create booking';
-  populateRoomSelect(preselectedRoomId||'');
-  document.getElementById('fName').value='';document.getElementById('fCompany').value='';
   const todayStr=toISODate(new Date());
+  // If no room pre-selected, find first available for today
+  let roomToSelect=preselectedRoomId||'';
+  let autoSelected=false;
+  if(!roomToSelect){
+    const auto=findFirstAvailableRoomId(todayStr,'');
+    if(auto){roomToSelect=auto;autoSelected=true}
+  }
+  populateRoomSelect(roomToSelect);
+  document.getElementById('fName').value='';document.getElementById('fCompany').value='';
   document.getElementById('fCheckIn').value=todayStr;document.getElementById('fCheckOut').value='';
   // Default to Active if check-in is today, Upcoming otherwise
   document.getElementById('fStatus').value='Active';
   document.getElementById('fNotes').value='';
   document.getElementById('fIncludeCheckoutFee').checked=true;
   document.getElementById('fNameInfo').innerHTML='';
+  // Show auto-select hint in room-info area
+  const roomInfo=document.getElementById('fRoomInfo');
+  if(autoSelected&&roomToSelect){
+    const r=rooms.find(rm=>rm.id===roomToSelect);
+    if(r){
+      roomInfo.textContent='✓ Auto-selected first available: Room '+r.Title;
+      roomInfo.style.color='var(--text-success)';
+    }
+  }else if(!roomToSelect){
+    roomInfo.textContent='';
+  }else{
+    roomInfo.textContent='';
+  }
   document.getElementById('fOverlapWarning').style.display='none';
   attachOverlapListeners();
   attachStatusAutoSelect();
@@ -865,11 +938,14 @@ function findAvailableRoom(){
     });
 
     if(!hasConflict){
-      // Found available room — select it
-      document.getElementById('fRoom').value=room.id;
+      // Found available room — select it and trigger change event
+      const sel=document.getElementById('fRoom');
+      sel.value=room.id;
       const rm=rooms.find(r=>r.id===room.id);
       document.getElementById('fFloor').value=rm?rm.Floor:'';
-      info.textContent='✓ Room '+room.Title+' (Floor '+room.Floor+') is available';
+      // Dispatch change event so overlap warning and other listeners update
+      sel.dispatchEvent(new Event('change',{bubbles:true}));
+      info.textContent='✓ Room '+room.Title+' (Floor '+room.Floor+') — selected';
       info.style.color='var(--text-success)';
       return;
     }
