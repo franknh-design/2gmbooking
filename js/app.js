@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v14.0.9 — app.js (Core)
+// 2GM Booking v14.0.10 — app.js (Core)
 // Auth, Graph API, Data, Rendering, Bookings
 // ============================================================
 
@@ -213,31 +213,53 @@ async function createListItem(listName,fields){
     return await graphPost('/sites/'+s+'/lists/'+lid+'/items',{fields:final});
   }catch(e){
     if(String(e.message||'').indexOf('500')<0&&String(e.message||'').indexOf('General exception')<0)throw e;
-    // 500 with no useful info → automatically bisect to find offending field
-    console.warn('[BISECT] 500 received. Identifying problematic field by removing one at a time...');
+    // 500 with no useful info → systematic bisect
+    console.warn('[BISECT] 500 received. Building payload up from minimal to find the broken field combination...');
     const keys=Object.keys(final);
-    let problemField=null;
+    // Phase 1: try absolute minimal — just Title (or empty)
+    const startMinimal={};
+    if(final.Title)startMinimal.Title=final.Title;
+    else startMinimal.Title='_BISECT_TEST_'+Date.now();
+    let lastWorking=null;
+    let lastWorkingItemId=null;
+    try{
+      console.log('[BISECT] Phase 1: minimal payload',startMinimal);
+      const r=await graphPost('/sites/'+s+'/lists/'+lid+'/items',{fields:startMinimal});
+      console.log('[BISECT] ✓ Minimal succeeded with id='+r.id);
+      lastWorking={...startMinimal};
+      lastWorkingItemId=r.id;
+    }catch(e2){
+      console.warn('[BISECT] ✗ Even minimal payload failed:',e2.message);
+      throw new Error('Save failed. Even a minimal payload (just Title) fails. This is a list-level problem in SharePoint, not a field problem. Original error: '+e.message);
+    }
+    // Phase 2: add fields one at a time
+    let breakingField=null;
+    let breakingValue=null;
     for(let i=0;i<keys.length;i++){
-      const testFields={...final};
-      delete testFields[keys[i]];
-      console.log('[BISECT] Trying without "'+keys[i]+'"...');
+      const k=keys[i];
+      if(k in lastWorking)continue;
+      const testFields={...lastWorking,[k]:final[k]};
       try{
+        console.log('[BISECT] Adding "'+k+'"='+JSON.stringify(final[k])+'...');
+        // Delete previous test item before creating new one
+        if(lastWorkingItemId){try{await graphDelete('/sites/'+s+'/lists/'+lid+'/items/'+lastWorkingItemId)}catch(e3){}}
         const r=await graphPost('/sites/'+s+'/lists/'+lid+'/items',{fields:testFields});
-        // Success! This field was the problem. But we also created an item — delete it.
-        problemField=keys[i];
-        console.warn('[BISECT] ✓ Save succeeded WITHOUT "'+keys[i]+'". This is the problematic field. Cleaning up test item id='+r.id);
-        try{await graphDelete('/sites/'+s+'/lists/'+lid+'/items/'+r.id)}catch(e2){console.warn('[BISECT] Could not delete test item '+r.id+' — please remove manually')}
-        break;
+        lastWorking=testFields;
+        lastWorkingItemId=r.id;
+        console.log('[BISECT] ✓ OK with "'+k+'"');
       }catch(e2){
-        if(String(e2.message||'').indexOf('500')<0&&String(e2.message||'').indexOf('General exception')<0){
-          console.log('[BISECT] Still failed but with different error: '+e2.message);
-        }
+        console.warn('[BISECT] ✗ FAILED when adding "'+k+'"='+JSON.stringify(final[k])+':',e2.message);
+        breakingField=k;
+        breakingValue=final[k];
+        break;
       }
     }
-    if(problemField){
-      throw new Error('Save failed. Problematic field identified: "'+problemField+'" with value: '+JSON.stringify(final[problemField])+'. Check SharePoint column type/configuration.');
+    // Cleanup last test item
+    if(lastWorkingItemId){try{await graphDelete('/sites/'+s+'/lists/'+lid+'/items/'+lastWorkingItemId)}catch(e3){console.warn('[BISECT] Could not delete test item '+lastWorkingItemId+' — please remove manually')}}
+    if(breakingField){
+      throw new Error('Save failed. Adding field "'+breakingField+'" with value '+JSON.stringify(breakingValue)+' broke the request. Check SharePoint column type/required. Last working set: '+Object.keys(lastWorking).join(', '));
     }
-    throw new Error('Save failed with 500 and bisect could not identify a single field. May be a combination of fields or schema issue. Original error: '+e.message);
+    throw new Error('Save failed unexpectedly. Bisect added all fields without breaking but original payload still failed. Strange. Original error: '+e.message);
   }
 }
 async function updateListItem(listName,itemId,fields){
@@ -1593,7 +1615,7 @@ msalInstance.initialize().then(()=>{
 });
 
 // ============================================================
-// AUTO-REFRESH (v14.0.9)
+// AUTO-REFRESH (v14.0.10)
 // ============================================================
 
 // Build a fingerprint that tells us if data has changed without full reload
