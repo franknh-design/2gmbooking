@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v14.4 — modules.js
+// 2GM Booking v14.5 — modules.js
 // Hours, Archive, Import/Export, Admin (checkbox permissions)
 // ============================================================
 
@@ -988,7 +988,7 @@ async function deleteRate(id){
 }
 
 // ============================================================
-// PERSONS / CUSTOMERS (v14.4)
+// PERSONS / CUSTOMERS (v14.5)
 // ============================================================
 let editingPersonId=null;
 
@@ -1288,7 +1288,7 @@ function onPersonNameInput(){
 }
 
 // ============================================================
-// CHARTS (v14.4) — pure SVG, no dependencies
+// CHARTS (v14.5) — pure SVG, no dependencies
 // ============================================================
 
 // Reusable bar chart: data = [{label, value, subtitle?}]
@@ -1597,7 +1597,7 @@ function renderHoursCharts(filtered){
 }
 
 // ============================================================
-// CLEANING EFFICIENCY ANALYSIS (v14.4)
+// CLEANING EFFICIENCY ANALYSIS (v14.5)
 // ============================================================
 // Compares cleaner hours against guest-nights per property, per week/month.
 // USE WITH CAUTION: Hours include breaks, transport, repairs — not just cleaning.
@@ -1950,7 +1950,7 @@ function _dateFromIsoWeek(year,week){
 }
 
 // ============================================================
-// MORE MENU (v14.4)
+// MORE MENU (v14.5)
 // ============================================================
 function toggleMoreMenu(e){
   if(e){e.stopPropagation();e.preventDefault()}
@@ -1977,7 +1977,7 @@ function closeMoreMenu(){
 }
 
 // ============================================================
-// FAKTURAGRUNNLAG / INVOICING (v14.4)
+// FAKTURAGRUNNLAG / INVOICING (v14.5)
 // ============================================================
 let invoicingInitialized=false;
 
@@ -2178,7 +2178,7 @@ function renderInvoicing(){
     });
   });
 
-  // LONG-TERM CONTRACTS (per-room): segmented by guests/gaps (v14.4)
+  // LONG-TERM CONTRACTS (per-room): segmented by guests/gaps (v14.5)
   Object.keys(longTermByRoomId).forEach(rid=>{
     const room=allRooms.find(r=>r.id===rid);
     if(!room)return;
@@ -2537,7 +2537,7 @@ function exportInvoicingCSV(companyFilterName){
     ]);
   });
 
-  // Long-term per-room contracts (v14.4 segmented)
+  // Long-term per-room contracts (v14.5 segmented)
   Object.keys(longTermByRoomIdCsv).forEach(rid=>{
     const lt=longTermByRoomIdCsv[rid];
     if(companyFilterName&&lt.company!==companyFilterName)return;
@@ -2594,7 +2594,7 @@ function exportInvoicingCSV(companyFilterName){
 }
 
 // ============================================================
-// ADD GUEST FROM BOOKING (v14.4)
+// ADD GUEST FROM BOOKING (v14.5)
 // ============================================================
 function addBookingToGuests(bookingId){
   if(!can('edit_bookings')){alert('You do not have permission to add guests.');return}
@@ -2619,7 +2619,7 @@ function addBookingToGuests(bookingId){
 }
 
 // ============================================================
-// GUEST BOOKINGS HISTORY (v14.4)
+// GUEST BOOKINGS HISTORY (v14.5)
 // ============================================================
 function showGuestBookings(name){
   if(!name)return;
@@ -2691,7 +2691,7 @@ function showGuestBookings(name){
 }
 
 // ============================================================
-// HOURS IMPORT (v14.4)
+// HOURS IMPORT (v14.5)
 // ============================================================
 let importHoursData=[];
 
@@ -2841,7 +2841,7 @@ async function runImportHours(){
 }
 
 // ============================================================
-// CLEANING DIAGNOSTICS (v14.4)
+// CLEANING DIAGNOSTICS (v14.5)
 // ============================================================
 function showCleaningDiagnostics(){
   const today=new Date();today.setHours(0,0,0,0);
@@ -2953,7 +2953,7 @@ function showCleaningDiagnostics(){
 }
 
 // ============================================================
-// BATTERY REFRESH (v14.4)
+// BATTERY REFRESH (v14.5)
 // ============================================================
 const BATTERY_FILE_PATH='Batteristatus/RoomBattery.csv';
 
@@ -3009,8 +3009,10 @@ async function refreshBatteryStatus(){
       // Skip if value hasn't changed
       if(Number(room.Door_Battery_Level)===e.bat){unchanged++;continue}
       try{
-        await updateListItem('Rooms',room.id,{Door_Battery_Level:e.bat});
+        const nowIso=new Date().toISOString();
+        await updateListItem('Rooms',room.id,{Door_Battery_Level:e.bat,Door_Battery_Updated:nowIso});
         room.Door_Battery_Level=e.bat;
+        room.Door_Battery_Updated=nowIso;
         updated++;
       }catch(err){console.error('Failed to update room '+e.roomTitle+':',err);skipped++}
       // Throttle every 10 to avoid rate limiting
@@ -3023,6 +3025,8 @@ async function refreshBatteryStatus(){
     if(notFound.length)summary+='\n\nRooms not found in system: '+notFound.slice(0,20).join(', ')+(notFound.length>20?' (and '+(notFound.length-20)+' more)':'');
     alert(summary);
     if(typeof renderFloors==='function')renderFloors();
+    // Show low-battery alert (v14.5) — locks under 30%
+    showLowBatteryAlert();
     if(typeof updateStats==='function')updateStats();
   }catch(e){
     alert('Battery refresh failed:\n\n'+e.message+'\n\nExpected file location: Default document library > '+BATTERY_FILE_PATH);
@@ -3032,7 +3036,7 @@ async function refreshBatteryStatus(){
 }
 
 // ============================================================
-// COMPANIES MANAGEMENT (v14.4)
+// COMPANIES MANAGEMENT (v14.5)
 // ============================================================
 let editingCompanyId=null;
 
@@ -3260,7 +3264,7 @@ async function quickAddCompany(name){
 }
 
 // ============================================================
-// BRREG LOOKUP (v14.4)
+// BRREG LOOKUP (v14.5)
 // ============================================================
 // Fetches company information from Brønnøysundregistrene open API.
 // https://data.brreg.no/enhetsregisteret/api/enheter/{orgnr}
@@ -3328,7 +3332,7 @@ async function lookupBrreg(){
 }
 
 // ============================================================
-// PDF EXPORT VIA PRINT (v14.4)
+// PDF EXPORT VIA PRINT (v14.5)
 // ============================================================
 // Opens a print-friendly window containing the same data as exportInvoicingCSV.
 // Browser's print dialog allows "Save as PDF" as the destination.
@@ -3441,7 +3445,7 @@ function exportInvoicingPDF(companyFilterName){
     if(!groups[key])groups[key]={nights:[],fees:[],percent:null,fullTenant:null,longTerm:[]};
     groups[key].fullTenant={property:prop?prop.Title:'',rooms:ft.rooms,days:ft.days,rate:ft.rate,total:ft.total,detailLabel:ft.detailLabel};
   });
-  // Long-term per-room contracts (v14.4 segmented)
+  // Long-term per-room contracts (v14.5 segmented)
   Object.keys(longTermByRoomIdPdf).forEach(rid=>{
     const lt=longTermByRoomIdPdf[rid];
     if(companyFilterName&&lt.company!==companyFilterName)return;
@@ -3494,7 +3498,7 @@ function exportInvoicingPDF(companyFilterName){
       tableRows+='<tr class="ft-row"><td colspan="4"><strong>🔒 Full-tenant lease — '+escapeHtml(ft.property)+'</strong><br><small>'+escapeHtml(ft.detailLabel||'')+'</small></td><td class="num"><strong>'+fmtKr(ft.total)+'</strong></td></tr>';
     }
 
-    // Long-term per-room contracts (v14.4 segmented): summary + collapsible detail rows
+    // Long-term per-room contracts (v14.5 segmented): summary + collapsible detail rows
     if(g.longTerm&&g.longTerm.length){
       const ltTotal=g.longTerm.reduce((s,lt)=>s+lt.total,0);
       groupTotal+=ltTotal;
@@ -3621,7 +3625,7 @@ function exportInvoicingPDF(companyFilterName){
 }
 
 // ============================================================
-// PRICING TABS — Full-tenant + Long-term editors (v14.4)
+// PRICING TABS — Full-tenant + Long-term editors (v14.5)
 // ============================================================
 function switchPricingTab(tab){
   document.querySelectorAll('.pricing-tab').forEach(b=>{
@@ -3877,7 +3881,7 @@ async function bulkApplyLongTermContract(){
 }
 
 // ============================================================
-// BACKUP & RESTORE (v14.4)
+// BACKUP & RESTORE (v14.5)
 // ============================================================
 const BACKUP_LISTS=['Properties','Rooms','Bookings','Persons','Cleaning_Log','Hours','Users','Rates','Companies'];
 
@@ -3888,7 +3892,7 @@ async function exportBackup(){
   try{
     const data={
       meta:{
-        appVersion:'v14.4',
+        appVersion:'v14.5',
         timestamp:new Date().toISOString(),
         exportedBy:currentUser.email||'unknown',
         siteId:siteId
@@ -4053,7 +4057,7 @@ async function restoreSingleItem(listName,idx){
 }
 
 // ============================================================
-// COMPANY MERGE (v14.4)
+// COMPANY MERGE (v14.5)
 // ============================================================
 function openMergeCompanies(){
   if(!can('manage_companies')&&!can('admin')){alert('Permission required');return}
@@ -4264,7 +4268,7 @@ async function deleteListItem(listName,itemId){
 }
 
 // ============================================================
-// MESSAGING — SMS & E-post (v14.4)
+// MESSAGING — SMS & E-post (v14.5)
 // ============================================================
 const DEFAULT_SMS_TEMPLATE=`Hei {first_name}!
 Velkommen til {property}.
@@ -4547,7 +4551,7 @@ function previewTemplate(kind){
 }
 
 // ============================================================
-// DOOR CODE GENERATOR — Phase 1 (v14.4)
+// DOOR CODE GENERATOR — Phase 1 (v14.5)
 // Generates 6-digit codes per room, stored in Rooms.Door_Code.
 // Tuya integration is Phase 2 (later).
 // ============================================================
@@ -4632,4 +4636,100 @@ function showDoorCodeDisplay(room,code){
     +'</div>'
     +'</div>';
   modal.classList.add('open');
+}
+
+// ============================================================
+// BATTERY DISPLAY (v14.5)
+// ============================================================
+function _formatRelativeTime(iso){
+  if(!iso)return '(ukjent)';
+  const d=new Date(iso);
+  if(isNaN(d.getTime()))return '(ukjent)';
+  const now=new Date();
+  const diffMs=now-d;
+  const diffMin=Math.floor(diffMs/60000);
+  const diffHr=Math.floor(diffMs/3600000);
+  const diffDay=Math.floor(diffMs/86400000);
+  if(diffMs<0)return formatDate(d);// future, just show date
+  if(diffMin<1)return 'akkurat nå';
+  if(diffMin<60)return 'for '+diffMin+' min siden';
+  if(diffHr<24)return 'for '+diffHr+' time'+(diffHr===1?'':'r')+' siden';
+  if(diffDay<7)return 'for '+diffDay+' dag'+(diffDay===1?'':'er')+' siden';
+  return formatDate(d);
+}
+
+function _formatExactDateTime(iso){
+  if(!iso)return '';
+  const d=new Date(iso);
+  if(isNaN(d.getTime()))return '';
+  const dd=String(d.getDate()).padStart(2,'0');
+  const mm=String(d.getMonth()+1).padStart(2,'0');
+  const yyyy=d.getFullYear();
+  const hh=String(d.getHours()).padStart(2,'0');
+  const mi=String(d.getMinutes()).padStart(2,'0');
+  return dd+'.'+mm+'.'+yyyy+' '+hh+':'+mi;
+}
+
+function renderBatteryStatusHtml(room){
+  if(!room)return '';
+  const bat=room.Door_Battery_Level;
+  if(bat==null)return '<div style="font-size:12px;color:var(--text-tertiary);margin-top:6px">🔋 Batteri: <em>ikke registrert</em></div>';
+  const updated=room.Door_Battery_Updated;
+  // Color coding
+  let color,bg;
+  if(bat>=50){color='#1D9E75';bg='rgba(29,158,117,.08)'}
+  else if(bat>=30){color='#EF9F27';bg='rgba(239,159,39,.10)'}
+  else{color='#D14343';bg='rgba(209,67,67,.10)'}
+  const icon=bat>=80?'🔋':bat>=30?'🔋':'🪫';
+  const relTime=updated?_formatRelativeTime(updated):'';
+  const exactTime=updated?_formatExactDateTime(updated):'';
+  const timeHtml=updated
+    ?'<span style="color:var(--text-tertiary);font-size:11px" title="'+exactTime+'"> · sist oppdatert '+relTime+'</span>'
+    :'<span style="color:var(--text-tertiary);font-size:11px"> · timestamp mangler</span>';
+  return '<div style="display:inline-block;padding:4px 10px;border-radius:6px;background:'+bg+';color:'+color+';font-size:12px;margin-top:6px;font-weight:500">'
+    +icon+' '+bat+'%'+timeHtml
+    +'</div>';
+}
+
+function showLowBatteryAlert(){
+  const lowRooms=allRooms.filter(r=>r.Door_Battery_Level!=null&&Number(r.Door_Battery_Level)<30);
+  if(!lowRooms.length)return;
+  // Build modal once, reuse
+  let modal=document.getElementById('lowBatteryModal');
+  if(!modal){
+    modal=document.createElement('div');
+    modal.id='lowBatteryModal';
+    modal.className='modal-overlay';
+    modal.innerHTML='<div class="modal" style="max-width:600px"><div class="modal-header"><h2>🪫 Lavt batteri</h2><button onclick="document.getElementById(\'lowBatteryModal\').classList.remove(\'open\')" style="padding:5px 14px;border:1px solid var(--border-tertiary);border-radius:var(--radius-md);font-size:14px;font-family:inherit;background:var(--bg-secondary);cursor:pointer;font-weight:500">✕ Lukk</button></div><div class="modal-body"><div id="lowBatteryBody"></div></div></div>';
+    document.body.appendChild(modal);
+  }
+  // Sort by battery ascending (lowest first)
+  lowRooms.sort((a,b)=>Number(a.Door_Battery_Level)-Number(b.Door_Battery_Level));
+  let html='<div style="background:rgba(209,67,67,.08);border-left:3px solid #D14343;padding:10px 14px;margin-bottom:14px;font-size:13px;border-radius:6px">'
+    +'<strong>'+lowRooms.length+' lås'+(lowRooms.length===1?'':'er')+' har batteri under 30%</strong> — bytt batteri snart for å unngå at gjester blir låst ute.'
+    +'</div>';
+  html+='<div style="max-height:400px;overflow-y:auto">';
+  lowRooms.forEach(r=>{
+    const prop=properties.find(p=>String(p.id)===String(r.PropertyLookupId));
+    const bat=Number(r.Door_Battery_Level);
+    const color=bat<15?'#D14343':'#EF9F27';
+    const icon=bat<15?'🪫':'🔋';
+    html+='<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;border-bottom:.5px solid var(--border-tertiary)">'
+      +'<div><strong>'+escapeHtml(r.Title||'')+'</strong> <span style="color:var(--text-tertiary);font-size:11px">'+escapeHtml(prop?prop.Title:'')+'</span></div>'
+      +'<div style="color:'+color+';font-weight:600;font-size:14px">'+icon+' '+bat+'%</div>'
+      +'</div>';
+  });
+  html+='</div>';
+  document.getElementById('lowBatteryBody').innerHTML=html;
+  modal.classList.add('open');
+}
+
+// Manual trigger from menu
+function showLowBatteryStatus(){
+  const lowRooms=allRooms.filter(r=>r.Door_Battery_Level!=null&&Number(r.Door_Battery_Level)<30);
+  if(!lowRooms.length){
+    _toast('✓ Ingen låser med lavt batteri');
+    return;
+  }
+  showLowBatteryAlert();
 }

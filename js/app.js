@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v14.4 — app.js (Core)
+// 2GM Booking v14.5 — app.js (Core)
 // Auth, Graph API, Data, Rendering, Bookings
 // ============================================================
 
@@ -1157,6 +1157,7 @@ function showDetail(roomId){
         +'<tr><td>Door tag</td><td>'+dt+'</td></tr>'
         +'<tr><td>Cleaning</td><td>'+cl+'</td></tr>'
         +(booking.Notes?'<tr><td>Notes</td><td>'+booking.Notes+'</td></tr>':'')
+        +'<tr><td>Battery</td><td>'+(typeof renderBatteryStatusHtml==='function'?renderBatteryStatusHtml(room):'(n/a)')+'</td></tr>'
         +((booking.Continuation===true||booking.Continuation==='true'||booking.Continuation===1)?'<tr><td>🔗 Continuation</td><td><span style="color:#7B61FF;font-weight:500">Yes — utvask skipped</span></td></tr>':'')
         +((booking.Billing_Company||'').trim()&&(booking.Billing_Company||'').trim()!==(booking.Company||'').trim()?'<tr><td>💳 Billing</td><td><span style="color:var(--accent);font-weight:500">'+escapeHtml(booking.Billing_Company)+'</span> <span style="color:var(--text-tertiary);font-size:11px">(rate &amp; invoice follow billing company)</span></td></tr>':'')
         +'</table>'
@@ -1182,7 +1183,7 @@ function showDetail(roomId){
         })():'')
         +washHtml;
     }else{
-      infoHtml='<div class="detail-name">Room '+room.Title+'</div><div class="detail-sub">'+cl+'</div>'+washHtml;
+      infoHtml='<div class="detail-name">Room '+room.Title+'</div><div class="detail-sub">'+cl+'</div>'+(typeof renderBatteryStatusHtml==='function'?renderBatteryStatusHtml(room):'')+washHtml;
     }
     let btns='';
     if(can('edit_bookings'))btns+='<button onclick="openEditBooking(\''+booking.id+'\')">Edit booking</button>';
@@ -1731,7 +1732,7 @@ msalInstance.initialize().then(()=>{
 });
 
 // ============================================================
-// AUTO-REFRESH (v14.4)
+// AUTO-REFRESH (v14.5)
 // ============================================================
 
 // Build a fingerprint that tells us if data has changed without full reload
