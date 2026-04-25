@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- 2GM Booking v14.0.11 — Created by Frank Haugan -->
+<!-- 2GM Booking v14.1 — Created by Frank Haugan -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -157,7 +157,7 @@ tbody td{padding:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
         <tbody id="floor2Body"><tr><td colspan="7" class="loading">Loading...</td></tr></tbody></table></div>
     </div>
     <div class="incoming-panel" id="incomingPanel">
-      <div class="incoming-head"><span class="title">Upcoming — next 30 days</span><button class="modal-close" onclick="toggleIncoming()">&times;</button></div>
+      <div class="incoming-head"><span class="title">Upcoming — next 30 days</span><button onclick="toggleIncoming()" title="Lukk" style="padding:5px 14px;border:1px solid var(--border-tertiary);border-radius:var(--radius-md);font-size:14px;font-family:inherit;background:var(--bg-secondary);color:var(--text-primary);cursor:pointer;font-weight:500">✕ Lukk</button></div>
       <table id="tableUpcoming"><thead><tr><th>Room</th><th>Name</th><th>Company</th><th>Check-in</th><th>Check-out</th><th>Status</th><th></th></tr></thead>
       <tbody id="incomingBody"></tbody></table>
     </div>
@@ -173,7 +173,7 @@ tbody td{padding:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
           <button id="archiveChartsBtn" onclick="toggleArchiveCharts()" title="Show charts" style="padding:5px 12px;border:1px solid var(--border-tertiary);border-radius:var(--radius-md);font-size:13px;background:var(--bg-secondary);cursor:pointer">📊 Charts</button>
           <button onclick="exportArchiveExcel()" style="padding:5px 12px;border:1px solid var(--border-tertiary);border-radius:var(--radius-md);font-size:13px;font-family:inherit;background:var(--accent);color:#fff;cursor:pointer">↓ Export</button>
           <button onclick="document.getElementById('importModal').classList.add('open')" style="padding:5px 12px;border:1px solid var(--border-tertiary);border-radius:var(--radius-md);font-size:13px;font-family:inherit;background:#EF9F27;color:#fff;cursor:pointer">↑ Import</button>
-          <button class="modal-close" onclick="toggleArchive()">&times;</button>
+          <button onclick="toggleArchive()" title="Lukk" style="padding:5px 14px;border:1px solid var(--border-tertiary);border-radius:var(--radius-md);font-size:14px;font-family:inherit;background:var(--bg-secondary);color:var(--text-primary);cursor:pointer;font-weight:500">✕ Lukk</button>
         </div>
       </div>
       <div id="archiveChartsContainer" style="display:none;padding:16px;border-bottom:1px solid var(--border-tertiary);background:var(--bg-tertiary)"></div>
@@ -185,7 +185,7 @@ tbody td{padding:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
           <input type="text" id="personsSearch" placeholder="Search name, company, email, phone..." oninput="renderPersons()" style="padding:5px 10px;border:1px solid var(--border-tertiary);border-radius:var(--radius-md);font-size:13px;font-family:inherit;width:260px">
           <button id="btnNewGuest" onclick="openPersonEdit()" style="padding:5px 12px;border:1px solid var(--accent);border-radius:var(--radius-md);font-size:13px;font-family:inherit;background:var(--accent);color:#fff;cursor:pointer">+ New guest</button>
-          <button class="modal-close" onclick="togglePersons()">&times;</button>
+          <button onclick="togglePersons()" title="Lukk" style="padding:5px 14px;border:1px solid var(--border-tertiary);border-radius:var(--radius-md);font-size:14px;font-family:inherit;background:var(--bg-secondary);color:var(--text-primary);cursor:pointer;font-weight:500">✕ Lukk</button>
         </div>
       </div>
       <div style="max-height:600px;overflow-y:auto"><table><thead><tr><th>Name</th><th>Current room</th><th>Company</th><th>Mobile</th><th>Email</th><th>Address</th><th>Bookings</th><th></th></tr></thead><tbody id="personsBody"></tbody></table></div>
@@ -210,7 +210,7 @@ tbody td{padding:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
           </select>
           <button onclick="exportInvoicingCSV()" style="padding:5px 12px;border:1px solid var(--border-tertiary);border-radius:var(--radius-md);font-size:13px;font-family:inherit;background:var(--accent);color:#fff;cursor:pointer">↓ CSV all</button>
           <button onclick="exportInvoicingPDF()" style="padding:5px 12px;border:1px solid var(--border-tertiary);border-radius:var(--radius-md);font-size:13px;font-family:inherit;background:#1D9E75;color:#fff;cursor:pointer" title="Export as PDF via print dialog">📄 PDF</button>
-          <button class="modal-close" onclick="toggleInvoicing()">&times;</button>
+          <button onclick="toggleInvoicing()" title="Lukk" style="padding:5px 14px;border:1px solid var(--border-tertiary);border-radius:var(--radius-md);font-size:14px;font-family:inherit;background:var(--bg-secondary);color:var(--text-primary);cursor:pointer;font-weight:500">✕ Lukk</button>
         </div>
       </div>
       <div id="invoicingBody" style="padding:14px"></div>
@@ -246,7 +246,7 @@ tbody td{padding:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
       </div>
     </div>
   </div>
-  <div style="text-align:center;padding:12px;font-size:11px;color:var(--text-tertiary);margin-top:1rem">v14.0.11 — Created by Frank Haugan</div>
+  <div style="text-align:center;padding:12px;font-size:11px;color:var(--text-tertiary);margin-top:1rem">v14.1 — Created by Frank Haugan</div>
 </div>
 <!-- Modals -->
 <div class="modal-overlay" id="bookingModal"><div class="modal"><div class="modal-header"><h2 id="bookingModalTitle">New booking</h2><button class="modal-close" onclick="closeBookingModal()">&times;</button></div><div class="modal-body"><div class="form-group"><label>Room</label><div style="display:flex;gap:8px"><select id="fRoom" style="flex:1"></select><button type="button" onclick="findAvailableRoom()" style="padding:6px 12px;background:var(--accent);color:#fff;border:none;border-radius:var(--radius-md);cursor:pointer;font-size:12px;white-space:nowrap;font-family:inherit">Find available</button></div><div id="fRoomInfo" style="font-size:11px;margin-top:4px;color:var(--text-tertiary)"></div></div><div class="form-group"><label>Guest name</label><input id="fName" type="text" placeholder="Start typing to find existing person..." list="fNameList" oninput="onPersonNameInput()"><datalist id="fNameList"></datalist><div id="fNameInfo" style="font-size:11px;margin-top:4px;color:var(--text-tertiary)"></div></div><div class="form-group"><label>Company</label><input id="fCompany" type="text" placeholder="Company name" list="fCompanyList" onblur="checkCompanyRegistration(this.value,'fCompanyWarn')"><datalist id="fCompanyList"></datalist><div id="fCompanyWarn" style="font-size:11px;margin-top:4px"></div></div><div class="form-group"><label>Billing company <span style="font-weight:normal;color:var(--text-tertiary);font-size:11px">(if different — rate and invoicing will follow this)</span></label><input id="fBillingCompany" type="text" placeholder="Leave empty to use Company" list="fCompanyList" onblur="checkCompanyRegistration(this.value,'fBillingCompanyWarn')"><div id="fBillingCompanyWarn" style="font-size:11px;margin-top:4px"></div></div><div class="form-row"><div class="form-group"><label>Check-in</label><input id="fCheckIn" type="date"></div><div class="form-group"><label>Check-out</label><input id="fCheckOut" type="date"><div style="font-size:11px;color:var(--text-tertiary);margin-top:2px">Leave empty for open-ended</div></div></div><div class="form-row"><div class="form-group"><label>Status</label><select id="fStatus"><option value="Upcoming">Upcoming</option><option value="Active">Active (checked in)</option></select></div><div class="form-group"><label>Floor</label><input id="fFloor" type="number" min="1" max="9" readonly></div></div><div class="form-group"><label>Notes</label><textarea id="fNotes" placeholder="Optional notes..."></textarea></div><div class="form-group" style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="fIncludeCheckoutFee" checked style="width:auto;margin:0"><label for="fIncludeCheckoutFee" style="margin:0;cursor:pointer;font-weight:normal">Include checkout cleaning fee (utvask)</label></div><div class="form-group" style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="fContinuation" style="width:auto;margin:0"><label for="fContinuation" style="margin:0;cursor:pointer;font-weight:normal" title="Marker dette som fortsettelse av et tidligere opphold der gjesten bytter rom. Utvask hoppes over i Fakturagrunnlag.">🔗 Continuation of previous stay (skip utvask)</label></div><div id="fOverlapWarning" style="display:none;margin-top:8px;padding:8px 10px;background:var(--bg-warning);border:1px solid #EF9F27;border-radius:var(--radius-md);color:var(--text-warning);font-size:12px"></div></div><div class="modal-footer"><button onclick="closeBookingModal()">Cancel</button><button class="primary" id="bookingSaveBtn" onclick="saveBooking()">Create booking</button></div></div></div>
@@ -301,6 +301,7 @@ tbody td{padding:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 <input id="coSearch" type="text" placeholder="Search..." oninput="renderCompaniesList()" style="padding:5px 8px;border:1px solid var(--border-tertiary);border-radius:var(--radius-md);font-size:13px;font-family:inherit;flex:1;min-width:180px">
 <button onclick="openCompanyEdit()" style="padding:5px 12px;border:1px solid var(--accent);border-radius:var(--radius-md);font-size:13px;font-family:inherit;background:var(--accent);color:#fff;cursor:pointer">+ New company</button>
 <button onclick="findUnlinkedCompanies()" style="padding:5px 12px;border:1px solid var(--border-tertiary);border-radius:var(--radius-md);font-size:13px;font-family:inherit;background:var(--bg-secondary);cursor:pointer" title="Find company names used in bookings/rates that are not in the Companies list">🔍 Find unlinked</button>
+<button onclick="openMergeCompanies()" style="padding:5px 12px;border:1px solid #EF9F27;border-radius:var(--radius-md);font-size:13px;font-family:inherit;background:rgba(239,159,39,.12);color:#a76800;cursor:pointer" title="Slå sammen flere firma-navn til ett">🔀 Merge</button>
 </div>
 <div id="companiesStats" style="font-size:12px;color:var(--text-tertiary);margin-bottom:8px"></div>
 <div id="companiesList"></div>
@@ -409,7 +410,34 @@ tbody td{padding:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 <div class="form-group"><label>End date</label><input id="ftEditEndDate" type="date"><small class="muted" style="font-size:10px">Leave empty for ongoing</small></div>
 </div>
 </div><div class="modal-footer"><button onclick="document.getElementById('fullTenantEditModal').classList.remove('open')">Cancel</button><button class="primary" onclick="saveFullTenantAgreement()">Save</button></div></div></div>
-<!-- Restore Inspect Modal -->
+<!-- Merge Companies Modal -->
+<div class="modal-overlay" id="mergeCompaniesModal"><div class="modal" style="max-width:760px;min-height:500px;resize:both;overflow:auto"><div class="modal-header"><h2>🔀 Merge firma-navn</h2><button onclick="document.getElementById('mergeCompaniesModal').classList.remove('open')" style="padding:5px 14px;border:1px solid var(--border-tertiary);border-radius:var(--radius-md);font-size:14px;font-family:inherit;background:var(--bg-secondary);cursor:pointer;font-weight:500">✕ Lukk</button></div><div class="modal-body">
+
+<div style="background:rgba(239,159,39,.08);border-left:3px solid #EF9F27;padding:10px 14px;margin-bottom:14px;font-size:12px;border-radius:6px">
+<strong>⚠ Slik fungerer merge:</strong> Velg det riktige firma-navnet (kanonisk) og ett eller flere alternative skrivemåter (alias). Alle bookinger, persons, rates, properties og rooms som bruker alias-navn vil få det kanoniske navnet. Alias-firma slettes fra Companies-lista. <strong>Husk å ta backup først!</strong>
+</div>
+
+<div class="form-group">
+  <label>Kanonisk navn (det riktige) *</label>
+  <input id="mergeCanonical" type="text" list="mergeCanonicalList" placeholder="F.eks. SalMar" oninput="renderMergePreview()">
+  <datalist id="mergeCanonicalList"></datalist>
+</div>
+
+<div class="form-group">
+  <label>Alias-navn å slå sammen (én per linje, eller komma-separert)</label>
+  <textarea id="mergeAliases" rows="4" placeholder="F.eks.&#10;Salmar&#10;SAL MAR&#10;Salmar AS" oninput="renderMergePreview()" style="font-family:Consolas,monospace;font-size:13px"></textarea>
+  <small class="muted" style="font-size:11px">Hvert alias-navn vil bli endret til det kanoniske navnet. Match er case-insensitive.</small>
+</div>
+
+<div class="form-group">
+  <label>Forhåndsvisning</label>
+  <div id="mergePreview" style="background:var(--bg-secondary);padding:12px;border-radius:6px;min-height:80px;font-size:13px"></div>
+</div>
+
+</div><div class="modal-footer">
+<button onclick="document.getElementById('mergeCompaniesModal').classList.remove('open')">Avbryt</button>
+<button id="mergeConfirmBtn" onclick="confirmMergeCompanies()" disabled style="background:#EF9F27;color:#fff;border:1px solid #EF9F27">🔀 Slå sammen</button>
+</div></div></div>
 <div class="modal-overlay" id="restoreInspectModal"><div class="modal" style="max-width:900px;width:90vw;min-height:500px;resize:both;overflow:auto"><div class="modal-header"><h2>↻ Restore from backup</h2><button class="modal-close" onclick="document.getElementById('restoreInspectModal').classList.remove('open')">&times;</button></div><div class="modal-body" id="restoreInspectBody"></div><div class="modal-footer"><button onclick="document.getElementById('restoreInspectModal').classList.remove('open')">Close</button></div></div></div>
 
 <!-- Occupancy Report Modal -->
