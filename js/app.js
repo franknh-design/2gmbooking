@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v14.2 — app.js (Core)
+// 2GM Booking v14.3 — app.js (Core)
 // Auth, Graph API, Data, Rendering, Bookings
 // ============================================================
 
@@ -790,6 +790,102 @@ function computeLongTermForRoomPeriod(room,fromDate,toDate){
   return{room,company:c.company,price:c.price,isMonthly:c.isMonthly,days,total,detailLabel};
 }
 
+// Splits a long-term room's invoicing period into segments based on actual bookings
+// in the room. Each segment is either a guest stay or an empty period (where the
+// company still pays). Total of all segments matches the room's contract amount,
+// with rounding adjustment on the last segment.
+//
+// Returns array of: {fromDate, toDate, days, name, isEmpty, total, dailyRate}
+function segmentLongTermRoom(room,fromDate,toDate){
+  const c=getActiveLongTermContract(room);
+  if(!c)return null;
+  // Determine the effective period (overlap of contract and invoicing period)
+  const agreementStart=room.LongTerm_StartDate?new Date(room.LongTerm_StartDate):new Date(1970,0,1);
+  const agreementEnd=room.LongTerm_EndDate?new Date(room.LongTerm_EndDate):new Date(2100,0,1);
+  agreementStart.setHours(0,0,0,0);
+  agreementEnd.setHours(23,59,59,999);
+  const effFrom=new Date(Math.max(fromDate.getTime(),agreementStart.getTime()));
+  const effTo=new Date(Math.min(toDate.getTime(),agreementEnd.getTime()));
+  effFrom.setHours(0,0,0,0);
+  effTo.setHours(23,59,59,999);
+  if(effFrom>effTo)return null;
+  const totalDays=Math.floor((effTo-effFrom)/86400000)+1;
+  // Compute the total contract amount for this period (with pro-rata)
+  const contractCalc=computeLongTermForRoomPeriod(room,fromDate,toDate);
+  if(!contractCalc)return null;
+  const contractTotal=contractCalc.total;
+  const dailyRate=contractTotal/totalDays;
+  // Find all bookings on this room that overlap the period
+  const roomBookings=allBookings.filter(b=>{
+    if(String(b.RoomLookupId)!==String(room.id))return false;
+    if(b.Status==='Cancelled')return false;
+    if(!b.Check_In)return false;
+    const ci=new Date(b.Check_In);ci.setHours(0,0,0,0);
+    const co=b.Check_Out?new Date(b.Check_Out):effTo;co.setHours(0,0,0,0);
+    if(co<effFrom||ci>effTo)return false;
+    return true;
+  }).map(b=>{
+    const ci=new Date(b.Check_In);ci.setHours(0,0,0,0);
+    const co=b.Check_Out?new Date(b.Check_Out):effTo;co.setHours(0,0,0,0);
+    // Clip to effective period
+    const sFrom=ci<effFrom?effFrom:ci;
+    const sTo=co>effTo?effTo:co;
+    return {bookingId:b.id,name:b.Person_Name||'(uten navn)',from:sFrom,to:sTo};
+  }).sort((a,b)=>a.from-b.from);
+  // Build segments: walk from effFrom forward, alternate between booking and empty
+  const segments=[];
+  let cursor=new Date(effFrom);
+  for(let i=0;i<roomBookings.length;i++){
+    const bk=roomBookings[i];
+    // Empty segment before this booking?
+    if(bk.from>cursor){
+      const segTo=new Date(bk.from.getTime()-86400000);// day before booking starts
+      segTo.setHours(0,0,0,0);
+      if(segTo>=cursor){
+        const days=Math.floor((segTo-cursor)/86400000)+1;
+        segments.push({fromDate:new Date(cursor),toDate:segTo,days,name:c.company+' (tomt)',isEmpty:true,bookingId:null});
+      }
+    }
+    // The booking segment
+    const bSegFrom=bk.from>cursor?bk.from:cursor;
+    const bSegTo=bk.to;
+    if(bSegTo>=bSegFrom){
+      const days=Math.floor((bSegTo-bSegFrom)/86400000)+1;
+      segments.push({fromDate:new Date(bSegFrom),toDate:new Date(bSegTo),days,name:bk.name,isEmpty:false,bookingId:bk.bookingId});
+    }
+    // Move cursor to day after booking ends
+    const nextCursor=new Date(bSegTo.getTime()+86400000);
+    nextCursor.setHours(0,0,0,0);
+    if(nextCursor>cursor)cursor=nextCursor;
+  }
+  // Trailing empty segment after last booking
+  if(cursor<=effTo){
+    const days=Math.floor((effTo-cursor)/86400000)+1;
+    segments.push({fromDate:new Date(cursor),toDate:new Date(effTo),days,name:c.company+' (tomt)',isEmpty:true,bookingId:null});
+  }
+  // No bookings at all → one big empty segment
+  if(segments.length===0){
+    segments.push({fromDate:new Date(effFrom),toDate:new Date(effTo),days:totalDays,name:c.company+' (tomt)',isEmpty:true,bookingId:null});
+  }
+  // Compute totals per segment, with rounding adjustment on last segment
+  let runningTotal=0;
+  segments.forEach((s,idx)=>{
+    if(idx===segments.length-1){
+      // Last segment gets the rounding diff
+      s.total=Math.round((contractTotal-runningTotal)*100)/100;
+    }else{
+      s.total=Math.round(s.days*dailyRate*100)/100;
+      runningTotal+=s.total;
+    }
+    s.dailyRate=dailyRate;
+  });
+  return{
+    room,company:c.company,price:c.price,isMonthly:c.isMonthly,
+    contractTotal,totalDays,dailyRate,segments,
+    contractDetailLabel:contractCalc.detailLabel
+  };
+}
+
 // Compute full-tenant lease amount for a property within a date period.
 // Handles pro-rata (partial overlap between period and agreement dates).
 // Returns {days,rooms,rate,total,company,effectiveFrom,effectiveTo} or null if not applicable.
@@ -1468,7 +1564,10 @@ function printDoorTag(bookingId){
 
 // --- VIEW SWITCHING ---
 function showMainView(){currentView='main';document.getElementById('mainView').style.display='';document.getElementById('hoursView').style.display='none';document.getElementById('propertySelect').style.display='';if(selectedProperty)document.getElementById('headerTitle').textContent='2GM Booking — '+selectedProperty.Title;updateNavActiveState()}
-function showHoursView(){currentView='hours';document.getElementById('mainView').style.display='none';document.getElementById('mainView').classList.remove('panel-mode');document.getElementById('incomingPanel').classList.remove('open');document.getElementById('archivePanel').classList.remove('open');const pp=document.getElementById('personsPanel');if(pp)pp.classList.remove('open');const ip=document.getElementById('invoicingPanel');if(ip)ip.classList.remove('open');const cp=document.getElementById('companiesPanel');if(cp)cp.classList.remove('open');document.getElementById('hoursView').style.display='';document.getElementById('propertySelect').style.display='none';document.getElementById('headerTitle').textContent='2GM Booking — Hours';updateNavActiveState()}
+function showHoursView(){currentView='hours';document.getElementById('mainView').style.display='none';document.getElementById('mainView').classList.remove('panel-mode');document.getElementById('incomingPanel').classList.remove('open');document.getElementById('archivePanel').classList.remove('open');const pp=document.getElementById('personsPanel');if(pp)pp.classList.remove('open');const ip=document.getElementById('invoicingPanel');if(ip)ip.classList.remove('open');const cp=document.getElementById('companiesPanel');if(cp)cp.classList.remove('open');
+  const pr=document.getElementById('pricingPanel');if(pr)pr.classList.remove('open');
+  const ap=document.getElementById('adminPanel');if(ap)ap.classList.remove('open');
+  document.getElementById('hoursView').style.display='';document.getElementById('propertySelect').style.display='none';document.getElementById('headerTitle').textContent='2GM Booking — Hours';updateNavActiveState()}
 function ensureMainView(){if(currentView==='hours')showMainView()}
 
 // --- FILTER ---
@@ -1629,7 +1728,7 @@ msalInstance.initialize().then(()=>{
 });
 
 // ============================================================
-// AUTO-REFRESH (v14.2)
+// AUTO-REFRESH (v14.3)
 // ============================================================
 
 // Build a fingerprint that tells us if data has changed without full reload

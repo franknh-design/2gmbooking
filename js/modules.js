@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v14.2 — modules.js
+// 2GM Booking v14.3 — modules.js
 // Hours, Archive, Import/Export, Admin (checkbox permissions)
 // ============================================================
 
@@ -20,6 +20,8 @@ function toggleIncoming(){
   const pp=document.getElementById('personsPanel');if(pp)pp.classList.remove('open');
   const ip=document.getElementById('invoicingPanel');if(ip)ip.classList.remove('open');
   const cp=document.getElementById('companiesPanel');if(cp)cp.classList.remove('open');
+  const pr=document.getElementById('pricingPanel');if(pr)pr.classList.remove('open');
+  const ap=document.getElementById('adminPanel');if(ap)ap.classList.remove('open');
   const panel=document.getElementById('incomingPanel');
   panel.classList.toggle('open');
   const isOpen=panel.classList.contains('open');
@@ -61,6 +63,8 @@ function toggleArchive(){
   const pp=document.getElementById('personsPanel');if(pp)pp.classList.remove('open');
   const ip=document.getElementById('invoicingPanel');if(ip)ip.classList.remove('open');
   const cp=document.getElementById('companiesPanel');if(cp)cp.classList.remove('open');
+  const pr=document.getElementById('pricingPanel');if(pr)pr.classList.remove('open');
+  const ap=document.getElementById('adminPanel');if(ap)ap.classList.remove('open');
   const panel=document.getElementById('archivePanel');
   panel.classList.toggle('open');
   const isOpen=panel.classList.contains('open');
@@ -502,8 +506,28 @@ function downloadCSV(filename,headers,rows){
 }
 
 // --- ADMIN ---
-function openAdminPanel(){if(!can('admin'))return;renderAdminUsers();document.getElementById('adminModal').classList.add('open')}
-function closeAdminPanel(){document.getElementById('adminModal').classList.remove('open')}
+function openAdminPanel(){
+  if(!can('admin'))return;
+  ensureMainView();
+  document.getElementById('incomingPanel').classList.remove('open');
+  document.getElementById('archivePanel').classList.remove('open');
+  const pp=document.getElementById('personsPanel');if(pp)pp.classList.remove('open');
+  const ip=document.getElementById('invoicingPanel');if(ip)ip.classList.remove('open');
+  const cp=document.getElementById('companiesPanel');if(cp)cp.classList.remove('open');
+  const pr=document.getElementById('pricingPanel');if(pr)pr.classList.remove('open');
+  const ap=document.getElementById('adminPanel');if(ap)ap.classList.remove('open');
+  document.getElementById('mainView').classList.add('panel-mode');
+  document.getElementById('adminPanel').classList.add('open');
+  renderAdminUsers();
+}
+function closeAdminPanel(){
+  document.getElementById('adminPanel').classList.remove('open');
+  document.getElementById('mainView').classList.remove('panel-mode');
+}
+function toggleAdminPanel(){
+  const p=document.getElementById('adminPanel');
+  if(p.classList.contains('open'))closeAdminPanel();else openAdminPanel();
+}
 
 function renderAdminUsers(){
   const list=document.getElementById('adminUserList');
@@ -774,8 +798,27 @@ function exportOccupancyReport(){
 // --- RATES MANAGEMENT ---
 function openRatesPanel(){
   if(!can('manage_rates')&&!can('admin')){alert('Access denied');return}
+  ensureMainView();
+  document.getElementById('incomingPanel').classList.remove('open');
+  document.getElementById('archivePanel').classList.remove('open');
+  const pp=document.getElementById('personsPanel');if(pp)pp.classList.remove('open');
+  const ip=document.getElementById('invoicingPanel');if(ip)ip.classList.remove('open');
+  const cp=document.getElementById('companiesPanel');if(cp)cp.classList.remove('open');
+  const pr=document.getElementById('pricingPanel');if(pr)pr.classList.remove('open');
+  const ap=document.getElementById('adminPanel');if(ap)ap.classList.remove('open');
+  document.getElementById('mainView').classList.add('panel-mode');
+  document.getElementById('pricingPanel').classList.add('open');
   renderRatesPanel();
-  document.getElementById('ratesModal').classList.add('open');
+}
+
+function togglePricingPanel(){
+  const p=document.getElementById('pricingPanel');
+  if(p.classList.contains('open')){
+    p.classList.remove('open');
+    document.getElementById('mainView').classList.remove('panel-mode');
+  }else{
+    openRatesPanel();
+  }
 }
 
 function renderRatesPanel(){
@@ -945,7 +988,7 @@ async function deleteRate(id){
 }
 
 // ============================================================
-// PERSONS / CUSTOMERS (v14.2)
+// PERSONS / CUSTOMERS (v14.3)
 // ============================================================
 let editingPersonId=null;
 
@@ -955,6 +998,8 @@ function togglePersons(){
   document.getElementById('archivePanel').classList.remove('open');
   const ip=document.getElementById('invoicingPanel');if(ip)ip.classList.remove('open');
   const cp=document.getElementById('companiesPanel');if(cp)cp.classList.remove('open');
+  const pr=document.getElementById('pricingPanel');if(pr)pr.classList.remove('open');
+  const ap=document.getElementById('adminPanel');if(ap)ap.classList.remove('open');
   const panel=document.getElementById('personsPanel');
   panel.classList.toggle('open');
   const isOpen=panel.classList.contains('open');
@@ -1243,7 +1288,7 @@ function onPersonNameInput(){
 }
 
 // ============================================================
-// CHARTS (v14.2) — pure SVG, no dependencies
+// CHARTS (v14.3) — pure SVG, no dependencies
 // ============================================================
 
 // Reusable bar chart: data = [{label, value, subtitle?}]
@@ -1552,7 +1597,7 @@ function renderHoursCharts(filtered){
 }
 
 // ============================================================
-// CLEANING EFFICIENCY ANALYSIS (v14.2)
+// CLEANING EFFICIENCY ANALYSIS (v14.3)
 // ============================================================
 // Compares cleaner hours against guest-nights per property, per week/month.
 // USE WITH CAUTION: Hours include breaks, transport, repairs — not just cleaning.
@@ -1905,7 +1950,7 @@ function _dateFromIsoWeek(year,week){
 }
 
 // ============================================================
-// MORE MENU (v14.2)
+// MORE MENU (v14.3)
 // ============================================================
 function toggleMoreMenu(e){
   if(e){e.stopPropagation();e.preventDefault()}
@@ -1932,7 +1977,7 @@ function closeMoreMenu(){
 }
 
 // ============================================================
-// FAKTURAGRUNNLAG / INVOICING (v14.2)
+// FAKTURAGRUNNLAG / INVOICING (v14.3)
 // ============================================================
 let invoicingInitialized=false;
 
@@ -1943,6 +1988,8 @@ function toggleInvoicing(){
   document.getElementById('archivePanel').classList.remove('open');
   const pp=document.getElementById('personsPanel');if(pp)pp.classList.remove('open');
   const cp=document.getElementById('companiesPanel');if(cp)cp.classList.remove('open');
+  const pr=document.getElementById('pricingPanel');if(pr)pr.classList.remove('open');
+  const ap=document.getElementById('adminPanel');if(ap)ap.classList.remove('open');
   const panel=document.getElementById('invoicingPanel');
   panel.classList.toggle('open');
   const isOpen=panel.classList.contains('open');
@@ -2131,23 +2178,29 @@ function renderInvoicing(){
     });
   });
 
-  // LONG-TERM CONTRACTS (per-room): one line per room with active contract
+  // LONG-TERM CONTRACTS (per-room): segmented by guests/gaps (v14.3)
   Object.keys(longTermByRoomId).forEach(rid=>{
-    const lt=longTermByRoomId[rid];
-    items.push({
-      booking:{id:''},
-      room:lt.room.Title||'',
-      name:lt.company+' — '+(lt.room.Title||''),
-      company:lt.company,
-      guestCompany:'',
-      hasBillingOverride:false,
-      nights:lt.days,
-      rate:lt.price,
-      total:lt.total,
-      source:lt.detailLabel,
-      nearMiss:null,
-      lineType:'longterm',
-      checkoutDate:null
+    const room=allRooms.find(r=>r.id===rid);
+    if(!room)return;
+    const seg=segmentLongTermRoom(room,fromDate,toDate);
+    if(!seg)return;
+    seg.segments.forEach(s=>{
+      const dateRange=formatDate(s.fromDate)+' → '+formatDate(s.toDate);
+      items.push({
+        booking:{id:s.bookingId||''},
+        room:room.Title||'',
+        name:s.isEmpty?s.name:(s.name+' ('+(room.Title||'')+')'),
+        company:seg.company,
+        guestCompany:'',
+        hasBillingOverride:false,
+        nights:s.days,
+        rate:Math.round(s.dailyRate*100)/100,
+        total:s.total,
+        source:dateRange+' · '+s.days+' dager'+(s.isEmpty?' · tomt':''),
+        nearMiss:null,
+        lineType:s.isEmpty?'longterm_empty':'longterm',
+        checkoutDate:null
+      });
     });
   });
 
@@ -2207,7 +2260,7 @@ function renderInvoicing(){
 
   // Grand totals — separate nights from checkout/percent fees and full-tenant leases
   const nightItems=finalItems.filter(i=>i.lineType==='nights');
-  const feeItems=finalItems.filter(i=>i.lineType==='checkout'||i.lineType==='percent'||i.lineType==='fulltenant'||i.lineType==='longterm');
+  const feeItems=finalItems.filter(i=>i.lineType==='checkout'||i.lineType==='percent'||i.lineType==='fulltenant'||i.lineType==='longterm'||i.lineType==='longterm_empty');
   const totalNights=nightItems.reduce((a,i)=>a+i.nights,0);
   const nightRevenue=nightItems.reduce((a,i)=>a+i.total,0);
   const feeRevenue=feeItems.reduce((a,i)=>a+i.total,0);
@@ -2255,36 +2308,39 @@ function renderInvoicing(){
         const isPercent=i.lineType==='percent';
         const isFullTenant=i.lineType==='fulltenant';
         const isLongTerm=i.lineType==='longterm';
+        const isLongTermEmpty=i.lineType==='longterm_empty';
         const ci=i.booking.Check_In?formatDate(i.booking.Check_In):'';
         const co=i.booking.Check_Out?formatDate(i.booking.Check_Out):'Open';
         let period;
         if(isFullTenant)period='🔒 Full-tenant lease';
-        else if(isLongTerm)period='🔑 Långtidsleie';
+        else if(isLongTerm||isLongTermEmpty)period='🔑 '+(i.source||'').split(' · ')[0];
         else if(isPercent)period='📊 Monthly percent fee';
         else if(isCheckout)period='🧹 Checkout '+formatDate(i.checkoutDate);
         else period=ci+' → '+co;
-        const nightsCell=(isCheckout||isPercent)?'—':((isFullTenant||isLongTerm)?i.nights+' days':i.nights);
+        const nightsCell=(isCheckout||isPercent)?'—':((isFullTenant||isLongTerm||isLongTermEmpty)?i.nights+' days':i.nights);
         let rateCell;
         if(isFullTenant)rateCell='<em style="color:var(--text-tertiary)">Full-tenant</em>';
-        else if(isLongTerm)rateCell='<em style="color:var(--text-tertiary)">Långtid</em>';
+        else if(isLongTerm||isLongTermEmpty)rateCell=i.rate?i.rate.toLocaleString('nb-NO',{maximumFractionDigits:2})+' kr/dag':'<em style="color:var(--text-tertiary)">Långtid</em>';
         else if(isPercent)rateCell='<em style="color:var(--text-tertiary)">%-basert</em>';
         else if(isCheckout)rateCell='<em style="color:var(--text-tertiary)">Utvask</em>';
         else rateCell=(i.rate?i.rate.toLocaleString('nb-NO')+' kr':'<span style="color:var(--text-danger)">— missing</span>');
         const totalCell=i.total?i.total.toLocaleString('nb-NO')+' kr':'—';
         let sourceCell;
         if(isFullTenant)sourceCell='<span style="color:#1D9E75">🔒 '+escapeHtml(i.source)+'</span>';
-        else if(isLongTerm)sourceCell='<span style="color:#0EA5A5">🔑 '+escapeHtml(i.source)+'</span>';
+        else if(isLongTerm)sourceCell='<span style="color:#0EA5A5">'+escapeHtml(i.source)+'</span>';
+        else if(isLongTermEmpty)sourceCell='<span style="color:#a76800;font-style:italic">'+escapeHtml(i.source)+'</span>';
         else if(isPercent)sourceCell='<span style="color:#EF9F27">📊 '+escapeHtml(i.source)+'</span>';
         else if(isCheckout)sourceCell='<span style="color:#7B61FF">🧹 Checkout fee</span>';
         else sourceCell=(i.nearMiss?'<span title="'+escapeHtml(i.nearMiss)+'" style="color:var(--text-warning)">⚠ '+escapeHtml(i.source)+'</span>':escapeHtml(i.source));
         let rowStyle;
         if(isFullTenant)rowStyle='border-top:.5px solid var(--border-tertiary);cursor:default;background:rgba(29,158,117,.08)';
         else if(isLongTerm)rowStyle='border-top:.5px solid var(--border-tertiary);cursor:default;background:rgba(14,165,165,.07)';
+        else if(isLongTermEmpty)rowStyle='border-top:.5px solid var(--border-tertiary);cursor:default;background:rgba(239,159,39,.05);font-style:italic';
         else if(isPercent)rowStyle='border-top:.5px solid var(--border-tertiary);cursor:default;background:rgba(239,159,39,.06)';
         else if(isCheckout)rowStyle='border-top:.5px solid var(--border-tertiary);cursor:pointer;background:rgba(123,97,255,.04)';
         else rowStyle='border-top:.5px solid var(--border-tertiary);cursor:pointer';
-        const hoverBg=isFullTenant?'rgba(29,158,117,.16)':(isLongTerm?'rgba(14,165,165,.14)':(isPercent?'rgba(239,159,39,.12)':(isCheckout?'rgba(123,97,255,.12)':'var(--bg-secondary)')));
-        const restBg=isFullTenant?'rgba(29,158,117,.08)':(isLongTerm?'rgba(14,165,165,.07)':(isPercent?'rgba(239,159,39,.06)':(isCheckout?'rgba(123,97,255,.04)':'')));
+        const hoverBg=isFullTenant?'rgba(29,158,117,.16)':(isLongTerm?'rgba(14,165,165,.14)':(isLongTermEmpty?'rgba(239,159,39,.10)':(isPercent?'rgba(239,159,39,.12)':(isCheckout?'rgba(123,97,255,.12)':'var(--bg-secondary)'))));
+        const restBg=isFullTenant?'rgba(29,158,117,.08)':(isLongTerm?'rgba(14,165,165,.07)':(isLongTermEmpty?'rgba(239,159,39,.05)':(isPercent?'rgba(239,159,39,.06)':(isCheckout?'rgba(123,97,255,.04)':''))));
         // Flag company mismatch when grouping by company: if company field differs from group key, highlight
         const groupKey=k;
         const actualCompany=i.company||'(no company)';
@@ -2300,11 +2356,12 @@ function renderInvoicing(){
         let nameCell;
         if(isFullTenant)nameCell='<span style="color:#1D9E75;font-weight:500">'+escapeHtml(i.name)+'</span>';
         else if(isLongTerm)nameCell='<span style="color:#0EA5A5;font-weight:500">🔑 '+escapeHtml(i.name)+'</span>';
+        else if(isLongTermEmpty)nameCell='<span style="color:#a76800;font-style:italic">'+escapeHtml(i.name)+'</span>';
         else if(isPercent)nameCell='<span style="color:var(--text-warning);font-weight:500">'+escapeHtml(i.name)+'</span>';
         else if(isCheckout)nameCell='<span style="color:var(--text-tertiary)">↳ '+guestMarkedName(i.name)+'</span>';
         else nameCell=guestMarkedName(i.name);
         // Full-tenant, long-term and percent rows are not clickable
-        const clickAttr=(isPercent||isFullTenant||isLongTerm)?'':'onclick="openEditBooking(\''+i.booking.id+'\')"';
+        const clickAttr=(isPercent||isFullTenant||isLongTermEmpty)?'':(isLongTerm&&i.booking.id?'onclick="openEditBooking(\''+i.booking.id+'\')"':(isLongTerm?'':'onclick="openEditBooking(\''+i.booking.id+'\')"'));
         html+='<tr '+clickAttr+' style="'+rowStyle+'" onmouseover="this.style.background=\''+hoverBg+'\'" onmouseout="this.style.background=\''+restBg+'\'">'
           +'<td style="padding:6px 10px">'+nameCell+'</td>'
           +'<td style="padding:6px 10px">'+companyCell+'</td>'
@@ -2480,22 +2537,29 @@ function exportInvoicingCSV(companyFilterName){
     ]);
   });
 
-  // Long-term per-room contracts
+  // Long-term per-room contracts (v14.3 segmented)
   Object.keys(longTermByRoomIdCsv).forEach(rid=>{
     const lt=longTermByRoomIdCsv[rid];
     if(companyFilterName&&lt.company!==companyFilterName)return;
-    rows.push([
-      lt.company+' — '+(lt.room.Title||''),
-      '',
-      lt.company,
-      lt.room.Title||'',
-      '',
-      '',
-      lt.days,
-      lt.price,
-      lt.total,
-      'Långtid: '+lt.detailLabel
-    ]);
+    const room=allRooms.find(r=>r.id===rid);
+    if(!room)return;
+    const seg=segmentLongTermRoom(room,fromDate,toDate);
+    if(!seg)return;
+    seg.segments.forEach(s=>{
+      const dateRange=formatDate(s.fromDate)+' → '+formatDate(s.toDate);
+      rows.push([
+        s.isEmpty?s.name:s.name+' ('+(room.Title||'')+')',
+        '',
+        seg.company,
+        room.Title||'',
+        formatDate(s.fromDate),
+        formatDate(s.toDate),
+        s.days,
+        Math.round(s.dailyRate*100)/100,
+        s.total,
+        s.isEmpty?'Långtid (tomt): '+dateRange:'Långtid: '+dateRange
+      ]);
+    });
   });
 
   // Percent-based fee lines (by effective/billing company)
@@ -2530,7 +2594,7 @@ function exportInvoicingCSV(companyFilterName){
 }
 
 // ============================================================
-// ADD GUEST FROM BOOKING (v14.2)
+// ADD GUEST FROM BOOKING (v14.3)
 // ============================================================
 function addBookingToGuests(bookingId){
   if(!can('edit_bookings')){alert('You do not have permission to add guests.');return}
@@ -2555,7 +2619,7 @@ function addBookingToGuests(bookingId){
 }
 
 // ============================================================
-// GUEST BOOKINGS HISTORY (v14.2)
+// GUEST BOOKINGS HISTORY (v14.3)
 // ============================================================
 function showGuestBookings(name){
   if(!name)return;
@@ -2627,7 +2691,7 @@ function showGuestBookings(name){
 }
 
 // ============================================================
-// HOURS IMPORT (v14.2)
+// HOURS IMPORT (v14.3)
 // ============================================================
 let importHoursData=[];
 
@@ -2777,7 +2841,7 @@ async function runImportHours(){
 }
 
 // ============================================================
-// CLEANING DIAGNOSTICS (v14.2)
+// CLEANING DIAGNOSTICS (v14.3)
 // ============================================================
 function showCleaningDiagnostics(){
   const today=new Date();today.setHours(0,0,0,0);
@@ -2889,7 +2953,7 @@ function showCleaningDiagnostics(){
 }
 
 // ============================================================
-// BATTERY REFRESH (v14.2)
+// BATTERY REFRESH (v14.3)
 // ============================================================
 const BATTERY_FILE_PATH='Batteristatus/RoomBattery.csv';
 
@@ -2968,7 +3032,7 @@ async function refreshBatteryStatus(){
 }
 
 // ============================================================
-// COMPANIES MANAGEMENT (v14.2)
+// COMPANIES MANAGEMENT (v14.3)
 // ============================================================
 let editingCompanyId=null;
 
@@ -2980,6 +3044,8 @@ function openCompaniesPanel(){
   document.getElementById('archivePanel').classList.remove('open');
   const pp=document.getElementById('personsPanel');if(pp)pp.classList.remove('open');
   document.getElementById('invoicingPanel').classList.remove('open');
+  const pr=document.getElementById('pricingPanel');if(pr)pr.classList.remove('open');
+  const ap=document.getElementById('adminPanel');if(ap)ap.classList.remove('open');
   document.getElementById('mainView').classList.add('panel-mode');
   document.getElementById('companiesPanel').classList.add('open');
   renderCompaniesList();
@@ -3194,7 +3260,7 @@ async function quickAddCompany(name){
 }
 
 // ============================================================
-// BRREG LOOKUP (v14.2)
+// BRREG LOOKUP (v14.3)
 // ============================================================
 // Fetches company information from Brønnøysundregistrene open API.
 // https://data.brreg.no/enhetsregisteret/api/enheter/{orgnr}
@@ -3262,7 +3328,7 @@ async function lookupBrreg(){
 }
 
 // ============================================================
-// PDF EXPORT VIA PRINT (v14.2)
+// PDF EXPORT VIA PRINT (v14.3)
 // ============================================================
 // Opens a print-friendly window containing the same data as exportInvoicingCSV.
 // Browser's print dialog allows "Save as PDF" as the destination.
@@ -3375,19 +3441,30 @@ function exportInvoicingPDF(companyFilterName){
     if(!groups[key])groups[key]={nights:[],fees:[],percent:null,fullTenant:null,longTerm:[]};
     groups[key].fullTenant={property:prop?prop.Title:'',rooms:ft.rooms,days:ft.days,rate:ft.rate,total:ft.total,detailLabel:ft.detailLabel};
   });
-  // Long-term per-room contracts
+  // Long-term per-room contracts (v14.3 segmented)
   Object.keys(longTermByRoomIdPdf).forEach(rid=>{
     const lt=longTermByRoomIdPdf[rid];
     if(companyFilterName&&lt.company!==companyFilterName)return;
     const key=lt.company;
     if(!groups[key])groups[key]={nights:[],fees:[],percent:null,fullTenant:null,longTerm:[]};
     if(!groups[key].longTerm)groups[key].longTerm=[];
-    groups[key].longTerm.push({
-      roomTitle:lt.room.Title||'',
-      price:lt.price,
-      total:lt.total,
-      detailLabel:lt.detailLabel,
-      isMonthly:lt.isMonthly
+    const room=allRooms.find(r=>r.id===rid);
+    if(!room)return;
+    const seg=segmentLongTermRoom(room,fromDate,toDate);
+    if(!seg)return;
+    seg.segments.forEach(s=>{
+      groups[key].longTerm.push({
+        roomTitle:room.Title||'',
+        guestName:s.name,
+        isEmpty:s.isEmpty,
+        price:s.dailyRate,
+        days:s.days,
+        total:s.total,
+        fromDate:s.fromDate,
+        toDate:s.toDate,
+        detailLabel:formatDate(s.fromDate)+' → '+formatDate(s.toDate)+' · '+s.days+' dager',
+        isMonthly:lt.isMonthly
+      });
     });
   });
 
@@ -3417,24 +3494,28 @@ function exportInvoicingPDF(companyFilterName){
       tableRows+='<tr class="ft-row"><td colspan="4"><strong>🔒 Full-tenant lease — '+escapeHtml(ft.property)+'</strong><br><small>'+escapeHtml(ft.detailLabel||'')+'</small></td><td class="num"><strong>'+fmtKr(ft.total)+'</strong></td></tr>';
     }
 
-    // Long-term per-room contracts: summary + collapsible detail rows
+    // Long-term per-room contracts (v14.3 segmented): summary + collapsible detail rows
     if(g.longTerm&&g.longTerm.length){
       const ltTotal=g.longTerm.reduce((s,lt)=>s+lt.total,0);
       groupTotal+=ltTotal;
+      // Count unique rooms
+      const uniqueRooms=new Set(g.longTerm.map(s=>s.roomTitle)).size;
       const sectionId='lt-'+escapeHtml(key).replace(/[^a-zA-Z0-9]/g,'_');
       // Summary row — clickable for screen, always shows on print
       tableRows+='<tr class="lt-row lt-summary" onclick="document.querySelectorAll(\'.'+sectionId+'\').forEach(el=>el.classList.toggle(\'lt-hidden\'))">'
-        +'<td colspan="4"><strong>🔑 Långtidsleie ('+g.longTerm.length+' rom)</strong> <span class="muted no-print">▼ klikk for detaljer</span></td>'
+        +'<td colspan="4"><strong>🔑 Långtidsleie ('+uniqueRooms+' rom · '+g.longTerm.length+' segmenter)</strong> <span class="muted no-print">▼ klikk for detaljer</span></td>'
         +'<td class="num"><strong>'+fmtKr(ltTotal)+'</strong></td>'
         +'</tr>';
       // Detail rows — hidden by default on screen, always shown on print
-      g.longTerm.forEach(lt=>{
-        tableRows+='<tr class="lt-row lt-detail '+sectionId+' lt-hidden">'
-          +'<td style="padding-left:24px"><small>↳ '+escapeHtml(lt.roomTitle)+'</small></td>'
-          +'<td><small>'+escapeHtml(lt.roomTitle)+'</small></td>'
-          +'<td><small>'+escapeHtml(lt.detailLabel||'')+'</small></td>'
-          +'<td class="num"><small>'+fmtKr(lt.price)+(lt.isMonthly?'/mnd':'/dag')+'</small></td>'
-          +'<td class="num"><small>'+fmtKr(lt.total)+'</small></td>'
+      g.longTerm.forEach(s=>{
+        const nameDisplay=s.isEmpty?s.guestName:s.guestName+' ('+s.roomTitle+')';
+        const styleExtra=s.isEmpty?';color:#a76800;font-style:italic':'';
+        tableRows+='<tr class="lt-row lt-detail '+sectionId+' lt-hidden" style="background:'+(s.isEmpty?'rgba(239,159,39,.05)':'rgba(14,165,165,.05)')+'">'
+          +'<td style="padding-left:24px'+styleExtra+'"><small>'+(s.isEmpty?'':'↳ ')+escapeHtml(nameDisplay)+'</small></td>'
+          +'<td><small>'+escapeHtml(s.roomTitle)+'</small></td>'
+          +'<td><small>'+escapeHtml(s.detailLabel||'')+'</small></td>'
+          +'<td class="num"><small>'+fmtKr(Math.round(s.price*100)/100)+'/dag</small></td>'
+          +'<td class="num"><small>'+fmtKr(s.total)+'</small></td>'
           +'</tr>';
       });
     }
@@ -3540,7 +3621,7 @@ function exportInvoicingPDF(companyFilterName){
 }
 
 // ============================================================
-// PRICING TABS — Full-tenant + Long-term editors (v14.2)
+// PRICING TABS — Full-tenant + Long-term editors (v14.3)
 // ============================================================
 function switchPricingTab(tab){
   document.querySelectorAll('.pricing-tab').forEach(b=>{
@@ -3796,7 +3877,7 @@ async function bulkApplyLongTermContract(){
 }
 
 // ============================================================
-// BACKUP & RESTORE (v14.2)
+// BACKUP & RESTORE (v14.3)
 // ============================================================
 const BACKUP_LISTS=['Properties','Rooms','Bookings','Persons','Cleaning_Log','Hours','Users','Rates','Companies'];
 
@@ -3807,7 +3888,7 @@ async function exportBackup(){
   try{
     const data={
       meta:{
-        appVersion:'v14.2',
+        appVersion:'v14.3',
         timestamp:new Date().toISOString(),
         exportedBy:currentUser.email||'unknown',
         siteId:siteId
@@ -3972,7 +4053,7 @@ async function restoreSingleItem(listName,idx){
 }
 
 // ============================================================
-// COMPANY MERGE (v14.2)
+// COMPANY MERGE (v14.3)
 // ============================================================
 function openMergeCompanies(){
   if(!can('manage_companies')&&!can('admin')){alert('Permission required');return}
@@ -4183,7 +4264,7 @@ async function deleteListItem(listName,itemId){
 }
 
 // ============================================================
-// MESSAGING — SMS & E-post (v14.2)
+// MESSAGING — SMS & E-post (v14.3)
 // ============================================================
 const DEFAULT_SMS_TEMPLATE=`Hei {first_name}!
 Velkommen til {property}.
