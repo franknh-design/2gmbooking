@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v14.0.10 — app.js (Core)
+// 2GM Booking v14.0.11 — app.js (Core)
 // Auth, Graph API, Data, Rendering, Bookings
 // ============================================================
 
@@ -184,9 +184,15 @@ async function _stripUnknownFieldsAsync(listName,fields){
     // Always allow Lookup-prefixed fields (e.g. RoomLookupId) — SharePoint resolves these
     if(k.endsWith('LookupId')||cols.has(k)){
       let v=fields[k];
-      // Convert JS booleans to 0/1 — SharePoint Yes/No fields can throw 500 on JS true/false via Graph API
-      if(v===true)v=1;
-      else if(v===false)v=0;
+      // PRAGMATIC: Yes/No fields cause 500 errors via Graph API.
+      // Skip them entirely — SharePoint default value will be used.
+      // TODO: figure out correct format. For now this gets bookings working.
+      const isBool=(typeof v==='boolean'||v===0||v===1);
+      const isYesNoField=(k==='Include_Checkout_Fee'||k==='Continuation');
+      if(isBool&&isYesNoField){
+        console.log('[SharePoint] Skipping Yes/No field "'+k+'" with value '+v+' (Graph API issue — using SharePoint default)');
+        return; // skip this field
+      }
       cleaned[k]=v;
     }else{
       skipped.push(k);
@@ -1615,7 +1621,7 @@ msalInstance.initialize().then(()=>{
 });
 
 // ============================================================
-// AUTO-REFRESH (v14.0.10)
+// AUTO-REFRESH (v14.0.11)
 // ============================================================
 
 // Build a fingerprint that tells us if data has changed without full reload
