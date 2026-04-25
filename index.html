@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- 2GM Booking v13.20.2 — Created by Frank Haugan -->
+<!-- 2GM Booking v13.21 — Created by Frank Haugan -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -243,7 +243,7 @@ tbody td{padding:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
       </div>
     </div>
   </div>
-  <div style="text-align:center;padding:12px;font-size:11px;color:var(--text-tertiary);margin-top:1rem">v13.20.2 — Created by Frank Haugan</div>
+  <div style="text-align:center;padding:12px;font-size:11px;color:var(--text-tertiary);margin-top:1rem">v13.21 — Created by Frank Haugan</div>
 </div>
 <!-- Modals -->
 <div class="modal-overlay" id="bookingModal"><div class="modal"><div class="modal-header"><h2 id="bookingModalTitle">New booking</h2><button class="modal-close" onclick="closeBookingModal()">&times;</button></div><div class="modal-body"><div class="form-group"><label>Room</label><div style="display:flex;gap:8px"><select id="fRoom" style="flex:1"></select><button type="button" onclick="findAvailableRoom()" style="padding:6px 12px;background:var(--accent);color:#fff;border:none;border-radius:var(--radius-md);cursor:pointer;font-size:12px;white-space:nowrap;font-family:inherit">Find available</button></div><div id="fRoomInfo" style="font-size:11px;margin-top:4px;color:var(--text-tertiary)"></div></div><div class="form-group"><label>Guest name</label><input id="fName" type="text" placeholder="Start typing to find existing person..." list="fNameList" oninput="onPersonNameInput()"><datalist id="fNameList"></datalist><div id="fNameInfo" style="font-size:11px;margin-top:4px;color:var(--text-tertiary)"></div></div><div class="form-group"><label>Company</label><input id="fCompany" type="text" placeholder="Company name" list="fCompanyList" onblur="checkCompanyRegistration(this.value,'fCompanyWarn')"><datalist id="fCompanyList"></datalist><div id="fCompanyWarn" style="font-size:11px;margin-top:4px"></div></div><div class="form-group"><label>Billing company <span style="font-weight:normal;color:var(--text-tertiary);font-size:11px">(if different — rate and invoicing will follow this)</span></label><input id="fBillingCompany" type="text" placeholder="Leave empty to use Company" list="fCompanyList" onblur="checkCompanyRegistration(this.value,'fBillingCompanyWarn')"><div id="fBillingCompanyWarn" style="font-size:11px;margin-top:4px"></div></div><div class="form-row"><div class="form-group"><label>Check-in</label><input id="fCheckIn" type="date"></div><div class="form-group"><label>Check-out</label><input id="fCheckOut" type="date"><div style="font-size:11px;color:var(--text-tertiary);margin-top:2px">Leave empty for open-ended</div></div></div><div class="form-row"><div class="form-group"><label>Status</label><select id="fStatus"><option value="Upcoming">Upcoming</option><option value="Active">Active (checked in)</option></select></div><div class="form-group"><label>Floor</label><input id="fFloor" type="number" min="1" max="9" readonly></div></div><div class="form-group"><label>Notes</label><textarea id="fNotes" placeholder="Optional notes..."></textarea></div><div class="form-group" style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="fIncludeCheckoutFee" checked style="width:auto;margin:0"><label for="fIncludeCheckoutFee" style="margin:0;cursor:pointer;font-weight:normal">Include checkout cleaning fee (utvask)</label></div><div class="form-group" style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="fContinuation" style="width:auto;margin:0"><label for="fContinuation" style="margin:0;cursor:pointer;font-weight:normal" title="Marker dette som fortsettelse av et tidligere opphold der gjesten bytter rom. Utvask hoppes over i Fakturagrunnlag.">🔗 Continuation of previous stay (skip utvask)</label></div><div id="fOverlapWarning" style="display:none;margin-top:8px;padding:8px 10px;background:var(--bg-warning);border:1px solid #EF9F27;border-radius:var(--radius-md);color:var(--text-warning);font-size:12px"></div></div><div class="modal-footer"><button onclick="closeBookingModal()">Cancel</button><button class="primary" id="bookingSaveBtn" onclick="saveBooking()">Create booking</button></div></div></div>
@@ -321,7 +321,15 @@ tbody td{padding:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 </div><div class="modal-footer"><button id="coDeleteBtn" onclick="deleteCompany()" style="display:none;margin-right:auto;color:var(--text-danger);border-color:var(--text-danger)">Delete</button><button onclick="document.getElementById('companyEditModal').classList.remove('open')">Cancel</button><button class="primary" onclick="saveCompany()">Save</button></div></div></div>
 
 <!-- Rates Modal -->
-<div class="modal-overlay" id="ratesModal"><div class="modal" style="max-width:900px;width:90vw;min-height:500px;resize:both;overflow:auto"><div class="modal-header"><h2>Rates Management</h2><button class="modal-close" onclick="document.getElementById('ratesModal').classList.remove('open')">&times;</button></div><div class="modal-body">
+<div class="modal-overlay" id="ratesModal"><div class="modal" style="max-width:1100px;width:95vw;min-height:600px;resize:both;overflow:auto"><div class="modal-header"><h2>💰 Pricing & Contracts</h2><button class="modal-close" onclick="document.getElementById('ratesModal').classList.remove('open')">&times;</button></div><div class="modal-body">
+<div id="pricingTabs" style="display:flex;gap:0;border-bottom:2px solid var(--border-tertiary);margin-bottom:16px">
+  <button class="pricing-tab pricing-tab-active" data-tab="rates" onclick="switchPricingTab('rates')" style="padding:8px 16px;background:0 0;border:0;border-bottom:2px solid var(--accent);margin-bottom:-2px;cursor:pointer;font-size:13px;font-family:inherit;font-weight:500">💰 Rates</button>
+  <button class="pricing-tab" data-tab="fulltenant" onclick="switchPricingTab('fulltenant')" style="padding:8px 16px;background:0 0;border:0;border-bottom:2px solid transparent;margin-bottom:-2px;cursor:pointer;font-size:13px;font-family:inherit;color:var(--text-secondary)">🔒 Full-tenant</button>
+  <button class="pricing-tab" data-tab="longterm" onclick="switchPricingTab('longterm')" style="padding:8px 16px;background:0 0;border:0;border-bottom:2px solid transparent;margin-bottom:-2px;cursor:pointer;font-size:13px;font-family:inherit;color:var(--text-secondary)">🔑 Long-term</button>
+</div>
+
+<!-- TAB: RATES -->
+<div id="tab-rates" class="pricing-tab-content">
 <div style="margin-bottom:12px"><strong style="font-size:13px">Property default rates</strong></div>
 <div id="ratesPropertyList" style="margin-bottom:16px"></div>
 <div style="border-top:1px solid var(--border-tertiary);padding-top:12px;margin-bottom:12px"><strong style="font-size:13px">Room rates</strong> <span class="muted" style="font-size:11px">(overrides property default — only rooms with individual pricing)</span></div>
@@ -338,7 +346,66 @@ tbody td{padding:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 <input id="rRate" type="number" placeholder="Rate" style="padding:6px 8px;border:1px solid var(--border-tertiary);border-radius:var(--radius-md);font-size:13px">
 <button onclick="addCustomRate()" style="padding:6px 14px;background:var(--accent);color:#fff;border:none;border-radius:var(--radius-md);cursor:pointer;font-size:13px">+</button>
 </div></div>
+</div>
+
+<!-- TAB: FULL-TENANT -->
+<div id="tab-fulltenant" class="pricing-tab-content" style="display:none">
+<div style="margin-bottom:12px"><strong style="font-size:13px">🔒 Full-tenant agreements</strong> <span class="muted" style="font-size:11px">(one company leases all rooms on a property uniformly)</span></div>
+<div id="fullTenantList"></div>
+</div>
+
+<!-- TAB: LONG-TERM -->
+<div id="tab-longterm" class="pricing-tab-content" style="display:none">
+<div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap">
+  <strong style="font-size:13px">🔑 Long-term contracts</strong> <span class="muted" style="font-size:11px">(individual rooms leased to a company)</span>
+  <select id="ltFilterProperty" onchange="renderLongTermList()" style="padding:5px 8px;border:1px solid var(--border-tertiary);border-radius:var(--radius-md);font-size:13px;font-family:inherit;margin-left:auto"></select>
+  <button onclick="openLongTermBulkAdd()" style="padding:5px 12px;border:1px solid var(--accent);border-radius:var(--radius-md);background:var(--accent);color:#fff;cursor:pointer;font-size:12px;font-family:inherit">+ Bulk-add</button>
+</div>
+<div id="longTermList"></div>
+</div>
+
 </div><div class="modal-footer"><button onclick="document.getElementById('ratesModal').classList.remove('open')">Close</button></div></div></div>
+
+<!-- Long-term contract edit modal -->
+<div class="modal-overlay" id="longTermEditModal"><div class="modal" style="max-width:600px"><div class="modal-header"><h2 id="ltEditTitle">Long-term contract</h2><button class="modal-close" onclick="document.getElementById('longTermEditModal').classList.remove('open')">&times;</button></div><div class="modal-body">
+<div class="form-group"><label>Room</label><div id="ltEditRoomLabel" style="padding:8px;background:var(--bg-secondary);border-radius:var(--radius-md);font-size:13px;font-weight:500"></div></div>
+<div class="form-group"><label>Company *</label><input id="ltEditCompany" type="text" list="fCompanyList" placeholder="Company name"></div>
+<div class="form-row">
+<div class="form-group"><label>Price *</label><input id="ltEditPrice" type="number" step="0.01" placeholder="0.00"></div>
+<div class="form-group"><label>Rate unit</label><select id="ltEditRateUnit"><option value="Per month" selected>Per month</option><option value="Per day">Per day</option></select></div>
+</div>
+<div class="form-row">
+<div class="form-group"><label>Start date *</label><input id="ltEditStartDate" type="date"></div>
+<div class="form-group"><label>End date</label><input id="ltEditEndDate" type="date"><small class="muted" style="font-size:10px">Leave empty for ongoing</small></div>
+</div>
+</div><div class="modal-footer"><button id="ltEditClearBtn" onclick="clearLongTermContract()" style="display:none;margin-right:auto;color:var(--text-danger);border-color:var(--text-danger)">Clear contract</button><button onclick="document.getElementById('longTermEditModal').classList.remove('open')">Cancel</button><button class="primary" onclick="saveLongTermContract()">Save</button></div></div></div>
+
+<!-- Long-term bulk-add modal -->
+<div class="modal-overlay" id="longTermBulkModal"><div class="modal" style="max-width:600px"><div class="modal-header"><h2>Bulk-add long-term contracts</h2><button class="modal-close" onclick="document.getElementById('longTermBulkModal').classList.remove('open')">&times;</button></div><div class="modal-body">
+<div class="muted" style="font-size:12px;margin-bottom:12px">Apply same contract to multiple rooms at once. Use this when many rooms share company, dates and price.</div>
+<div class="form-group"><label>Property</label><select id="ltBulkProperty" onchange="renderLongTermBulkRoomList()"></select></div>
+<div class="form-group"><label>Select rooms</label><div id="ltBulkRoomList" style="max-height:200px;overflow-y:auto;border:1px solid var(--border-tertiary);border-radius:var(--radius-md);padding:8px"></div></div>
+<div class="form-group"><label>Company *</label><input id="ltBulkCompany" type="text" list="fCompanyList" placeholder="Company name"></div>
+<div class="form-row">
+<div class="form-group"><label>Rate unit</label><select id="ltBulkRateUnit"><option value="Per month" selected>Per month</option><option value="Per day">Per day</option></select></div>
+<div class="form-group"><label>Start date *</label><input id="ltBulkStartDate" type="date"></div>
+</div>
+<div class="muted" style="font-size:11px;margin-top:8px">Note: Price is set per-room individually. After bulk-add, click each room to set its specific price.</div>
+</div><div class="modal-footer"><button onclick="document.getElementById('longTermBulkModal').classList.remove('open')">Cancel</button><button class="primary" onclick="bulkApplyLongTermContract()">Apply to selected</button></div></div></div>
+
+<!-- Full-tenant edit modal -->
+<div class="modal-overlay" id="fullTenantEditModal"><div class="modal" style="max-width:600px"><div class="modal-header"><h2 id="ftEditTitle">Full-tenant agreement</h2><button class="modal-close" onclick="document.getElementById('fullTenantEditModal').classList.remove('open')">&times;</button></div><div class="modal-body">
+<div class="form-group"><label>Property</label><div id="ftEditPropertyLabel" style="padding:8px;background:var(--bg-secondary);border-radius:var(--radius-md);font-size:13px;font-weight:500"></div></div>
+<div class="form-group"><label>Company *</label><input id="ftEditCompany" type="text" list="fCompanyList" placeholder="Company name"><small class="muted" style="font-size:10px">Leave empty to disable full-tenant on this property</small></div>
+<div class="form-row">
+<div class="form-group"><label>Price per room</label><input id="ftEditRate" type="number" step="0.01" placeholder="(empty = sum each room's price from Rates tab)"></div>
+<div class="form-group"><label>Rate unit</label><select id="ftEditRateUnit"><option value="Per day" selected>Per day</option><option value="Per month">Per month</option></select></div>
+</div>
+<div class="form-row">
+<div class="form-group"><label>Start date</label><input id="ftEditStartDate" type="date"></div>
+<div class="form-group"><label>End date</label><input id="ftEditEndDate" type="date"><small class="muted" style="font-size:10px">Leave empty for ongoing</small></div>
+</div>
+</div><div class="modal-footer"><button onclick="document.getElementById('fullTenantEditModal').classList.remove('open')">Cancel</button><button class="primary" onclick="saveFullTenantAgreement()">Save</button></div></div></div>
 <!-- Occupancy Report Modal -->
 <div class="modal-overlay" id="occupancyModal"><div class="modal" style="max-width:700px"><div class="modal-header"><h2>Occupancy Report</h2><button class="modal-close" onclick="document.getElementById('occupancyModal').classList.remove('open')">&times;</button></div><div class="modal-body">
 <div class="form-row" style="margin-bottom:16px"><div class="form-group"><label>Year</label><select id="occYear" onchange="renderOccupancyReport()" style="width:100%;padding:8px;border:1px solid var(--border-tertiary);border-radius:var(--radius-md);font-size:14px"></select></div><div class="form-group"><label>Property</label><select id="occProperty" onchange="renderOccupancyReport()" style="width:100%;padding:8px;border:1px solid var(--border-tertiary);border-radius:var(--radius-md);font-size:14px"></select></div></div>
