@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v13.21 — app.js (Core)
+// 2GM Booking v14.0.2 — app.js (Core)
 // Auth, Graph API, Data, Rendering, Bookings
 // ============================================================
 
@@ -137,8 +137,60 @@ async function fetchSiteFileText(pathInLibrary){
   }
   throw new Error('File not found. Tried:\n'+errors.join('\n'));
 }
-async function createListItem(listName,fields){const s=await getSiteId();const lid=await getListId(listName);return graphPost('/sites/'+s+'/lists/'+lid+'/items',{fields})}
-async function updateListItem(listName,itemId,fields){const s=await getSiteId();const lid=await getListId(listName);return graphPatch('/sites/'+s+'/lists/'+lid+'/items/'+itemId+'/fields',fields)}
+// Cache of known columns per list. Populated lazily on first save attempt.
+const _knownColumnsByList={};
+const _unknownFieldsByList={};
+
+async function _discoverColumns(listName){
+  if(_knownColumnsByList[listName])return _knownColumnsByList[listName];
+  try{
+    const s=await getSiteId();const lid=await getListId(listName);
+    const res=await graphGet('/sites/'+s+'/lists/'+lid+'/columns?$select=name,displayName');
+    const cols=new Set();
+    (res.value||[]).forEach(c=>{if(c.name)cols.add(c.name)});
+    // Also add common system fields that should always be allowed even if not in schema
+    ['Title'].forEach(k=>cols.add(k));
+    _knownColumnsByList[listName]=cols;
+    console.log('[SharePoint] Discovered '+cols.size+' columns for '+listName);
+    return cols;
+  }catch(e){
+    console.warn('Could not discover columns for '+listName+':',e.message);
+    _knownColumnsByList[listName]=new Set();
+    return _knownColumnsByList[listName];
+  }
+}
+
+async function _stripUnknownFieldsAsync(listName,fields){
+  const cols=await _discoverColumns(listName);
+  if(!cols||!cols.size)return fields; // discovery failed — let SharePoint reject as before
+  const cleaned={};
+  const skipped=[];
+  Object.keys(fields).forEach(k=>{
+    // Always allow Lookup-prefixed fields (e.g. RoomLookupId) — SharePoint resolves these
+    if(k.endsWith('LookupId')||cols.has(k)){
+      cleaned[k]=fields[k];
+    }else{
+      skipped.push(k);
+      if(!_unknownFieldsByList[listName])_unknownFieldsByList[listName]=new Set();
+      _unknownFieldsByList[listName].add(k);
+    }
+  });
+  if(skipped.length){
+    console.warn('[SharePoint] Skipping unknown columns in '+listName+': '+skipped.join(', ')+'. Create these in SharePoint to enable.');
+  }
+  return cleaned;
+}
+
+async function createListItem(listName,fields){
+  const cleaned=await _stripUnknownFieldsAsync(listName,fields);
+  const s=await getSiteId();const lid=await getListId(listName);
+  return graphPost('/sites/'+s+'/lists/'+lid+'/items',{fields:cleaned});
+}
+async function updateListItem(listName,itemId,fields){
+  const cleaned=await _stripUnknownFieldsAsync(listName,fields);
+  const s=await getSiteId();const lid=await getListId(listName);
+  return graphPatch('/sites/'+s+'/lists/'+lid+'/items/'+itemId+'/fields',cleaned);
+}
 
 // --- USER & PERMISSIONS ---
 async function loadCurrentUser(){
@@ -234,6 +286,8 @@ function applyPermissions(){
   show('btnNewBooking',can('edit_bookings'));
   show('btnNewGuest',can('edit_bookings'));
   show('menuBtnCompanies',can('manage_companies')||can('admin'));
+  show('menuBtnBackup',can('admin'));
+  show('menuBtnRestore',can('admin'));
   show('btnArchive',can('archive')||can('view_bookings'));
   show('btnUpcoming',can('view_bookings'));
   show('btnHours',can('view_hours')||can('edit_hours'));
@@ -1485,7 +1539,7 @@ msalInstance.initialize().then(()=>{
 });
 
 // ============================================================
-// AUTO-REFRESH (v13.21)
+// AUTO-REFRESH (v14.0.2)
 // ============================================================
 
 // Build a fingerprint that tells us if data has changed without full reload

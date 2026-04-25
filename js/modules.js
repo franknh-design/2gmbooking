@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v13.21 — modules.js
+// 2GM Booking v14.0.2 — modules.js
 // Hours, Archive, Import/Export, Admin (checkbox permissions)
 // ============================================================
 
@@ -943,7 +943,7 @@ async function deleteRate(id){
 }
 
 // ============================================================
-// PERSONS / CUSTOMERS (v13.21)
+// PERSONS / CUSTOMERS (v14.0.2)
 // ============================================================
 let editingPersonId=null;
 
@@ -1240,7 +1240,7 @@ function onPersonNameInput(){
 }
 
 // ============================================================
-// CHARTS (v13.21) — pure SVG, no dependencies
+// CHARTS (v14.0.2) — pure SVG, no dependencies
 // ============================================================
 
 // Reusable bar chart: data = [{label, value, subtitle?}]
@@ -1549,7 +1549,7 @@ function renderHoursCharts(filtered){
 }
 
 // ============================================================
-// CLEANING EFFICIENCY ANALYSIS (v13.21)
+// CLEANING EFFICIENCY ANALYSIS (v14.0.2)
 // ============================================================
 // Compares cleaner hours against guest-nights per property, per week/month.
 // USE WITH CAUTION: Hours include breaks, transport, repairs — not just cleaning.
@@ -1902,7 +1902,7 @@ function _dateFromIsoWeek(year,week){
 }
 
 // ============================================================
-// MORE MENU (v13.21)
+// MORE MENU (v14.0.2)
 // ============================================================
 function toggleMoreMenu(e){
   if(e){e.stopPropagation();e.preventDefault()}
@@ -1929,7 +1929,7 @@ function closeMoreMenu(){
 }
 
 // ============================================================
-// FAKTURAGRUNNLAG / INVOICING (v13.21)
+// FAKTURAGRUNNLAG / INVOICING (v14.0.2)
 // ============================================================
 let invoicingInitialized=false;
 
@@ -2526,7 +2526,7 @@ function exportInvoicingCSV(companyFilterName){
 }
 
 // ============================================================
-// ADD GUEST FROM BOOKING (v13.21)
+// ADD GUEST FROM BOOKING (v14.0.2)
 // ============================================================
 function addBookingToGuests(bookingId){
   if(!can('edit_bookings')){alert('You do not have permission to add guests.');return}
@@ -2551,7 +2551,7 @@ function addBookingToGuests(bookingId){
 }
 
 // ============================================================
-// GUEST BOOKINGS HISTORY (v13.21)
+// GUEST BOOKINGS HISTORY (v14.0.2)
 // ============================================================
 function showGuestBookings(name){
   if(!name)return;
@@ -2623,7 +2623,7 @@ function showGuestBookings(name){
 }
 
 // ============================================================
-// HOURS IMPORT (v13.21)
+// HOURS IMPORT (v14.0.2)
 // ============================================================
 let importHoursData=[];
 
@@ -2773,7 +2773,7 @@ async function runImportHours(){
 }
 
 // ============================================================
-// CLEANING DIAGNOSTICS (v13.21)
+// CLEANING DIAGNOSTICS (v14.0.2)
 // ============================================================
 function showCleaningDiagnostics(){
   const today=new Date();today.setHours(0,0,0,0);
@@ -2885,7 +2885,7 @@ function showCleaningDiagnostics(){
 }
 
 // ============================================================
-// BATTERY REFRESH (v13.21)
+// BATTERY REFRESH (v14.0.2)
 // ============================================================
 const BATTERY_FILE_PATH='Batteristatus/RoomBattery.csv';
 
@@ -2964,7 +2964,7 @@ async function refreshBatteryStatus(){
 }
 
 // ============================================================
-// COMPANIES MANAGEMENT (v13.21)
+// COMPANIES MANAGEMENT (v14.0.2)
 // ============================================================
 let editingCompanyId=null;
 
@@ -3174,7 +3174,7 @@ async function quickAddCompany(name){
 }
 
 // ============================================================
-// BRREG LOOKUP (v13.21)
+// BRREG LOOKUP (v14.0.2)
 // ============================================================
 // Fetches company information from Brønnøysundregistrene open API.
 // https://data.brreg.no/enhetsregisteret/api/enheter/{orgnr}
@@ -3242,7 +3242,7 @@ async function lookupBrreg(){
 }
 
 // ============================================================
-// PDF EXPORT VIA PRINT (v13.21)
+// PDF EXPORT VIA PRINT (v14.0.2)
 // ============================================================
 // Opens a print-friendly window containing the same data as exportInvoicingCSV.
 // Browser's print dialog allows "Save as PDF" as the destination.
@@ -3520,7 +3520,7 @@ function exportInvoicingPDF(companyFilterName){
 }
 
 // ============================================================
-// PRICING TABS — Full-tenant + Long-term editors (v13.21)
+// PRICING TABS — Full-tenant + Long-term editors (v14.0.2)
 // ============================================================
 function switchPricingTab(tab){
   document.querySelectorAll('.pricing-tab').forEach(b=>{
@@ -3773,4 +3773,180 @@ async function bulkApplyLongTermContract(){
   alert('Applied to '+success+' rooms'+(failed?', '+failed+' failed':'')+'. Now set the individual prices in the Long-term tab.');
   document.getElementById('longTermBulkModal').classList.remove('open');
   renderLongTermList();
+}
+
+// ============================================================
+// BACKUP & RESTORE (v14.0.2)
+// ============================================================
+const BACKUP_LISTS=['Properties','Rooms','Bookings','Persons','Cleaning_Log','Hours','Users','Rates','Companies'];
+
+async function exportBackup(){
+  if(!can('admin')){alert('Admin permission required');return}
+  const btn=document.querySelector('[data-backup-btn]');
+  if(btn){btn.disabled=true;btn.textContent='⏳ Backing up...'}
+  try{
+    const data={
+      meta:{
+        appVersion:'v14.0.2',
+        timestamp:new Date().toISOString(),
+        exportedBy:currentUser.email||'unknown',
+        siteId:siteId
+      },
+      lists:{}
+    };
+    for(let i=0;i<BACKUP_LISTS.length;i++){
+      const name=BACKUP_LISTS[i];
+      if(btn)btn.textContent='⏳ '+name+' ('+(i+1)+'/'+BACKUP_LISTS.length+')...';
+      try{
+        const items=await getListItems(name);
+        data.lists[name]={count:items.length,items};
+      }catch(e){
+        data.lists[name]={count:0,items:[],error:e.message};
+        console.warn('Skipping '+name+':',e.message);
+      }
+    }
+    // Build summary
+    const summary=Object.keys(data.lists).map(k=>k+': '+data.lists[k].count).join(', ');
+    data.meta.summary=summary;
+    // Download as JSON
+    const json=JSON.stringify(data,null,2);
+    const blob=new Blob([json],{type:'application/json'});
+    const dateStr=new Date().toISOString().substring(0,10);
+    const filename='2gmbooking_backup_'+dateStr+'.json';
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    a.href=url;a.download=filename;
+    document.body.appendChild(a);a.click();
+    setTimeout(()=>{document.body.removeChild(a);URL.revokeObjectURL(url)},100);
+    alert('✓ Backup ready: '+filename+'\n\n'+summary);
+  }catch(e){
+    alert('Backup failed: '+e.message);
+  }finally{
+    if(btn){btn.disabled=false;btn.textContent='💾 Backup data'}
+  }
+}
+
+// --- RESTORE: inspect only ---
+let _backupInspectData=null;
+
+function openRestoreInspect(){
+  if(!can('admin')){alert('Admin permission required');return}
+  document.getElementById('restoreFileInput').click();
+}
+
+function onRestoreFileSelected(event){
+  const file=event.target.files[0];
+  if(!file)return;
+  const reader=new FileReader();
+  reader.onload=e=>{
+    try{
+      const data=JSON.parse(e.target.result);
+      if(!data.meta||!data.lists){throw new Error('Not a valid 2GM Booking backup file')}
+      _backupInspectData=data;
+      renderRestoreInspect();
+      document.getElementById('restoreInspectModal').classList.add('open');
+    }catch(err){
+      alert('Could not read file: '+err.message);
+    }
+  };
+  reader.readAsText(file);
+  // Reset input so same file can be selected again
+  event.target.value='';
+}
+
+function renderRestoreInspect(){
+  const data=_backupInspectData;
+  if(!data)return;
+  const meta=data.meta;
+  const exportedDate=new Date(meta.timestamp);
+  const ageDays=Math.floor((new Date()-exportedDate)/86400000);
+  let html='<div style="background:var(--bg-secondary);padding:10px;border-radius:6px;margin-bottom:12px;font-size:12px">'
+    +'<strong>Backup info</strong><br>'
+    +'Exported: '+formatDate(meta.timestamp)+' ('+ageDays+' days ago) by '+escapeHtml(meta.exportedBy||'?')+'<br>'
+    +'App version: '+escapeHtml(meta.appVersion||'?')+'<br>'
+    +'Summary: '+escapeHtml(meta.summary||'')
+    +'</div>';
+  // List selector
+  html+='<div style="margin-bottom:8px"><label style="font-size:12px">Pick a list: </label>'
+    +'<select id="restoreListPicker" onchange="renderRestoreItems()" style="padding:5px 8px;border:1px solid var(--border-tertiary);border-radius:var(--radius-md);font-size:13px;font-family:inherit">'
+    +'<option value="">— choose —</option>'
+    +Object.keys(data.lists).map(k=>'<option value="'+k+'">'+k+' ('+data.lists[k].count+')</option>').join('')
+    +'</select>'
+    +' <input id="restoreSearch" type="text" placeholder="Search..." oninput="renderRestoreItems()" style="margin-left:8px;padding:5px 8px;border:1px solid var(--border-tertiary);border-radius:var(--radius-md);font-size:13px;font-family:inherit;width:240px">'
+    +'</div>';
+  html+='<div id="restoreItemsContainer" style="border:1px solid var(--border-tertiary);border-radius:6px;padding:8px;min-height:200px;max-height:400px;overflow:auto;font-size:12px"><div class="muted" style="text-align:center;padding:30px">Pick a list to inspect items</div></div>';
+  document.getElementById('restoreInspectBody').innerHTML=html;
+}
+
+function renderRestoreItems(){
+  const data=_backupInspectData;
+  if(!data)return;
+  const listName=document.getElementById('restoreListPicker').value;
+  const search=(document.getElementById('restoreSearch').value||'').toLowerCase().trim();
+  const container=document.getElementById('restoreItemsContainer');
+  if(!listName){container.innerHTML='<div class="muted" style="text-align:center;padding:30px">Pick a list to inspect items</div>';return}
+  const list=data.lists[listName];
+  if(!list||!list.items||!list.items.length){
+    container.innerHTML='<div class="muted" style="text-align:center;padding:30px">No items in this list.</div>';
+    return;
+  }
+  // Filter by search
+  let items=list.items;
+  if(search){
+    items=items.filter(item=>{
+      const blob=JSON.stringify(item).toLowerCase();
+      return blob.indexOf(search)>=0;
+    });
+  }
+  if(!items.length){container.innerHTML='<div class="muted" style="text-align:center;padding:30px">No items match search.</div>';return}
+  // Show as expandable rows
+  let html='<div class="muted" style="font-size:11px;margin-bottom:6px">Showing '+items.length+(search?' / '+list.items.length:'')+' items. Click to expand.</div>';
+  items.slice(0,200).forEach((item,idx)=>{
+    const titleField=item.Title||item.Person_Name||item.Name||item.Email||('item #'+(item.id||idx));
+    const itemJson=JSON.stringify(item,null,2);
+    const elId='restore-item-'+listName+'-'+idx;
+    html+='<div style="border-bottom:.5px solid var(--border-tertiary);padding:4px 0">'
+      +'<div style="display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="document.getElementById(\''+elId+'\').classList.toggle(\'restore-collapsed\')">'
+      +'<span style="font-weight:500">'+escapeHtml(String(titleField))+'</span>'
+      +'<span><button onclick="event.stopPropagation();restoreSingleItem(\''+listName+'\','+idx+')" style="padding:2px 8px;background:#1D9E75;color:#fff;border:0;border-radius:4px;font-size:11px;cursor:pointer">↻ Restore</button></span>'
+      +'</div>'
+      +'<pre id="'+elId+'" class="restore-collapsed" style="font-family:Consolas,monospace;font-size:11px;background:var(--bg-secondary);padding:6px;border-radius:4px;margin:4px 0 0 0;white-space:pre-wrap;max-height:200px;overflow:auto">'+escapeHtml(itemJson)+'</pre>'
+      +'</div>';
+  });
+  if(items.length>200)html+='<div class="muted" style="text-align:center;padding:8px;font-size:11px">Showing first 200. Use search to narrow.</div>';
+  container.innerHTML=html;
+  // Make CSS work
+  if(!document.getElementById('restoreCSS')){
+    const css=document.createElement('style');
+    css.id='restoreCSS';
+    css.textContent='.restore-collapsed{display:none}';
+    document.head.appendChild(css);
+  }
+}
+
+async function restoreSingleItem(listName,idx){
+  if(!can('admin')){alert('Admin permission required');return}
+  const data=_backupInspectData;
+  if(!data)return;
+  const item=data.lists[listName].items[idx];
+  if(!item){alert('Item not found in backup');return}
+  // Build a clean fields object — strip system fields
+  const skipFields={id:1,_id:1,'@odata.etag':1,Created:1,Modified:1,Author:1,Editor:1,AuthorLookupId:1,EditorLookupId:1,ContentType:1,_UIVersionString:1,_ColorTag:1,Attachments:1,LinkTitle:1,LinkTitleNoMenu:1,ItemChildCount:1,FolderChildCount:1,_ComplianceFlags:1,_ComplianceTag:1,_ComplianceTagWrittenTime:1,_ComplianceTagUserId:1,AppAuthor:1,AppEditor:1};
+  const fields={};
+  Object.keys(item).forEach(k=>{if(!skipFields[k]&&!k.startsWith('OData_'))fields[k]=item[k]});
+  // Confirm
+  const titleField=item.Title||item.Person_Name||item.Name||'item';
+  const summary='Restore "'+titleField+'" to '+listName+'?\n\n'
+    +'A NEW item will be created with this data. The original ID ('+item.id+') will not be reused — SharePoint assigns a new one.\n\n'
+    +'Note: Lookup-references (e.g. RoomLookupId, PropertyLookupId) will be copied as-is. If the referenced room/property no longer exists, the item may not display correctly.\n\n'
+    +'Proceed?';
+  if(!confirm(summary))return;
+  try{
+    const result=await createListItem(listName,fields);
+    alert('✓ Restored as new item with id '+result.id+' in '+listName);
+    // Reload data so it shows up
+    await loadData();
+  }catch(e){
+    alert('Restore failed: '+e.message);
+  }
 }
