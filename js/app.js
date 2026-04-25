@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v14.0.2 — app.js (Core)
+// 2GM Booking v14.0.3 — app.js (Core)
 // Auth, Graph API, Data, Rendering, Bookings
 // ============================================================
 
@@ -59,8 +59,23 @@ async function signIn(){
 }
 async function getToken(){
   const a=msalInstance.getAllAccounts();if(!a.length)return null;
-  try{const r=await msalInstance.acquireTokenSilent({scopes:['Sites.ReadWrite.All','Mail.Send'],account:a[0]});accessToken=r.accessToken;return accessToken}
-  catch(e){const r=await msalInstance.acquireTokenPopup({scopes:['Sites.ReadWrite.All','Mail.Send']});accessToken=r.accessToken;return accessToken}
+  try{
+    const r=await msalInstance.acquireTokenSilent({scopes:['Sites.ReadWrite.All','Mail.Send'],account:a[0]});
+    if(!r||!r.accessToken)throw new Error('Silent returned empty token');
+    accessToken=r.accessToken;return accessToken;
+  }catch(e){
+    console.warn('[Auth] Silent token failed:',e.message,'— trying popup');
+    try{
+      const r=await msalInstance.acquireTokenPopup({scopes:['Sites.ReadWrite.All','Mail.Send']});
+      if(!r||!r.accessToken)throw new Error('Popup returned empty token');
+      accessToken=r.accessToken;return accessToken;
+    }catch(popupErr){
+      console.error('[Auth] Popup token failed:',popupErr.message);
+      accessToken=null;
+      alert('Sesjonen har utløpt. Last siden på nytt (F5) og logg inn på nytt.');
+      throw new Error('Token unavailable');
+    }
+  }
 }
 function signOut(){msalInstance.logoutPopup();document.getElementById('app').style.display='none';document.getElementById('loginScreen').style.display='block'}
 function showApp(){document.getElementById('loginScreen').style.display='none';document.getElementById('app').style.display='block'}
@@ -151,7 +166,7 @@ async function _discoverColumns(listName){
     // Also add common system fields that should always be allowed even if not in schema
     ['Title'].forEach(k=>cols.add(k));
     _knownColumnsByList[listName]=cols;
-    console.log('[SharePoint] Discovered '+cols.size+' columns for '+listName);
+    console.log('[SharePoint] Discovered '+cols.size+' columns for '+listName+':',[...cols].sort().join(', '));
     return cols;
   }catch(e){
     console.warn('Could not discover columns for '+listName+':',e.message);
@@ -183,8 +198,11 @@ async function _stripUnknownFieldsAsync(listName,fields){
 
 async function createListItem(listName,fields){
   const cleaned=await _stripUnknownFieldsAsync(listName,fields);
+  // Strip null/undefined values for create — SharePoint can throw 500 on unexpected null
+  const final={};
+  Object.keys(cleaned).forEach(k=>{if(cleaned[k]!==null&&cleaned[k]!==undefined)final[k]=cleaned[k]});
   const s=await getSiteId();const lid=await getListId(listName);
-  return graphPost('/sites/'+s+'/lists/'+lid+'/items',{fields:cleaned});
+  return graphPost('/sites/'+s+'/lists/'+lid+'/items',{fields:final});
 }
 async function updateListItem(listName,itemId,fields){
   const cleaned=await _stripUnknownFieldsAsync(listName,fields);
@@ -1539,7 +1557,7 @@ msalInstance.initialize().then(()=>{
 });
 
 // ============================================================
-// AUTO-REFRESH (v14.0.2)
+// AUTO-REFRESH (v14.0.3)
 // ============================================================
 
 // Build a fingerprint that tells us if data has changed without full reload
