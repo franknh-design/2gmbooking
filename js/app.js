@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v14.0.3 — app.js (Core)
+// 2GM Booking v14.0.5 — app.js (Core)
 // Auth, Graph API, Data, Rendering, Bookings
 // ============================================================
 
@@ -183,7 +183,11 @@ async function _stripUnknownFieldsAsync(listName,fields){
   Object.keys(fields).forEach(k=>{
     // Always allow Lookup-prefixed fields (e.g. RoomLookupId) — SharePoint resolves these
     if(k.endsWith('LookupId')||cols.has(k)){
-      cleaned[k]=fields[k];
+      let v=fields[k];
+      // Convert JS booleans to 0/1 — SharePoint Yes/No fields can throw 500 on JS true/false via Graph API
+      if(v===true)v=1;
+      else if(v===false)v=0;
+      cleaned[k]=v;
     }else{
       skipped.push(k);
       if(!_unknownFieldsByList[listName])_unknownFieldsByList[listName]=new Set();
@@ -202,6 +206,9 @@ async function createListItem(listName,fields){
   const final={};
   Object.keys(cleaned).forEach(k=>{if(cleaned[k]!==null&&cleaned[k]!==undefined)final[k]=cleaned[k]});
   const s=await getSiteId();const lid=await getListId(listName);
+  console.log('[SharePoint] CREATE '+listName+' payload:',JSON.parse(JSON.stringify(final)));
+  console.log('[SharePoint] CREATE '+listName+' field names:',Object.keys(final).join(', '));
+  console.log('[SharePoint] Known columns:',[..._knownColumnsByList[listName]||[]].sort().join(', '));
   return graphPost('/sites/'+s+'/lists/'+lid+'/items',{fields:final});
 }
 async function updateListItem(listName,itemId,fields){
@@ -1557,7 +1564,7 @@ msalInstance.initialize().then(()=>{
 });
 
 // ============================================================
-// AUTO-REFRESH (v14.0.3)
+// AUTO-REFRESH (v14.0.5)
 // ============================================================
 
 // Build a fingerprint that tells us if data has changed without full reload
