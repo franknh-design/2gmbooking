@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v14.3 — app.js (Core)
+// 2GM Booking v14.4 — app.js (Core)
 // Auth, Graph API, Data, Rendering, Bookings
 // ============================================================
 
@@ -1202,6 +1202,9 @@ function showDetail(roomId){
       }
     }
     if(can('print_doortag'))btns+='<button onclick="printDoorTag(\''+booking.id+'\')">Print door tag</button>';
+    // Door code buttons (Phase 1: per-room, manual)
+    btns+='<button onclick="window._currentDoorCodeBookingId=\''+booking.id+'\';showRoomDoorCode(\''+booking.id+'\')" style="background:rgba(239,159,39,.1);color:#a76800;border-color:#EF9F27" title="Vis nåværende dørkode for rommet">🔑 Vis kode</button>';
+    btns+='<button onclick="window._currentDoorCodeBookingId=\''+booking.id+'\';generateRoomDoorCode(\''+booking.id+'\')" style="background:rgba(239,159,39,.1);color:#a76800;border-color:#EF9F27" title="Generer ny 6-sifret dørkode for rommet">🔑 Generer kode</button>';
     // Messaging buttons
     btns+='<button onclick="copyBookingSMS(\''+booking.id+'\')" style="background:rgba(14,165,165,.1);color:#0EA5A5;border-color:#0EA5A5" title="Kopier SMS-tekst til utklippstavle">📱 Kopier SMS</button>';
     btns+='<button onclick="openBookingSMS(\''+booking.id+'\')" style="background:rgba(14,165,165,.1);color:#0EA5A5;border-color:#0EA5A5" title="Åpne SMS-app med ferdig tekst">📱 Send SMS</button>';
@@ -1728,7 +1731,7 @@ msalInstance.initialize().then(()=>{
 });
 
 // ============================================================
-// AUTO-REFRESH (v14.3)
+// AUTO-REFRESH (v14.4)
 // ============================================================
 
 // Build a fingerprint that tells us if data has changed without full reload

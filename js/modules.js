@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v14.3 — modules.js
+// 2GM Booking v14.4 — modules.js
 // Hours, Archive, Import/Export, Admin (checkbox permissions)
 // ============================================================
 
@@ -988,7 +988,7 @@ async function deleteRate(id){
 }
 
 // ============================================================
-// PERSONS / CUSTOMERS (v14.3)
+// PERSONS / CUSTOMERS (v14.4)
 // ============================================================
 let editingPersonId=null;
 
@@ -1288,7 +1288,7 @@ function onPersonNameInput(){
 }
 
 // ============================================================
-// CHARTS (v14.3) — pure SVG, no dependencies
+// CHARTS (v14.4) — pure SVG, no dependencies
 // ============================================================
 
 // Reusable bar chart: data = [{label, value, subtitle?}]
@@ -1597,7 +1597,7 @@ function renderHoursCharts(filtered){
 }
 
 // ============================================================
-// CLEANING EFFICIENCY ANALYSIS (v14.3)
+// CLEANING EFFICIENCY ANALYSIS (v14.4)
 // ============================================================
 // Compares cleaner hours against guest-nights per property, per week/month.
 // USE WITH CAUTION: Hours include breaks, transport, repairs — not just cleaning.
@@ -1950,7 +1950,7 @@ function _dateFromIsoWeek(year,week){
 }
 
 // ============================================================
-// MORE MENU (v14.3)
+// MORE MENU (v14.4)
 // ============================================================
 function toggleMoreMenu(e){
   if(e){e.stopPropagation();e.preventDefault()}
@@ -1977,7 +1977,7 @@ function closeMoreMenu(){
 }
 
 // ============================================================
-// FAKTURAGRUNNLAG / INVOICING (v14.3)
+// FAKTURAGRUNNLAG / INVOICING (v14.4)
 // ============================================================
 let invoicingInitialized=false;
 
@@ -2178,7 +2178,7 @@ function renderInvoicing(){
     });
   });
 
-  // LONG-TERM CONTRACTS (per-room): segmented by guests/gaps (v14.3)
+  // LONG-TERM CONTRACTS (per-room): segmented by guests/gaps (v14.4)
   Object.keys(longTermByRoomId).forEach(rid=>{
     const room=allRooms.find(r=>r.id===rid);
     if(!room)return;
@@ -2537,7 +2537,7 @@ function exportInvoicingCSV(companyFilterName){
     ]);
   });
 
-  // Long-term per-room contracts (v14.3 segmented)
+  // Long-term per-room contracts (v14.4 segmented)
   Object.keys(longTermByRoomIdCsv).forEach(rid=>{
     const lt=longTermByRoomIdCsv[rid];
     if(companyFilterName&&lt.company!==companyFilterName)return;
@@ -2594,7 +2594,7 @@ function exportInvoicingCSV(companyFilterName){
 }
 
 // ============================================================
-// ADD GUEST FROM BOOKING (v14.3)
+// ADD GUEST FROM BOOKING (v14.4)
 // ============================================================
 function addBookingToGuests(bookingId){
   if(!can('edit_bookings')){alert('You do not have permission to add guests.');return}
@@ -2619,7 +2619,7 @@ function addBookingToGuests(bookingId){
 }
 
 // ============================================================
-// GUEST BOOKINGS HISTORY (v14.3)
+// GUEST BOOKINGS HISTORY (v14.4)
 // ============================================================
 function showGuestBookings(name){
   if(!name)return;
@@ -2691,7 +2691,7 @@ function showGuestBookings(name){
 }
 
 // ============================================================
-// HOURS IMPORT (v14.3)
+// HOURS IMPORT (v14.4)
 // ============================================================
 let importHoursData=[];
 
@@ -2841,7 +2841,7 @@ async function runImportHours(){
 }
 
 // ============================================================
-// CLEANING DIAGNOSTICS (v14.3)
+// CLEANING DIAGNOSTICS (v14.4)
 // ============================================================
 function showCleaningDiagnostics(){
   const today=new Date();today.setHours(0,0,0,0);
@@ -2953,7 +2953,7 @@ function showCleaningDiagnostics(){
 }
 
 // ============================================================
-// BATTERY REFRESH (v14.3)
+// BATTERY REFRESH (v14.4)
 // ============================================================
 const BATTERY_FILE_PATH='Batteristatus/RoomBattery.csv';
 
@@ -3032,7 +3032,7 @@ async function refreshBatteryStatus(){
 }
 
 // ============================================================
-// COMPANIES MANAGEMENT (v14.3)
+// COMPANIES MANAGEMENT (v14.4)
 // ============================================================
 let editingCompanyId=null;
 
@@ -3260,7 +3260,7 @@ async function quickAddCompany(name){
 }
 
 // ============================================================
-// BRREG LOOKUP (v14.3)
+// BRREG LOOKUP (v14.4)
 // ============================================================
 // Fetches company information from Brønnøysundregistrene open API.
 // https://data.brreg.no/enhetsregisteret/api/enheter/{orgnr}
@@ -3328,7 +3328,7 @@ async function lookupBrreg(){
 }
 
 // ============================================================
-// PDF EXPORT VIA PRINT (v14.3)
+// PDF EXPORT VIA PRINT (v14.4)
 // ============================================================
 // Opens a print-friendly window containing the same data as exportInvoicingCSV.
 // Browser's print dialog allows "Save as PDF" as the destination.
@@ -3441,7 +3441,7 @@ function exportInvoicingPDF(companyFilterName){
     if(!groups[key])groups[key]={nights:[],fees:[],percent:null,fullTenant:null,longTerm:[]};
     groups[key].fullTenant={property:prop?prop.Title:'',rooms:ft.rooms,days:ft.days,rate:ft.rate,total:ft.total,detailLabel:ft.detailLabel};
   });
-  // Long-term per-room contracts (v14.3 segmented)
+  // Long-term per-room contracts (v14.4 segmented)
   Object.keys(longTermByRoomIdPdf).forEach(rid=>{
     const lt=longTermByRoomIdPdf[rid];
     if(companyFilterName&&lt.company!==companyFilterName)return;
@@ -3494,7 +3494,7 @@ function exportInvoicingPDF(companyFilterName){
       tableRows+='<tr class="ft-row"><td colspan="4"><strong>🔒 Full-tenant lease — '+escapeHtml(ft.property)+'</strong><br><small>'+escapeHtml(ft.detailLabel||'')+'</small></td><td class="num"><strong>'+fmtKr(ft.total)+'</strong></td></tr>';
     }
 
-    // Long-term per-room contracts (v14.3 segmented): summary + collapsible detail rows
+    // Long-term per-room contracts (v14.4 segmented): summary + collapsible detail rows
     if(g.longTerm&&g.longTerm.length){
       const ltTotal=g.longTerm.reduce((s,lt)=>s+lt.total,0);
       groupTotal+=ltTotal;
@@ -3621,7 +3621,7 @@ function exportInvoicingPDF(companyFilterName){
 }
 
 // ============================================================
-// PRICING TABS — Full-tenant + Long-term editors (v14.3)
+// PRICING TABS — Full-tenant + Long-term editors (v14.4)
 // ============================================================
 function switchPricingTab(tab){
   document.querySelectorAll('.pricing-tab').forEach(b=>{
@@ -3877,7 +3877,7 @@ async function bulkApplyLongTermContract(){
 }
 
 // ============================================================
-// BACKUP & RESTORE (v14.3)
+// BACKUP & RESTORE (v14.4)
 // ============================================================
 const BACKUP_LISTS=['Properties','Rooms','Bookings','Persons','Cleaning_Log','Hours','Users','Rates','Companies'];
 
@@ -3888,7 +3888,7 @@ async function exportBackup(){
   try{
     const data={
       meta:{
-        appVersion:'v14.3',
+        appVersion:'v14.4',
         timestamp:new Date().toISOString(),
         exportedBy:currentUser.email||'unknown',
         siteId:siteId
@@ -4053,7 +4053,7 @@ async function restoreSingleItem(listName,idx){
 }
 
 // ============================================================
-// COMPANY MERGE (v14.3)
+// COMPANY MERGE (v14.4)
 // ============================================================
 function openMergeCompanies(){
   if(!can('manage_companies')&&!can('admin')){alert('Permission required');return}
@@ -4264,7 +4264,7 @@ async function deleteListItem(listName,itemId){
 }
 
 // ============================================================
-// MESSAGING — SMS & E-post (v14.3)
+// MESSAGING — SMS & E-post (v14.4)
 // ============================================================
 const DEFAULT_SMS_TEMPLATE=`Hei {first_name}!
 Velkommen til {property}.
@@ -4544,4 +4544,92 @@ function previewTemplate(kind){
     out='E-post-forhåndsvisning (basert på '+vars.guest_name+'):\n\nEmne: '+subj+'\n\n'+body;
   }
   alert(out);
+}
+
+// ============================================================
+// DOOR CODE GENERATOR — Phase 1 (v14.4)
+// Generates 6-digit codes per room, stored in Rooms.Door_Code.
+// Tuya integration is Phase 2 (later).
+// ============================================================
+
+function _generate6DigitCode(){
+  // Generate a 6-digit code, ensuring it's not too "weak" (no 000000, 111111, 123456, etc.)
+  const weakPatterns=['000000','111111','222222','333333','444444','555555','666666','777777','888888','999999','123456','654321','012345','543210'];
+  let code;
+  let attempts=0;
+  do{
+    code=String(Math.floor(Math.random()*1000000)).padStart(6,'0');
+    attempts++;
+  }while(weakPatterns.includes(code)&&attempts<10);
+  return code;
+}
+
+async function generateRoomDoorCode(bookingId){
+  const b=allBookings.find(x=>x.id===bookingId);
+  if(!b){alert('Booking ikke funnet');return}
+  const room=allRooms.find(r=>r.id===String(b.RoomLookupId));
+  if(!room){alert('Rom ikke funnet');return}
+  // Generate new code, ensure different from current
+  let newCode=_generate6DigitCode();
+  let attempts=0;
+  while(newCode===room.Door_Code&&attempts<5){
+    newCode=_generate6DigitCode();
+    attempts++;
+  }
+  // Confirm with user
+  const oldCode=room.Door_Code||'(ingen)';
+  if(!confirm('Generer ny dørkode for '+(room.Title||'rom')+'?\n\nGammel kode: '+oldCode+'\nNy kode: '+newCode+'\n\nObs: Du må også oppdatere koden i Tuya-appen manuelt.'))return;
+  try{
+    await updateListItem('Rooms',room.id,{Door_Code:newCode});
+    room.Door_Code=newCode;
+    _toast('✓ Ny dørkode lagret: '+newCode);
+    // Refresh detail panel if open
+    if(typeof showBookingDetail==='function'&&typeof currentBookingDetailId!=='undefined'&&currentBookingDetailId===bookingId){
+      showBookingDetail(bookingId);
+    }
+    // Show large display modal with code so it's easy to read into Tuya app
+    showDoorCodeDisplay(room,newCode);
+  }catch(e){
+    alert('Lagring feilet: '+e.message);
+  }
+}
+
+function showRoomDoorCode(bookingId){
+  const b=allBookings.find(x=>x.id===bookingId);
+  if(!b){alert('Booking ikke funnet');return}
+  const room=allRooms.find(r=>r.id===String(b.RoomLookupId));
+  if(!room){alert('Rom ikke funnet');return}
+  if(!room.Door_Code){
+    if(confirm('Ingen kode satt for '+(room.Title||'rom')+'.\n\nGenerer ny nå?')){
+      generateRoomDoorCode(bookingId);
+    }
+    return;
+  }
+  showDoorCodeDisplay(room,room.Door_Code);
+}
+
+function showDoorCodeDisplay(room,code){
+  // Build large display
+  let modal=document.getElementById('doorCodeDisplayModal');
+  if(!modal){
+    modal=document.createElement('div');
+    modal.id='doorCodeDisplayModal';
+    modal.className='modal-overlay';
+    modal.innerHTML='<div class="modal" style="max-width:480px"><div class="modal-header"><h2>🔑 Dørkode</h2><button onclick="document.getElementById(\'doorCodeDisplayModal\').classList.remove(\'open\')" style="padding:5px 14px;border:1px solid var(--border-tertiary);border-radius:var(--radius-md);font-size:14px;font-family:inherit;background:var(--bg-secondary);cursor:pointer;font-weight:500">✕ Lukk</button></div><div class="modal-body"><div id="doorCodeDisplayBody"></div></div></div>';
+    document.body.appendChild(modal);
+  }
+  const body=document.getElementById('doorCodeDisplayBody');
+  body.innerHTML=
+    '<div style="text-align:center;padding:20px 0">'
+    +'<div style="font-size:14px;color:var(--text-tertiary);margin-bottom:8px">Rom: '+escapeHtml(room.Title||'')+'</div>'
+    +'<div id="doorCodeBig" style="font-size:64px;font-weight:700;letter-spacing:8px;color:var(--text-primary);margin:20px 0;font-family:Consolas,monospace;background:var(--bg-secondary);padding:24px;border-radius:8px;user-select:all;cursor:text">'+code+'</div>'
+    +'<div style="display:flex;gap:8px;justify-content:center;margin-top:14px">'
+    +'<button onclick="navigator.clipboard.writeText(\''+code+'\').then(()=>_toast(\'✓ Kode kopiert\'))" style="padding:8px 16px;background:var(--accent);color:#fff;border:none;border-radius:var(--radius-md);cursor:pointer;font-size:14px">📋 Kopier kode</button>'
+    +'<button onclick="generateRoomDoorCode(\''+(window._currentDoorCodeBookingId||'')+'\');document.getElementById(\'doorCodeDisplayModal\').classList.remove(\'open\')" style="padding:8px 16px;background:#EF9F27;color:#fff;border:none;border-radius:var(--radius-md);cursor:pointer;font-size:14px">🔄 Generer ny</button>'
+    +'</div>'
+    +'<div style="margin-top:20px;padding:12px;background:rgba(239,159,39,.08);border-left:3px solid #EF9F27;border-radius:6px;text-align:left;font-size:12px">'
+    +'<strong>⚠ Husk:</strong> Du må også oppdatere koden i Tuya-appen manuelt. Tuya-integrasjon kommer i fase 2.'
+    +'</div>'
+    +'</div>';
+  modal.classList.add('open');
 }
