@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- 2GM Booking v14.1.1 — Created by Frank Haugan -->
+<!-- 2GM Booking v14.2 — Created by Frank Haugan -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -114,6 +114,9 @@ tbody td{padding:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
           <button class="more-menu-item" id="menuBtnCompanies" onclick="closeMoreMenu();openCompaniesPanel()" style="display:none;width:100%;text-align:left;padding:8px 14px;border:0;background:0 0;color:var(--text-primary);cursor:pointer;font-family:inherit;font-size:13px">🏢 Companies</button>
           <button class="more-menu-item" id="menuBtnBackup" data-backup-btn onclick="closeMoreMenu();exportBackup()" style="display:none;width:100%;text-align:left;padding:8px 14px;border:0;background:0 0;color:var(--text-primary);cursor:pointer;font-family:inherit;font-size:13px">💾 Backup data</button>
           <button class="more-menu-item" id="menuBtnRestore" onclick="closeMoreMenu();openRestoreInspect()" style="display:none;width:100%;text-align:left;padding:8px 14px;border:0;background:0 0;color:var(--text-primary);cursor:pointer;font-family:inherit;font-size:13px">↻ Restore from backup</button>
+          <button class="more-menu-item" id="menuBtnTemplates" onclick="closeMoreMenu();openTemplatesEditor()" style="display:none;width:100%;text-align:left;padding:8px 14px;border:0;background:0 0;color:var(--text-primary);cursor:pointer;font-family:inherit;font-size:13px">✉ Edit message templates</button>
+          <button class="more-menu-item" id="menuBtnMassSMS" onclick="closeMoreMenu();openMassMessage('sms')" style="display:none;width:100%;text-align:left;padding:8px 14px;border:0;background:0 0;color:var(--text-primary);cursor:pointer;font-family:inherit;font-size:13px">📱 Mass SMS</button>
+          <button class="more-menu-item" id="menuBtnMassEmail" onclick="closeMoreMenu();openMassMessage('email')" style="display:none;width:100%;text-align:left;padding:8px 14px;border:0;background:0 0;color:var(--text-primary);cursor:pointer;font-family:inherit;font-size:13px">📧 Mass e-post</button>
           <input type="file" id="restoreFileInput" accept=".json" style="display:none" onchange="onRestoreFileSelected(event)">
         </div>
       </div>
@@ -215,6 +218,22 @@ tbody td{padding:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
       </div>
       <div id="invoicingBody" style="padding:14px"></div>
     </div>
+    <div class="incoming-panel" id="companiesPanel">
+      <div class="incoming-head">
+        <span class="title">🏢 Companies</span>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <input id="coSearch" type="text" placeholder="Search..." oninput="renderCompaniesList()" style="padding:5px 8px;border:1px solid var(--border-tertiary);border-radius:var(--radius-md);font-size:13px;font-family:inherit;width:200px">
+          <button onclick="openCompanyEdit()" style="padding:5px 12px;border:1px solid var(--accent);border-radius:var(--radius-md);font-size:13px;font-family:inherit;background:var(--accent);color:#fff;cursor:pointer">+ New</button>
+          <button onclick="findUnlinkedCompanies()" style="padding:5px 12px;border:1px solid var(--border-tertiary);border-radius:var(--radius-md);font-size:13px;font-family:inherit;background:var(--bg-secondary);cursor:pointer" title="Finn firma-navn brukt i bookings/rates som ikke er i Companies-lista">🔍 Unlinked</button>
+          <button onclick="openMergeCompanies()" style="padding:5px 12px;border:1px solid #EF9F27;border-radius:var(--radius-md);font-size:13px;font-family:inherit;background:rgba(239,159,39,.12);color:#a76800;cursor:pointer" title="Slå sammen flere firma-navn til ett">🔀 Merge</button>
+          <button onclick="toggleCompaniesPanel()" title="Lukk" style="padding:5px 14px;border:1px solid var(--border-tertiary);border-radius:var(--radius-md);font-size:14px;font-family:inherit;background:var(--bg-secondary);color:var(--text-primary);cursor:pointer;font-weight:500">✕ Lukk</button>
+        </div>
+      </div>
+      <div style="padding:14px">
+        <div id="companiesStats" style="font-size:12px;color:var(--text-tertiary);margin-bottom:8px"></div>
+        <div id="companiesList"></div>
+      </div>
+    </div>
   </div>
   <!-- HOURS VIEW (replaces mainView) -->
   <div id="hoursView" style="display:none">
@@ -246,7 +265,7 @@ tbody td{padding:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
       </div>
     </div>
   </div>
-  <div style="text-align:center;padding:12px;font-size:11px;color:var(--text-tertiary);margin-top:1rem">v14.1.1 — Created by Frank Haugan</div>
+  <div style="text-align:center;padding:12px;font-size:11px;color:var(--text-tertiary);margin-top:1rem">v14.2 — Created by Frank Haugan</div>
 </div>
 <!-- Modals -->
 <div class="modal-overlay" id="bookingModal"><div class="modal"><div class="modal-header"><h2 id="bookingModalTitle">New booking</h2><button class="modal-close" onclick="closeBookingModal()">&times;</button></div><div class="modal-body"><div class="form-group"><label>Room</label><div style="display:flex;gap:8px"><select id="fRoom" style="flex:1"></select><button type="button" onclick="findAvailableRoom()" style="padding:6px 12px;background:var(--accent);color:#fff;border:none;border-radius:var(--radius-md);cursor:pointer;font-size:12px;white-space:nowrap;font-family:inherit">Find available</button></div><div id="fRoomInfo" style="font-size:11px;margin-top:4px;color:var(--text-tertiary)"></div></div><div class="form-group"><label>Guest name</label><input id="fName" type="text" placeholder="Start typing to find existing person..." list="fNameList" oninput="onPersonNameInput()"><datalist id="fNameList"></datalist><div id="fNameInfo" style="font-size:11px;margin-top:4px;color:var(--text-tertiary)"></div></div><div class="form-group"><label>Company</label><input id="fCompany" type="text" placeholder="Company name" list="fCompanyList" onblur="checkCompanyRegistration(this.value,'fCompanyWarn')"><datalist id="fCompanyList"></datalist><div id="fCompanyWarn" style="font-size:11px;margin-top:4px"></div></div><div class="form-group"><label>Billing company <span style="font-weight:normal;color:var(--text-tertiary);font-size:11px">(if different — rate and invoicing will follow this)</span></label><input id="fBillingCompany" type="text" placeholder="Leave empty to use Company" list="fCompanyList" onblur="checkCompanyRegistration(this.value,'fBillingCompanyWarn')"><div id="fBillingCompanyWarn" style="font-size:11px;margin-top:4px"></div></div><div class="form-row"><div class="form-group"><label>Check-in</label><input id="fCheckIn" type="date"></div><div class="form-group"><label>Check-out</label><input id="fCheckOut" type="date"><div style="font-size:11px;color:var(--text-tertiary);margin-top:2px">Leave empty for open-ended</div></div></div><div class="form-row"><div class="form-group"><label>Status</label><select id="fStatus"><option value="Upcoming">Upcoming</option><option value="Active">Active (checked in)</option></select></div><div class="form-group"><label>Floor</label><input id="fFloor" type="number" min="1" max="9" readonly></div></div><div class="form-group"><label>Notes</label><textarea id="fNotes" placeholder="Optional notes..."></textarea></div><div class="form-group" style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="fIncludeCheckoutFee" checked style="width:auto;margin:0"><label for="fIncludeCheckoutFee" style="margin:0;cursor:pointer;font-weight:normal">Include checkout cleaning fee (utvask)</label></div><div class="form-group" style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="fContinuation" style="width:auto;margin:0"><label for="fContinuation" style="margin:0;cursor:pointer;font-weight:normal" title="Marker dette som fortsettelse av et tidligere opphold der gjesten bytter rom. Utvask hoppes over i Fakturagrunnlag.">🔗 Continuation of previous stay (skip utvask)</label></div><div id="fOverlapWarning" style="display:none;margin-top:8px;padding:8px 10px;background:var(--bg-warning);border:1px solid #EF9F27;border-radius:var(--radius-md);color:var(--text-warning);font-size:12px"></div></div><div class="modal-footer"><button onclick="closeBookingModal()">Cancel</button><button class="primary" id="bookingSaveBtn" onclick="saveBooking()">Create booking</button></div></div></div>
@@ -296,16 +315,48 @@ tbody td{padding:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 </div><div class="modal-footer"><button onclick="document.getElementById('personModal').classList.remove('open')">Cancel</button><button class="primary" id="personSaveBtn" onclick="savePerson()">Save</button></div></div></div>
 
 <!-- Companies Modal -->
-<div class="modal-overlay" id="companiesModal"><div class="modal" style="max-width:900px;width:90vw;min-height:500px;resize:both;overflow:auto"><div class="modal-header"><h2>🏢 Companies</h2><button class="modal-close" onclick="document.getElementById('companiesModal').classList.remove('open')">&times;</button></div><div class="modal-body">
-<div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap">
-<input id="coSearch" type="text" placeholder="Search..." oninput="renderCompaniesList()" style="padding:5px 8px;border:1px solid var(--border-tertiary);border-radius:var(--radius-md);font-size:13px;font-family:inherit;flex:1;min-width:180px">
-<button onclick="openCompanyEdit()" style="padding:5px 12px;border:1px solid var(--accent);border-radius:var(--radius-md);font-size:13px;font-family:inherit;background:var(--accent);color:#fff;cursor:pointer">+ New company</button>
-<button onclick="findUnlinkedCompanies()" style="padding:5px 12px;border:1px solid var(--border-tertiary);border-radius:var(--radius-md);font-size:13px;font-family:inherit;background:var(--bg-secondary);cursor:pointer" title="Find company names used in bookings/rates that are not in the Companies list">🔍 Find unlinked</button>
-<button onclick="openMergeCompanies()" style="padding:5px 12px;border:1px solid #EF9F27;border-radius:var(--radius-md);font-size:13px;font-family:inherit;background:rgba(239,159,39,.12);color:#a76800;cursor:pointer" title="Slå sammen flere firma-navn til ett">🔀 Merge</button>
+<!-- Companies modal removed in v14.2 — replaced with companiesPanel above -->
+
+<!-- Mass Message Modal -->
+<div class="modal-overlay" id="massMessageModal"><div class="modal" style="max-width:900px;width:90vw;min-height:500px;resize:both;overflow:auto"><div class="modal-header"><h2 id="massMsgTitle">Mass Message</h2><button onclick="document.getElementById('massMessageModal').classList.remove('open')" style="padding:5px 14px;border:1px solid var(--border-tertiary);border-radius:var(--radius-md);font-size:14px;font-family:inherit;background:var(--bg-secondary);cursor:pointer;font-weight:500">✕ Lukk</button></div><div class="modal-body">
+<input type="hidden" id="massMsgKind" value="sms">
+<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+  <select id="massPropFilter" onchange="renderMassMessageList()" style="padding:6px 10px;border:1px solid var(--border-tertiary);border-radius:var(--radius-md);font-size:13px;font-family:inherit"></select>
+  <select id="massCoFilter" onchange="renderMassMessageList()" style="padding:6px 10px;border:1px solid var(--border-tertiary);border-radius:var(--radius-md);font-size:13px;font-family:inherit"></select>
+  <span class="muted" style="font-size:11px;align-self:center">Bare aktive/kommende bookinger vises</span>
 </div>
-<div id="companiesStats" style="font-size:12px;color:var(--text-tertiary);margin-bottom:8px"></div>
-<div id="companiesList"></div>
-</div><div class="modal-footer"><button onclick="document.getElementById('companiesModal').classList.remove('open')">Close</button></div></div></div>
+<div id="massMsgList" style="border:1px solid var(--border-tertiary);border-radius:6px;padding:8px;max-height:400px;overflow-y:auto;margin-bottom:12px"></div>
+<div style="background:var(--bg-secondary);padding:10px;border-radius:6px">
+  <div style="margin-bottom:6px;font-size:12px;font-weight:500">Hvordan sende:</div>
+  <label style="display:block;font-size:13px;margin-bottom:4px"><input type="radio" name="massAction" value="copy_all" checked> Kopier alle meldinger til utklippstavle (lim inn senere)</label>
+  <label style="display:block;font-size:13px"><input type="radio" name="massAction" value="open_each"> Åpne SMS/e-post-app for hver gjest (én og én, med 2 sek pause)</label>
+</div>
+</div><div class="modal-footer"><button onclick="document.getElementById('massMessageModal').classList.remove('open')">Avbryt</button><button class="primary" onclick="executeMassMessage()">Utfør</button></div></div></div>
+
+<!-- Templates Editor Modal -->
+<div class="modal-overlay" id="templatesModal"><div class="modal" style="max-width:760px;width:90vw;min-height:600px;resize:both;overflow:auto"><div class="modal-header"><h2>✉ Message Templates</h2><button onclick="document.getElementById('templatesModal').classList.remove('open')" style="padding:5px 14px;border:1px solid var(--border-tertiary);border-radius:var(--radius-md);font-size:14px;font-family:inherit;background:var(--bg-secondary);cursor:pointer;font-weight:500">✕ Lukk</button></div><div class="modal-body">
+
+<div style="background:rgba(123,97,255,.06);border-left:3px solid #7B61FF;padding:10px 14px;margin-bottom:14px;font-size:11px;border-radius:6px">
+<strong>Tilgjengelige variabler:</strong> <code>{first_name}</code> <code>{guest_name}</code> <code>{property}</code> <code>{room}</code> <code>{room_door_code}</code> <code>{wifi_ssid}</code> <code>{wifi_password}</code> <code>{welcome_message}</code> <code>{check_in_date}</code> <code>{my_name}</code> <code>{my_phone}</code> <code>{my_email}</code>
+</div>
+
+<div class="form-group"><label>Eiendom</label><select id="tmplPropSel" onchange="loadTemplateForProperty()" style="width:100%"></select></div>
+
+<div style="border-top:1px solid var(--border-tertiary);margin:16px 0;padding-top:12px"><strong style="font-size:13px">📶 WiFi & velkomst-info</strong></div>
+<div class="form-row">
+<div class="form-group"><label>WiFi SSID</label><input id="tmplWifiSsid" type="text" placeholder="f.eks. Rigg Botnhågen Gjest"></div>
+<div class="form-group"><label>WiFi-passord</label><input id="tmplWifiPwd" type="text" placeholder="passord"></div>
+</div>
+<div class="form-group"><label>Velkomst-melding (kommer inn i {welcome_message})</label><textarea id="tmplWelcome" rows="4" placeholder="F.eks.: Kjøkkenkode 1.etg: 1234. Kjøkkenkode 2.etg: 5678."></textarea></div>
+
+<div style="border-top:1px solid var(--border-tertiary);margin:16px 0;padding-top:12px"><strong style="font-size:13px">📱 SMS-mal</strong> <button onclick="previewTemplate('sms')" style="margin-left:10px;padding:3px 10px;border:1px solid var(--border-tertiary);border-radius:4px;background:var(--bg-secondary);cursor:pointer;font-size:11px">👁 Forhåndsvis</button></div>
+<div class="form-group"><textarea id="tmplSms" rows="6" style="font-family:Consolas,monospace;font-size:12px"></textarea></div>
+
+<div style="border-top:1px solid var(--border-tertiary);margin:16px 0;padding-top:12px"><strong style="font-size:13px">📧 E-post-mal</strong> <button onclick="previewTemplate('email')" style="margin-left:10px;padding:3px 10px;border:1px solid var(--border-tertiary);border-radius:4px;background:var(--bg-secondary);cursor:pointer;font-size:11px">👁 Forhåndsvis</button></div>
+<div class="form-group"><label>Emne</label><input id="tmplEmailSubj" type="text"></div>
+<div class="form-group"><label>Innhold</label><textarea id="tmplEmail" rows="10" style="font-family:Consolas,monospace;font-size:12px"></textarea></div>
+
+</div><div class="modal-footer"><button onclick="document.getElementById('templatesModal').classList.remove('open')">Avbryt</button><button class="primary" onclick="saveTemplateForProperty()">Lagre for valgt eiendom</button></div></div></div>
 
 <!-- Company Edit Modal -->
 <div class="modal-overlay" id="companyEditModal"><div class="modal" style="max-width:640px"><div class="modal-header"><h2 id="companyEditModalTitle">New company</h2><button class="modal-close" onclick="document.getElementById('companyEditModal').classList.remove('open')">&times;</button></div><div class="modal-body">
