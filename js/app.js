@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v14.0.5 — app.js (Core)
+// 2GM Booking v14.0.6 — app.js (Core)
 // Auth, Graph API, Data, Rendering, Bookings
 // ============================================================
 
@@ -1371,7 +1371,7 @@ async function saveBooking(){
   // Property_Name: find from room's property (works even in "All properties" mode)
   const roomProp=room?properties.find(pr=>String(pr.id)===String(room.PropertyLookupId)):null;
   const propNameForSave=roomProp?roomProp.Title:(selectedProperty?selectedProperty.Title:'');
-  const fields={Person_Name:name,Company:company,Billing_Company:billingCompany||null,Check_In:checkIn+'T15:00:00Z',Status:status,Door_Tag_Status:'Needs-print',Cleaning_Status:'None',Property_Name:propNameForSave,Floor:room?room.Floor:1,Notes:notes||null};
+  const fields={Person_Name:name,Company:company,Billing_Company:billingCompany||null,Check_In:checkIn+'T15:00:00Z',Status:status,Door_Tag_Status:'Needs-print',Cleaning_Status:'None',Property_Name:propNameForSave,Notes:notes||null};
   fields.Include_Checkout_Fee=document.getElementById('fIncludeCheckoutFee').checked;
   fields.Continuation=document.getElementById('fContinuation').checked;
   if(checkOut)fields.Check_Out=checkOut+'T12:00:00Z';else fields.Check_Out=null;
@@ -1564,7 +1564,7 @@ msalInstance.initialize().then(()=>{
 });
 
 // ============================================================
-// AUTO-REFRESH (v14.0.5)
+// AUTO-REFRESH (v14.0.6)
 // ============================================================
 
 // Build a fingerprint that tells us if data has changed without full reload
