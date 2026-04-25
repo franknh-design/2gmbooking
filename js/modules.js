@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v13.20.2 — modules.js
+// 2GM Booking v13.21 — modules.js
 // Hours, Archive, Import/Export, Admin (checkbox permissions)
 // ============================================================
 
@@ -943,7 +943,7 @@ async function deleteRate(id){
 }
 
 // ============================================================
-// PERSONS / CUSTOMERS (v13.20.2)
+// PERSONS / CUSTOMERS (v13.21)
 // ============================================================
 let editingPersonId=null;
 
@@ -1240,7 +1240,7 @@ function onPersonNameInput(){
 }
 
 // ============================================================
-// CHARTS (v13.20.2) — pure SVG, no dependencies
+// CHARTS (v13.21) — pure SVG, no dependencies
 // ============================================================
 
 // Reusable bar chart: data = [{label, value, subtitle?}]
@@ -1549,7 +1549,7 @@ function renderHoursCharts(filtered){
 }
 
 // ============================================================
-// CLEANING EFFICIENCY ANALYSIS (v13.20.2)
+// CLEANING EFFICIENCY ANALYSIS (v13.21)
 // ============================================================
 // Compares cleaner hours against guest-nights per property, per week/month.
 // USE WITH CAUTION: Hours include breaks, transport, repairs — not just cleaning.
@@ -1902,7 +1902,7 @@ function _dateFromIsoWeek(year,week){
 }
 
 // ============================================================
-// MORE MENU (v13.20.2)
+// MORE MENU (v13.21)
 // ============================================================
 function toggleMoreMenu(e){
   if(e){e.stopPropagation();e.preventDefault()}
@@ -1929,7 +1929,7 @@ function closeMoreMenu(){
 }
 
 // ============================================================
-// FAKTURAGRUNNLAG / INVOICING (v13.20.2)
+// FAKTURAGRUNNLAG / INVOICING (v13.21)
 // ============================================================
 let invoicingInitialized=false;
 
@@ -2526,7 +2526,7 @@ function exportInvoicingCSV(companyFilterName){
 }
 
 // ============================================================
-// ADD GUEST FROM BOOKING (v13.20.2)
+// ADD GUEST FROM BOOKING (v13.21)
 // ============================================================
 function addBookingToGuests(bookingId){
   if(!can('edit_bookings')){alert('You do not have permission to add guests.');return}
@@ -2551,7 +2551,7 @@ function addBookingToGuests(bookingId){
 }
 
 // ============================================================
-// GUEST BOOKINGS HISTORY (v13.20.2)
+// GUEST BOOKINGS HISTORY (v13.21)
 // ============================================================
 function showGuestBookings(name){
   if(!name)return;
@@ -2623,7 +2623,7 @@ function showGuestBookings(name){
 }
 
 // ============================================================
-// HOURS IMPORT (v13.20.2)
+// HOURS IMPORT (v13.21)
 // ============================================================
 let importHoursData=[];
 
@@ -2773,7 +2773,7 @@ async function runImportHours(){
 }
 
 // ============================================================
-// CLEANING DIAGNOSTICS (v13.20.2)
+// CLEANING DIAGNOSTICS (v13.21)
 // ============================================================
 function showCleaningDiagnostics(){
   const today=new Date();today.setHours(0,0,0,0);
@@ -2885,7 +2885,7 @@ function showCleaningDiagnostics(){
 }
 
 // ============================================================
-// BATTERY REFRESH (v13.20.2)
+// BATTERY REFRESH (v13.21)
 // ============================================================
 const BATTERY_FILE_PATH='Batteristatus/RoomBattery.csv';
 
@@ -2964,7 +2964,7 @@ async function refreshBatteryStatus(){
 }
 
 // ============================================================
-// COMPANIES MANAGEMENT (v13.20.2)
+// COMPANIES MANAGEMENT (v13.21)
 // ============================================================
 let editingCompanyId=null;
 
@@ -3174,7 +3174,7 @@ async function quickAddCompany(name){
 }
 
 // ============================================================
-// BRREG LOOKUP (v13.20.2)
+// BRREG LOOKUP (v13.21)
 // ============================================================
 // Fetches company information from Brønnøysundregistrene open API.
 // https://data.brreg.no/enhetsregisteret/api/enheter/{orgnr}
@@ -3242,7 +3242,7 @@ async function lookupBrreg(){
 }
 
 // ============================================================
-// PDF EXPORT VIA PRINT (v13.20.2)
+// PDF EXPORT VIA PRINT (v13.21)
 // ============================================================
 // Opens a print-friendly window containing the same data as exportInvoicingCSV.
 // Browser's print dialog allows "Save as PDF" as the destination.
@@ -3517,4 +3517,260 @@ function exportInvoicingPDF(companyFilterName){
   w.document.close();
   // Auto-trigger print dialog after render
   setTimeout(()=>{try{w.focus();w.print()}catch(e){console.error(e)}},500);
+}
+
+// ============================================================
+// PRICING TABS — Full-tenant + Long-term editors (v13.21)
+// ============================================================
+function switchPricingTab(tab){
+  document.querySelectorAll('.pricing-tab').forEach(b=>{
+    if(b.dataset.tab===tab){
+      b.classList.add('pricing-tab-active');
+      b.style.borderBottom='2px solid var(--accent)';
+      b.style.color='';
+      b.style.fontWeight='500';
+    }else{
+      b.classList.remove('pricing-tab-active');
+      b.style.borderBottom='2px solid transparent';
+      b.style.color='var(--text-secondary)';
+      b.style.fontWeight='';
+    }
+  });
+  document.querySelectorAll('.pricing-tab-content').forEach(d=>d.style.display='none');
+  document.getElementById('tab-'+tab).style.display='';
+  if(tab==='fulltenant')renderFullTenantList();
+  else if(tab==='longterm'){populateLongTermPropertyFilter();renderLongTermList()}
+}
+
+// --- FULL-TENANT TAB ---
+function renderFullTenantList(){
+  const list=document.getElementById('fullTenantList');
+  if(!properties.length){list.innerHTML='<div class="muted" style="padding:20px;text-align:center">No properties found.</div>';return}
+  const fmtKr=n=>(n||0).toLocaleString('nb-NO');
+  list.innerHTML='<table style="width:100%;font-size:13px"><thead><tr style="background:var(--bg-secondary)"><th style="padding:8px;text-align:left">Property</th><th style="padding:8px;text-align:left">Company</th><th style="padding:8px;text-align:right">Price/room</th><th style="padding:8px;text-align:left">Unit</th><th style="padding:8px;text-align:left">Start</th><th style="padding:8px;text-align:left">End</th><th style="padding:8px;text-align:left">Status</th><th style="padding:8px;width:60px"></th></tr></thead><tbody>'
+    +properties.map(p=>{
+      const company=(p.FullTenant_Company||'').trim();
+      const rate=Number(p.FullTenant_RatePerRoom)||0;
+      const unit=p.FullTenant_RateUnit||'Per day';
+      const start=p.FullTenant_StartDate?formatDate(p.FullTenant_StartDate):'';
+      const end=p.FullTenant_EndDate?formatDate(p.FullTenant_EndDate):'';
+      const today=new Date();
+      const startD=p.FullTenant_StartDate?new Date(p.FullTenant_StartDate):null;
+      const endD=p.FullTenant_EndDate?new Date(p.FullTenant_EndDate):null;
+      let status,statusClr;
+      if(!company){status='—';statusClr='var(--text-tertiary)'}
+      else if(startD&&today<startD){status='Upcoming';statusClr='var(--accent)'}
+      else if(endD&&today>endD){status='Expired';statusClr='var(--text-tertiary)'}
+      else{status='Active';statusClr='var(--text-success)'}
+      return '<tr style="border-top:.5px solid var(--border-tertiary);cursor:pointer" onclick="openFullTenantEdit(\''+p.id+'\')" onmouseover="this.style.background=\'var(--bg-secondary)\'" onmouseout="this.style.background=\'\'">'
+        +'<td style="padding:8px;font-weight:500">'+escapeHtml(p.Title||'')+'</td>'
+        +'<td style="padding:8px">'+(company?escapeHtml(company):'<span class="muted">—</span>')+'</td>'
+        +'<td style="padding:8px;text-align:right">'+(rate?fmtKr(rate)+' kr':'<span class="muted">empty</span>')+'</td>'
+        +'<td style="padding:8px"><small>'+escapeHtml(unit)+'</small></td>'
+        +'<td style="padding:8px">'+(start||'<span class="muted">—</span>')+'</td>'
+        +'<td style="padding:8px">'+(end||'<span class="muted">—</span>')+'</td>'
+        +'<td style="padding:8px"><span style="color:'+statusClr+';font-weight:500">'+status+'</span></td>'
+        +'<td style="padding:8px"><button onclick="event.stopPropagation();openFullTenantEdit(\''+p.id+'\')" style="padding:3px 10px;border:1px solid var(--border-tertiary);border-radius:4px;background:var(--bg-primary);cursor:pointer;font-size:11px">Edit</button></td>'
+        +'</tr>';
+    }).join('')+'</tbody></table>';
+}
+
+let editingFullTenantPropId=null;
+function openFullTenantEdit(propId){
+  editingFullTenantPropId=propId;
+  const p=properties.find(x=>String(x.id)===String(propId));
+  if(!p)return;
+  document.getElementById('ftEditPropertyLabel').textContent=p.Title;
+  document.getElementById('ftEditCompany').value=p.FullTenant_Company||'';
+  document.getElementById('ftEditRate').value=p.FullTenant_RatePerRoom||'';
+  document.getElementById('ftEditRateUnit').value=p.FullTenant_RateUnit||'Per day';
+  document.getElementById('ftEditStartDate').value=p.FullTenant_StartDate?p.FullTenant_StartDate.substring(0,10):'';
+  document.getElementById('ftEditEndDate').value=p.FullTenant_EndDate?p.FullTenant_EndDate.substring(0,10):'';
+  document.getElementById('fullTenantEditModal').classList.add('open');
+}
+
+async function saveFullTenantAgreement(){
+  if(!editingFullTenantPropId)return;
+  const company=document.getElementById('ftEditCompany').value.trim();
+  const rate=parseFloat(document.getElementById('ftEditRate').value)||null;
+  const rateUnit=document.getElementById('ftEditRateUnit').value;
+  const startDate=document.getElementById('ftEditStartDate').value;
+  const endDate=document.getElementById('ftEditEndDate').value;
+  const fields={
+    FullTenant_Company:company||null,
+    FullTenant_RatePerRoom:rate,
+    FullTenant_RateUnit:rateUnit,
+    FullTenant_StartDate:startDate||null,
+    FullTenant_EndDate:endDate||null
+  };
+  try{
+    await updateListItem('Properties',editingFullTenantPropId,fields);
+    const p=properties.find(x=>String(x.id)===String(editingFullTenantPropId));
+    if(p)Object.assign(p,fields);
+    document.getElementById('fullTenantEditModal').classList.remove('open');
+    renderFullTenantList();
+  }catch(e){alert('Save failed: '+e.message)}
+}
+
+// --- LONG-TERM TAB ---
+function populateLongTermPropertyFilter(){
+  const sel=document.getElementById('ltFilterProperty');
+  const current=sel.value;
+  sel.innerHTML='<option value="__ALL__">All properties</option>'+properties.map(p=>'<option value="'+p.id+'">'+escapeHtml(p.Title)+'</option>').join('');
+  if(current)sel.value=current;
+}
+
+function renderLongTermList(){
+  const list=document.getElementById('longTermList');
+  const filter=document.getElementById('ltFilterProperty').value;
+  let rooms=allRooms;
+  if(filter&&filter!=='__ALL__')rooms=rooms.filter(r=>String(r.PropertyLookupId)===String(filter));
+  // Sort by property then room title
+  rooms=[...rooms].sort((a,b)=>{
+    const pa=String(a.PropertyLookupId||'');
+    const pb=String(b.PropertyLookupId||'');
+    if(pa!==pb)return pa.localeCompare(pb);
+    return (a.Title||'').localeCompare(b.Title||'',undefined,{numeric:true});
+  });
+  if(!rooms.length){list.innerHTML='<div class="muted" style="padding:20px;text-align:center">No rooms in this property.</div>';return}
+  const fmtKr=n=>(n||0).toLocaleString('nb-NO');
+  let html='<table style="width:100%;font-size:13px"><thead><tr style="background:var(--bg-secondary)"><th style="padding:8px;text-align:left">Property</th><th style="padding:8px;text-align:left">Room</th><th style="padding:8px;text-align:left">Company</th><th style="padding:8px;text-align:right">Price</th><th style="padding:8px;text-align:left">Unit</th><th style="padding:8px;text-align:left">Period</th><th style="padding:8px;text-align:left">Status</th><th style="padding:8px;width:60px"></th></tr></thead><tbody>';
+  rooms.forEach(r=>{
+    const prop=properties.find(p=>String(p.id)===String(r.PropertyLookupId));
+    const propName=prop?prop.Title:'';
+    const company=(r.LongTerm_Company||'').trim();
+    const price=Number(r.LongTerm_Price)||0;
+    const unit=r.LongTerm_RateUnit||'Per day';
+    const start=r.LongTerm_StartDate?formatDate(r.LongTerm_StartDate):'';
+    const end=r.LongTerm_EndDate?formatDate(r.LongTerm_EndDate):'(open)';
+    const today=new Date();
+    const startD=r.LongTerm_StartDate?new Date(r.LongTerm_StartDate):null;
+    const endD=r.LongTerm_EndDate?new Date(r.LongTerm_EndDate):null;
+    let status,statusClr;
+    if(!company){status='—';statusClr='var(--text-tertiary)'}
+    else if(!price){status='⚠ No price';statusClr='var(--text-warning)'}
+    else if(startD&&today<startD){status='Upcoming';statusClr='var(--accent)'}
+    else if(endD&&today>endD){status='Expired';statusClr='var(--text-tertiary)'}
+    else{status='Active';statusClr='var(--text-success)'}
+    const periodText=company?(start+' → '+end):'<span class="muted">—</span>';
+    html+='<tr style="border-top:.5px solid var(--border-tertiary);cursor:pointer'+(company?'':';opacity:.7')+'" onclick="openLongTermEdit(\''+r.id+'\')" onmouseover="this.style.background=\'var(--bg-secondary)\'" onmouseout="this.style.background=\'\'">'
+      +'<td style="padding:8px"><small>'+escapeHtml(propName)+'</small></td>'
+      +'<td style="padding:8px;font-weight:500">'+escapeHtml(r.Title||'')+'</td>'
+      +'<td style="padding:8px">'+(company?escapeHtml(company):'<span class="muted">—</span>')+'</td>'
+      +'<td style="padding:8px;text-align:right">'+(price?fmtKr(price)+' kr':'<span class="muted">—</span>')+'</td>'
+      +'<td style="padding:8px"><small>'+escapeHtml(unit)+'</small></td>'
+      +'<td style="padding:8px"><small>'+periodText+'</small></td>'
+      +'<td style="padding:8px"><span style="color:'+statusClr+';font-weight:500">'+status+'</span></td>'
+      +'<td style="padding:8px"><button onclick="event.stopPropagation();openLongTermEdit(\''+r.id+'\')" style="padding:3px 10px;border:1px solid var(--border-tertiary);border-radius:4px;background:var(--bg-primary);cursor:pointer;font-size:11px">Edit</button></td>'
+      +'</tr>';
+  });
+  html+='</tbody></table>';
+  // Summary footer
+  const activeRooms=rooms.filter(r=>(r.LongTerm_Company||'').trim()&&Number(r.LongTerm_Price)>0);
+  const totalSum=activeRooms.reduce((s,r)=>s+(Number(r.LongTerm_Price)||0),0);
+  if(activeRooms.length){
+    html+='<div style="padding:10px 8px;margin-top:10px;background:rgba(14,165,165,.07);border-radius:6px;font-size:12px"><strong>'+activeRooms.length+' active contracts</strong> · Total: <strong>'+fmtKr(totalSum)+' kr</strong> <span class="muted">(per unit shown — does not factor pro-rata)</span></div>';
+  }
+  list.innerHTML=html;
+}
+
+let editingLongTermRoomId=null;
+function openLongTermEdit(roomId){
+  editingLongTermRoomId=roomId;
+  const r=allRooms.find(x=>x.id===roomId);
+  if(!r)return;
+  const prop=properties.find(p=>String(p.id)===String(r.PropertyLookupId));
+  document.getElementById('ltEditTitle').textContent='Long-term contract — '+(r.Title||'');
+  document.getElementById('ltEditRoomLabel').textContent=(prop?prop.Title:'?')+' · '+(r.Title||'');
+  document.getElementById('ltEditCompany').value=r.LongTerm_Company||'';
+  document.getElementById('ltEditPrice').value=r.LongTerm_Price||'';
+  document.getElementById('ltEditRateUnit').value=r.LongTerm_RateUnit||'Per month';
+  document.getElementById('ltEditStartDate').value=r.LongTerm_StartDate?r.LongTerm_StartDate.substring(0,10):'';
+  document.getElementById('ltEditEndDate').value=r.LongTerm_EndDate?r.LongTerm_EndDate.substring(0,10):'';
+  document.getElementById('ltEditClearBtn').style.display=(r.LongTerm_Company||'').trim()?'':'none';
+  document.getElementById('longTermEditModal').classList.add('open');
+}
+
+async function saveLongTermContract(){
+  if(!editingLongTermRoomId)return;
+  const company=document.getElementById('ltEditCompany').value.trim();
+  const price=parseFloat(document.getElementById('ltEditPrice').value)||null;
+  const rateUnit=document.getElementById('ltEditRateUnit').value;
+  const startDate=document.getElementById('ltEditStartDate').value;
+  const endDate=document.getElementById('ltEditEndDate').value;
+  if(company){
+    if(!price){alert('Price is required');return}
+    if(!startDate){alert('Start date is required');return}
+  }
+  const fields={
+    LongTerm_Company:company||null,
+    LongTerm_Price:price,
+    LongTerm_RateUnit:rateUnit,
+    LongTerm_StartDate:startDate||null,
+    LongTerm_EndDate:endDate||null
+  };
+  try{
+    await updateListItem('Rooms',editingLongTermRoomId,fields);
+    const r=allRooms.find(x=>x.id===editingLongTermRoomId);
+    if(r)Object.assign(r,fields);
+    document.getElementById('longTermEditModal').classList.remove('open');
+    renderLongTermList();
+  }catch(e){alert('Save failed: '+e.message)}
+}
+
+async function clearLongTermContract(){
+  if(!editingLongTermRoomId)return;
+  if(!confirm('Clear long-term contract for this room? This will make it a regular bookable room again.'))return;
+  const fields={LongTerm_Company:null,LongTerm_Price:null,LongTerm_RateUnit:null,LongTerm_StartDate:null,LongTerm_EndDate:null};
+  try{
+    await updateListItem('Rooms',editingLongTermRoomId,fields);
+    const r=allRooms.find(x=>x.id===editingLongTermRoomId);
+    if(r)Object.assign(r,fields);
+    document.getElementById('longTermEditModal').classList.remove('open');
+    renderLongTermList();
+  }catch(e){alert('Clear failed: '+e.message)}
+}
+
+function openLongTermBulkAdd(){
+  const propSel=document.getElementById('ltBulkProperty');
+  propSel.innerHTML=properties.map(p=>'<option value="'+p.id+'">'+escapeHtml(p.Title)+'</option>').join('');
+  document.getElementById('ltBulkCompany').value='';
+  document.getElementById('ltBulkStartDate').value='';
+  document.getElementById('ltBulkRateUnit').value='Per month';
+  renderLongTermBulkRoomList();
+  document.getElementById('longTermBulkModal').classList.add('open');
+}
+
+function renderLongTermBulkRoomList(){
+  const propId=document.getElementById('ltBulkProperty').value;
+  const list=document.getElementById('ltBulkRoomList');
+  const rooms=allRooms.filter(r=>String(r.PropertyLookupId)===String(propId)).sort((a,b)=>(a.Title||'').localeCompare(b.Title||'',undefined,{numeric:true}));
+  if(!rooms.length){list.innerHTML='<div class="muted">No rooms.</div>';return}
+  list.innerHTML='<div style="margin-bottom:6px"><label style="font-size:11px"><input type="checkbox" onchange="document.querySelectorAll(\'.ltBulkRoom\').forEach(cb=>cb.checked=this.checked)"> Select all</label></div>'+rooms.map(r=>{
+    const has=(r.LongTerm_Company||'').trim();
+    return '<label style="display:block;font-size:12px;padding:3px 0"><input type="checkbox" class="ltBulkRoom" value="'+r.id+'"'+(has?' disabled title="Already has contract"':'')+'> '+escapeHtml(r.Title||'')+(has?' <span class="muted" style="font-size:10px">(already: '+escapeHtml(has)+')</span>':'')+'</label>';
+  }).join('');
+}
+
+async function bulkApplyLongTermContract(){
+  const company=document.getElementById('ltBulkCompany').value.trim();
+  const rateUnit=document.getElementById('ltBulkRateUnit').value;
+  const startDate=document.getElementById('ltBulkStartDate').value;
+  if(!company||!startDate){alert('Company and start date are required');return}
+  const ids=[...document.querySelectorAll('.ltBulkRoom:checked')].map(cb=>cb.value);
+  if(!ids.length){alert('Select at least one room');return}
+  if(!confirm('Apply contract "'+company+'" to '+ids.length+' rooms? You will need to set price per room afterwards.'))return;
+  let success=0,failed=0;
+  for(let i=0;i<ids.length;i++){
+    try{
+      await updateListItem('Rooms',ids[i],{LongTerm_Company:company,LongTerm_RateUnit:rateUnit,LongTerm_StartDate:startDate});
+      const r=allRooms.find(x=>x.id===ids[i]);
+      if(r){r.LongTerm_Company=company;r.LongTerm_RateUnit=rateUnit;r.LongTerm_StartDate=startDate}
+      success++;
+    }catch(e){console.error(e);failed++}
+    if(i%10===9)await new Promise(res=>setTimeout(res,300));
+  }
+  alert('Applied to '+success+' rooms'+(failed?', '+failed+' failed':'')+'. Now set the individual prices in the Long-term tab.');
+  document.getElementById('longTermBulkModal').classList.remove('open');
+  renderLongTermList();
 }

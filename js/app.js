@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v13.20.2 — app.js (Core)
+// 2GM Booking v13.21 — app.js (Core)
 // Auth, Graph API, Data, Rendering, Bookings
 // ============================================================
 
@@ -1485,7 +1485,7 @@ msalInstance.initialize().then(()=>{
 });
 
 // ============================================================
-// AUTO-REFRESH (v13.20.2)
+// AUTO-REFRESH (v13.21)
 // ============================================================
 
 // Build a fingerprint that tells us if data has changed without full reload
@@ -1633,6 +1633,22 @@ function showFullTenantDebug(){
       partialConfig.forEach(r=>{
         lines.push('  '+r.Title+': Company="'+(r.LongTerm_Company||'')+'", Price='+r.LongTerm_Price+', Start='+r.LongTerm_StartDate+', End='+r.LongTerm_EndDate);
       });
+    }
+    // Show all field names on first room — to diagnose field-name mismatches
+    if(matching.length){
+      const sample=matching[0];
+      const allKeys=Object.keys(sample).sort();
+      const longTermKeys=allKeys.filter(k=>k.toLowerCase().indexOf('long')>=0||k.toLowerCase().indexOf('tenant')>=0);
+      lines.push('\nAll fields on first room ('+sample.Title+'):');
+      lines.push(allKeys.join(', '));
+      if(longTermKeys.length){
+        lines.push('\nLongTerm/Tenant-related fields found:');
+        longTermKeys.forEach(k=>{
+          lines.push('  '+k+' = '+JSON.stringify(sample[k]));
+        });
+      }else{
+        lines.push('\n⚠ No fields containing "long" or "tenant" found on this room');
+      }
     }
   }else{
     lines.push('  Total: '+ltCount+' rooms · '+ltTotal.toLocaleString('nb-NO')+' kr');
