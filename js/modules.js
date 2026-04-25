@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v14.1.1 — modules.js
+// 2GM Booking v14.2 — modules.js
 // Hours, Archive, Import/Export, Admin (checkbox permissions)
 // ============================================================
 
@@ -19,6 +19,7 @@ function toggleIncoming(){
   document.getElementById('archivePanel').classList.remove('open');
   const pp=document.getElementById('personsPanel');if(pp)pp.classList.remove('open');
   const ip=document.getElementById('invoicingPanel');if(ip)ip.classList.remove('open');
+  const cp=document.getElementById('companiesPanel');if(cp)cp.classList.remove('open');
   const panel=document.getElementById('incomingPanel');
   panel.classList.toggle('open');
   const isOpen=panel.classList.contains('open');
@@ -59,6 +60,7 @@ function toggleArchive(){
   document.getElementById('incomingPanel').classList.remove('open');
   const pp=document.getElementById('personsPanel');if(pp)pp.classList.remove('open');
   const ip=document.getElementById('invoicingPanel');if(ip)ip.classList.remove('open');
+  const cp=document.getElementById('companiesPanel');if(cp)cp.classList.remove('open');
   const panel=document.getElementById('archivePanel');
   panel.classList.toggle('open');
   const isOpen=panel.classList.contains('open');
@@ -943,7 +945,7 @@ async function deleteRate(id){
 }
 
 // ============================================================
-// PERSONS / CUSTOMERS (v14.1.1)
+// PERSONS / CUSTOMERS (v14.2)
 // ============================================================
 let editingPersonId=null;
 
@@ -952,6 +954,7 @@ function togglePersons(){
   document.getElementById('incomingPanel').classList.remove('open');
   document.getElementById('archivePanel').classList.remove('open');
   const ip=document.getElementById('invoicingPanel');if(ip)ip.classList.remove('open');
+  const cp=document.getElementById('companiesPanel');if(cp)cp.classList.remove('open');
   const panel=document.getElementById('personsPanel');
   panel.classList.toggle('open');
   const isOpen=panel.classList.contains('open');
@@ -1240,7 +1243,7 @@ function onPersonNameInput(){
 }
 
 // ============================================================
-// CHARTS (v14.1.1) — pure SVG, no dependencies
+// CHARTS (v14.2) — pure SVG, no dependencies
 // ============================================================
 
 // Reusable bar chart: data = [{label, value, subtitle?}]
@@ -1549,7 +1552,7 @@ function renderHoursCharts(filtered){
 }
 
 // ============================================================
-// CLEANING EFFICIENCY ANALYSIS (v14.1.1)
+// CLEANING EFFICIENCY ANALYSIS (v14.2)
 // ============================================================
 // Compares cleaner hours against guest-nights per property, per week/month.
 // USE WITH CAUTION: Hours include breaks, transport, repairs — not just cleaning.
@@ -1902,7 +1905,7 @@ function _dateFromIsoWeek(year,week){
 }
 
 // ============================================================
-// MORE MENU (v14.1.1)
+// MORE MENU (v14.2)
 // ============================================================
 function toggleMoreMenu(e){
   if(e){e.stopPropagation();e.preventDefault()}
@@ -1929,7 +1932,7 @@ function closeMoreMenu(){
 }
 
 // ============================================================
-// FAKTURAGRUNNLAG / INVOICING (v14.1.1)
+// FAKTURAGRUNNLAG / INVOICING (v14.2)
 // ============================================================
 let invoicingInitialized=false;
 
@@ -1939,6 +1942,7 @@ function toggleInvoicing(){
   document.getElementById('incomingPanel').classList.remove('open');
   document.getElementById('archivePanel').classList.remove('open');
   const pp=document.getElementById('personsPanel');if(pp)pp.classList.remove('open');
+  const cp=document.getElementById('companiesPanel');if(cp)cp.classList.remove('open');
   const panel=document.getElementById('invoicingPanel');
   panel.classList.toggle('open');
   const isOpen=panel.classList.contains('open');
@@ -2526,7 +2530,7 @@ function exportInvoicingCSV(companyFilterName){
 }
 
 // ============================================================
-// ADD GUEST FROM BOOKING (v14.1.1)
+// ADD GUEST FROM BOOKING (v14.2)
 // ============================================================
 function addBookingToGuests(bookingId){
   if(!can('edit_bookings')){alert('You do not have permission to add guests.');return}
@@ -2551,7 +2555,7 @@ function addBookingToGuests(bookingId){
 }
 
 // ============================================================
-// GUEST BOOKINGS HISTORY (v14.1.1)
+// GUEST BOOKINGS HISTORY (v14.2)
 // ============================================================
 function showGuestBookings(name){
   if(!name)return;
@@ -2623,7 +2627,7 @@ function showGuestBookings(name){
 }
 
 // ============================================================
-// HOURS IMPORT (v14.1.1)
+// HOURS IMPORT (v14.2)
 // ============================================================
 let importHoursData=[];
 
@@ -2773,7 +2777,7 @@ async function runImportHours(){
 }
 
 // ============================================================
-// CLEANING DIAGNOSTICS (v14.1.1)
+// CLEANING DIAGNOSTICS (v14.2)
 // ============================================================
 function showCleaningDiagnostics(){
   const today=new Date();today.setHours(0,0,0,0);
@@ -2885,7 +2889,7 @@ function showCleaningDiagnostics(){
 }
 
 // ============================================================
-// BATTERY REFRESH (v14.1.1)
+// BATTERY REFRESH (v14.2)
 // ============================================================
 const BATTERY_FILE_PATH='Batteristatus/RoomBattery.csv';
 
@@ -2964,15 +2968,31 @@ async function refreshBatteryStatus(){
 }
 
 // ============================================================
-// COMPANIES MANAGEMENT (v14.1.1)
+// COMPANIES MANAGEMENT (v14.2)
 // ============================================================
 let editingCompanyId=null;
 
 function openCompaniesPanel(){
   if(!can('manage_companies')&&!can('admin')){alert('Access denied');return}
   document.getElementById('coSearch').value='';
+  // Close other panels (single-panel mode)
+  document.getElementById('incomingPanel').classList.remove('open');
+  document.getElementById('archivePanel').classList.remove('open');
+  const pp=document.getElementById('personsPanel');if(pp)pp.classList.remove('open');
+  document.getElementById('invoicingPanel').classList.remove('open');
+  document.getElementById('mainView').classList.add('panel-mode');
+  document.getElementById('companiesPanel').classList.add('open');
   renderCompaniesList();
-  document.getElementById('companiesModal').classList.add('open');
+}
+
+function toggleCompaniesPanel(){
+  const p=document.getElementById('companiesPanel');
+  if(p.classList.contains('open')){
+    p.classList.remove('open');
+    document.getElementById('mainView').classList.remove('panel-mode');
+  }else{
+    openCompaniesPanel();
+  }
 }
 
 function renderCompaniesList(){
@@ -3174,7 +3194,7 @@ async function quickAddCompany(name){
 }
 
 // ============================================================
-// BRREG LOOKUP (v14.1.1)
+// BRREG LOOKUP (v14.2)
 // ============================================================
 // Fetches company information from Brønnøysundregistrene open API.
 // https://data.brreg.no/enhetsregisteret/api/enheter/{orgnr}
@@ -3242,7 +3262,7 @@ async function lookupBrreg(){
 }
 
 // ============================================================
-// PDF EXPORT VIA PRINT (v14.1.1)
+// PDF EXPORT VIA PRINT (v14.2)
 // ============================================================
 // Opens a print-friendly window containing the same data as exportInvoicingCSV.
 // Browser's print dialog allows "Save as PDF" as the destination.
@@ -3520,7 +3540,7 @@ function exportInvoicingPDF(companyFilterName){
 }
 
 // ============================================================
-// PRICING TABS — Full-tenant + Long-term editors (v14.1.1)
+// PRICING TABS — Full-tenant + Long-term editors (v14.2)
 // ============================================================
 function switchPricingTab(tab){
   document.querySelectorAll('.pricing-tab').forEach(b=>{
@@ -3776,7 +3796,7 @@ async function bulkApplyLongTermContract(){
 }
 
 // ============================================================
-// BACKUP & RESTORE (v14.1.1)
+// BACKUP & RESTORE (v14.2)
 // ============================================================
 const BACKUP_LISTS=['Properties','Rooms','Bookings','Persons','Cleaning_Log','Hours','Users','Rates','Companies'];
 
@@ -3787,7 +3807,7 @@ async function exportBackup(){
   try{
     const data={
       meta:{
-        appVersion:'v14.1.1',
+        appVersion:'v14.2',
         timestamp:new Date().toISOString(),
         exportedBy:currentUser.email||'unknown',
         siteId:siteId
@@ -3952,7 +3972,7 @@ async function restoreSingleItem(listName,idx){
 }
 
 // ============================================================
-// COMPANY MERGE (v14.1.1)
+// COMPANY MERGE (v14.2)
 // ============================================================
 function openMergeCompanies(){
   if(!can('manage_companies')&&!can('admin')){alert('Permission required');return}
@@ -4160,4 +4180,287 @@ async function confirmMergeCompanies(){
 async function deleteListItem(listName,itemId){
   const s=await getSiteId();const lid=await getListId(listName);
   return graphDelete('/sites/'+s+'/lists/'+lid+'/items/'+itemId);
+}
+
+// ============================================================
+// MESSAGING — SMS & E-post (v14.2)
+// ============================================================
+const DEFAULT_SMS_TEMPLATE=`Hei {first_name}!
+Velkommen til {property}.
+Rom: {room}, dørkode: {room_door_code}
+WiFi: {wifi_ssid} / {wifi_password}
+{welcome_message}
+- Frank, 2GM`;
+
+const DEFAULT_EMAIL_TEMPLATE=`Hei {first_name},
+
+Velkommen til {property}!
+
+Rom: {room}
+Dørkode: {room_door_code}
+WiFi: {wifi_ssid}
+WiFi-passord: {wifi_password}
+Sjekk inn: {check_in_date}
+
+{welcome_message}
+
+Ha en hyggelig opphold.
+
+Vennlig hilsen,
+{my_name}
+{my_phone}
+{my_email}`;
+
+const DEFAULT_EMAIL_SUBJECT='Velkommen til {property} — rom {room}';
+
+function _renderTemplate(template,vars){
+  let out=template||'';
+  Object.keys(vars).forEach(k=>{
+    const re=new RegExp('\\{'+k+'\\}','g');
+    out=out.replace(re,vars[k]||'');
+  });
+  return out;
+}
+
+function _buildMessageVars(booking){
+  const room=allRooms.find(r=>r.id===String(booking.RoomLookupId));
+  const property=room?properties.find(p=>String(p.id)===String(room.PropertyLookupId)):null;
+  const fullName=booking.Person_Name||'';
+  const firstName=fullName.split(/\s+/)[0]||fullName;
+  const checkIn=booking.Check_In?formatDate(booking.Check_In):'';
+  // Find person record to get phone/email
+  const person=allPersons.find(p=>(p.Name||p.Title||'').toLowerCase()===fullName.toLowerCase());
+  return{
+    guest_name:fullName,
+    first_name:firstName,
+    property:property?property.Title:'',
+    room:room?room.Title:'',
+    room_door_code:room?room.Door_Code||'(ikke satt)':'',
+    wifi_ssid:property?property.WiFi_SSID||'(ikke satt)':'',
+    wifi_password:property?property.WiFi_Password||'(ikke satt)':'',
+    welcome_message:property?property.Welcome_Message||'':'',
+    check_in_date:checkIn,
+    my_name:'Frank Haugan',
+    my_phone:'+47 99 10 10 41',
+    my_email:'frank@2gm.no',
+    _person_phone:person?person.Mobile||booking.Mobile||'':booking.Mobile||'',
+    _person_email:person?person.Email||booking.Email||'':booking.Email||''
+  };
+}
+
+function _getTemplate(booking,kind){
+  const room=allRooms.find(r=>r.id===String(booking.RoomLookupId));
+  const property=room?properties.find(p=>String(p.id)===String(room.PropertyLookupId)):null;
+  if(kind==='sms')return (property&&property.SMS_Template)||DEFAULT_SMS_TEMPLATE;
+  if(kind==='email')return (property&&property.Email_Template)||DEFAULT_EMAIL_TEMPLATE;
+  if(kind==='subject')return (property&&property.Email_Subject_Template)||DEFAULT_EMAIL_SUBJECT;
+  return '';
+}
+
+function _toast(msg){
+  const t=document.createElement('div');
+  t.textContent=msg;
+  t.style.cssText='position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#1D9E75;color:#fff;padding:10px 20px;border-radius:6px;font-size:14px;z-index:10000;box-shadow:0 4px 12px rgba(0,0,0,.2)';
+  document.body.appendChild(t);
+  setTimeout(()=>{t.style.transition='opacity .4s';t.style.opacity='0';setTimeout(()=>document.body.removeChild(t),400)},1800);
+}
+
+async function _copyToClipboard(text){
+  try{
+    await navigator.clipboard.writeText(text);
+    _toast('✓ Kopiert! Lim inn i Mobil-app eller e-post');
+    return true;
+  }catch(e){
+    // Fallback
+    const ta=document.createElement('textarea');
+    ta.value=text;document.body.appendChild(ta);ta.select();
+    try{document.execCommand('copy');_toast('✓ Kopiert!');document.body.removeChild(ta);return true}
+    catch(e2){document.body.removeChild(ta);alert('Kunne ikke kopiere. Tekst:\n\n'+text);return false}
+  }
+}
+
+function copyBookingSMS(bookingId){
+  const b=allBookings.find(x=>x.id===bookingId);if(!b)return;
+  const vars=_buildMessageVars(b);
+  const text=_renderTemplate(_getTemplate(b,'sms'),vars);
+  _copyToClipboard(text);
+}
+
+function copyBookingEmail(bookingId){
+  const b=allBookings.find(x=>x.id===bookingId);if(!b)return;
+  const vars=_buildMessageVars(b);
+  const subject=_renderTemplate(_getTemplate(b,'subject'),vars);
+  const body=_renderTemplate(_getTemplate(b,'email'),vars);
+  _copyToClipboard('Emne: '+subject+'\n\n'+body);
+}
+
+function openBookingSMS(bookingId){
+  const b=allBookings.find(x=>x.id===bookingId);if(!b)return;
+  const vars=_buildMessageVars(b);
+  const text=_renderTemplate(_getTemplate(b,'sms'),vars);
+  const phone=vars._person_phone||'';
+  const url='sms:'+encodeURIComponent(phone)+'?body='+encodeURIComponent(text);
+  window.location.href=url;
+  setTimeout(()=>_toast('Hvis SMS-app ikke åpnet seg, bruk Kopier-knappen i stedet'),1500);
+}
+
+function openBookingEmail(bookingId){
+  const b=allBookings.find(x=>x.id===bookingId);if(!b)return;
+  const vars=_buildMessageVars(b);
+  const subject=_renderTemplate(_getTemplate(b,'subject'),vars);
+  const body=_renderTemplate(_getTemplate(b,'email'),vars);
+  const email=vars._person_email||'';
+  const url='mailto:'+encodeURIComponent(email)+'?subject='+encodeURIComponent(subject)+'&body='+encodeURIComponent(body);
+  window.location.href=url;
+}
+
+// --- MASS MESSAGING ---
+function openMassMessage(kind){
+  const m=document.getElementById('massMessageModal');
+  document.getElementById('massMsgKind').value=kind;
+  document.getElementById('massMsgTitle').textContent=kind==='sms'?'📱 Mass SMS':'📧 Mass e-post';
+  // Populate property and company filters
+  const propSel=document.getElementById('massPropFilter');
+  propSel.innerHTML='<option value="__ALL__">Alle eiendommer</option>'+properties.map(p=>'<option value="'+p.id+'">'+escapeHtml(p.Title)+'</option>').join('');
+  // Get all unique companies from active/upcoming bookings
+  const today=new Date();today.setHours(0,0,0,0);
+  const activeBookings=allBookings.filter(b=>{
+    if(b.Status==='Cancelled'||b.Status==='Completed')return false;
+    if(!b.Check_In)return false;
+    return true;
+  });
+  const cos=[...new Set(activeBookings.map(b=>b.Company||'').filter(Boolean))].sort();
+  const coSel=document.getElementById('massCoFilter');
+  coSel.innerHTML='<option value="__ALL__">Alle firma</option>'+cos.map(c=>'<option value="'+escapeHtml(c)+'">'+escapeHtml(c)+'</option>').join('');
+  renderMassMessageList();
+  m.classList.add('open');
+}
+
+function renderMassMessageList(){
+  const propFilter=document.getElementById('massPropFilter').value;
+  const coFilter=document.getElementById('massCoFilter').value;
+  const today=new Date();today.setHours(0,0,0,0);
+  const items=allBookings.filter(b=>{
+    if(b.Status==='Cancelled'||b.Status==='Completed')return false;
+    if(!b.Check_In)return false;
+    if(propFilter!=='__ALL__'){
+      const room=allRooms.find(r=>r.id===String(b.RoomLookupId));
+      if(!room||String(room.PropertyLookupId)!==String(propFilter))return false;
+    }
+    if(coFilter!=='__ALL__'&&b.Company!==coFilter)return false;
+    return true;
+  }).sort((a,b)=>{
+    const ca=(a.Company||'').localeCompare(b.Company||'');
+    if(ca!==0)return ca;
+    return (a.Person_Name||'').localeCompare(b.Person_Name||'');
+  });
+  const list=document.getElementById('massMsgList');
+  if(!items.length){list.innerHTML='<div class="muted" style="text-align:center;padding:20px">Ingen aktive bookinger matcher filtrene.</div>';return}
+  let html='<div style="margin-bottom:6px"><label style="font-size:11px"><input type="checkbox" onchange="document.querySelectorAll(\'.massMsgRow\').forEach(cb=>cb.checked=this.checked)"> Velg alle</label></div>';
+  items.forEach(b=>{
+    const room=allRooms.find(r=>r.id===String(b.RoomLookupId));
+    const prop=room?properties.find(p=>String(p.id)===String(room.PropertyLookupId)):null;
+    const kind=document.getElementById('massMsgKind').value;
+    const contact=kind==='sms'?(b.Mobile||''):(b.Email||'');
+    const hasContact=contact.trim().length>0;
+    const checkInStr=b.Check_In?formatDate(b.Check_In):'';
+    html+='<label style="display:flex;align-items:center;gap:8px;padding:6px 4px;border-bottom:.5px solid var(--border-tertiary);font-size:12px;'+(hasContact?'':'opacity:.5')+'">'
+      +'<input type="checkbox" class="massMsgRow" value="'+b.id+'"'+(hasContact?' checked':' disabled')+'>'
+      +'<div style="flex:1"><strong>'+escapeHtml(b.Person_Name||'')+'</strong> · '+escapeHtml(b.Company||'(uten firma)')+'</div>'
+      +'<div style="color:var(--text-tertiary);font-size:11px">'+escapeHtml(prop?prop.Title:'')+' / '+escapeHtml(room?room.Title:'')+'</div>'
+      +'<div style="color:var(--text-tertiary);font-size:11px;min-width:90px">'+checkInStr+'</div>'
+      +'<div style="color:'+(hasContact?'var(--text-success)':'var(--text-warning)')+';font-size:11px;min-width:130px">'+(hasContact?escapeHtml(contact):'⚠ mangler')+'</div>'
+      +'</label>';
+  });
+  list.innerHTML=html;
+}
+
+async function executeMassMessage(){
+  const kind=document.getElementById('massMsgKind').value;
+  const ids=[...document.querySelectorAll('.massMsgRow:checked')].map(cb=>cb.value);
+  if(!ids.length){alert('Velg minst én gjest');return}
+  const action=document.querySelector('input[name="massAction"]:checked').value;
+  const bookings=ids.map(id=>allBookings.find(b=>b.id===id)).filter(Boolean);
+  if(action==='copy_all'){
+    // Build one big text with all messages, separated by lines
+    const parts=bookings.map(b=>{
+      const vars=_buildMessageVars(b);
+      const txt=_renderTemplate(_getTemplate(b,kind==='sms'?'sms':'email'),vars);
+      const contact=kind==='sms'?vars._person_phone:vars._person_email;
+      return '═══ '+vars.guest_name+' ('+(contact||'mangler kontakt')+') ═══\n'+txt;
+    });
+    await _copyToClipboard(parts.join('\n\n'));
+    alert('Kopiert '+bookings.length+' meldinger til utklippstavle. Hver melding er separert med ═══');
+  }else if(action==='open_each'){
+    if(!confirm('Dette åpner '+kind.toUpperCase()+'-app for hver av '+bookings.length+' gjester. Du må sende hver manuelt. Fortsett?'))return;
+    for(let i=0;i<bookings.length;i++){
+      if(kind==='sms')openBookingSMS(bookings[i].id);
+      else openBookingEmail(bookings[i].id);
+      if(i<bookings.length-1)await new Promise(r=>setTimeout(r,2000));
+    }
+  }
+  document.getElementById('massMessageModal').classList.remove('open');
+}
+
+// --- TEMPLATES EDITOR (per property) ---
+function openTemplatesEditor(){
+  if(!can('admin')&&!can('manage_properties')){alert('Permission required');return}
+  const m=document.getElementById('templatesModal');
+  const sel=document.getElementById('tmplPropSel');
+  sel.innerHTML=properties.map(p=>'<option value="'+p.id+'">'+escapeHtml(p.Title)+'</option>').join('');
+  loadTemplateForProperty();
+  m.classList.add('open');
+}
+
+function loadTemplateForProperty(){
+  const propId=document.getElementById('tmplPropSel').value;
+  const p=properties.find(x=>String(x.id)===String(propId));
+  if(!p)return;
+  document.getElementById('tmplWifiSsid').value=p.WiFi_SSID||'';
+  document.getElementById('tmplWifiPwd').value=p.WiFi_Password||'';
+  document.getElementById('tmplWelcome').value=p.Welcome_Message||'';
+  document.getElementById('tmplSms').value=p.SMS_Template||DEFAULT_SMS_TEMPLATE;
+  document.getElementById('tmplEmailSubj').value=p.Email_Subject_Template||DEFAULT_EMAIL_SUBJECT;
+  document.getElementById('tmplEmail').value=p.Email_Template||DEFAULT_EMAIL_TEMPLATE;
+}
+
+async function saveTemplateForProperty(){
+  const propId=document.getElementById('tmplPropSel').value;
+  const p=properties.find(x=>String(x.id)===String(propId));
+  if(!p)return;
+  const fields={
+    WiFi_SSID:document.getElementById('tmplWifiSsid').value.trim()||null,
+    WiFi_Password:document.getElementById('tmplWifiPwd').value.trim()||null,
+    Welcome_Message:document.getElementById('tmplWelcome').value||null,
+    SMS_Template:document.getElementById('tmplSms').value||null,
+    Email_Subject_Template:document.getElementById('tmplEmailSubj').value.trim()||null,
+    Email_Template:document.getElementById('tmplEmail').value||null
+  };
+  try{
+    await updateListItem('Properties',p.id,fields);
+    Object.assign(p,fields);
+    _toast('✓ Mal lagret for '+p.Title);
+  }catch(e){alert('Save failed: '+e.message)}
+}
+
+function previewTemplate(kind){
+  const propId=document.getElementById('tmplPropSel').value;
+  const p=properties.find(x=>String(x.id)===String(propId));
+  if(!p){alert('Velg eiendom først');return}
+  // Find a sample booking from this property
+  const propRooms=allRooms.filter(r=>String(r.PropertyLookupId)===String(p.id));
+  const propRoomIds=new Set(propRooms.map(r=>r.id));
+  const sample=allBookings.find(b=>propRoomIds.has(String(b.RoomLookupId))&&b.Person_Name);
+  if(!sample){alert('Ingen booking funnet på '+p.Title+' for forhåndsvisning. Bruk en gjest som er booket der.');return}
+  const vars=_buildMessageVars(sample);
+  let out;
+  if(kind==='sms'){
+    const tmpl=document.getElementById('tmplSms').value;
+    out='SMS-forhåndsvisning (basert på '+vars.guest_name+'):\n\n'+_renderTemplate(tmpl,vars);
+  }else{
+    const subj=_renderTemplate(document.getElementById('tmplEmailSubj').value,vars);
+    const body=_renderTemplate(document.getElementById('tmplEmail').value,vars);
+    out='E-post-forhåndsvisning (basert på '+vars.guest_name+'):\n\nEmne: '+subj+'\n\n'+body;
+  }
+  alert(out);
 }

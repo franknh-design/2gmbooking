@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v14.1.1 — app.js (Core)
+// 2GM Booking v14.2 — app.js (Core)
 // Auth, Graph API, Data, Rendering, Bookings
 // ============================================================
 
@@ -370,6 +370,9 @@ function applyPermissions(){
   show('menuBtnCompanies',can('manage_companies')||can('admin'));
   show('menuBtnBackup',can('admin'));
   show('menuBtnRestore',can('admin'));
+  show('menuBtnTemplates',can('admin')||can('manage_properties'));
+  show('menuBtnMassSMS',can('edit_bookings'));
+  show('menuBtnMassEmail',can('edit_bookings'));
   show('btnArchive',can('archive')||can('view_bookings'));
   show('btnUpcoming',can('view_bookings'));
   show('btnHours',can('view_hours')||can('edit_hours'));
@@ -1103,6 +1106,11 @@ function showDetail(roomId){
       }
     }
     if(can('print_doortag'))btns+='<button onclick="printDoorTag(\''+booking.id+'\')">Print door tag</button>';
+    // Messaging buttons
+    btns+='<button onclick="copyBookingSMS(\''+booking.id+'\')" style="background:rgba(14,165,165,.1);color:#0EA5A5;border-color:#0EA5A5" title="Kopier SMS-tekst til utklippstavle">📱 Kopier SMS</button>';
+    btns+='<button onclick="openBookingSMS(\''+booking.id+'\')" style="background:rgba(14,165,165,.1);color:#0EA5A5;border-color:#0EA5A5" title="Åpne SMS-app med ferdig tekst">📱 Send SMS</button>';
+    btns+='<button onclick="copyBookingEmail(\''+booking.id+'\')" style="background:rgba(123,97,255,.1);color:#7B61FF;border-color:#7B61FF" title="Kopier e-post-tekst til utklippstavle">📧 Kopier e-post</button>';
+    btns+='<button onclick="openBookingEmail(\''+booking.id+'\')" style="background:rgba(123,97,255,.1);color:#7B61FF;border-color:#7B61FF" title="Åpne e-postklient med ferdig tekst">📧 Send e-post</button>';
     if(booking.Status==='Upcoming'&&can('checkin_out'))btns+='<button class="primary" onclick="checkIn(\''+booking.id+'\')">Check in</button>';
     if(booking.Status==='Active'&&can('checkin_out'))btns+='<button class="primary" style="background:#EF9F27;border-color:#EF9F27" onclick="checkOut(\''+booking.id+'\')">Check out</button>';
     if(can('cleaning')){
@@ -1460,7 +1468,7 @@ function printDoorTag(bookingId){
 
 // --- VIEW SWITCHING ---
 function showMainView(){currentView='main';document.getElementById('mainView').style.display='';document.getElementById('hoursView').style.display='none';document.getElementById('propertySelect').style.display='';if(selectedProperty)document.getElementById('headerTitle').textContent='2GM Booking — '+selectedProperty.Title;updateNavActiveState()}
-function showHoursView(){currentView='hours';document.getElementById('mainView').style.display='none';document.getElementById('mainView').classList.remove('panel-mode');document.getElementById('incomingPanel').classList.remove('open');document.getElementById('archivePanel').classList.remove('open');const pp=document.getElementById('personsPanel');if(pp)pp.classList.remove('open');const ip=document.getElementById('invoicingPanel');if(ip)ip.classList.remove('open');document.getElementById('hoursView').style.display='';document.getElementById('propertySelect').style.display='none';document.getElementById('headerTitle').textContent='2GM Booking — Hours';updateNavActiveState()}
+function showHoursView(){currentView='hours';document.getElementById('mainView').style.display='none';document.getElementById('mainView').classList.remove('panel-mode');document.getElementById('incomingPanel').classList.remove('open');document.getElementById('archivePanel').classList.remove('open');const pp=document.getElementById('personsPanel');if(pp)pp.classList.remove('open');const ip=document.getElementById('invoicingPanel');if(ip)ip.classList.remove('open');const cp=document.getElementById('companiesPanel');if(cp)cp.classList.remove('open');document.getElementById('hoursView').style.display='';document.getElementById('propertySelect').style.display='none';document.getElementById('headerTitle').textContent='2GM Booking — Hours';updateNavActiveState()}
 function ensureMainView(){if(currentView==='hours')showMainView()}
 
 // --- FILTER ---
@@ -1621,7 +1629,7 @@ msalInstance.initialize().then(()=>{
 });
 
 // ============================================================
-// AUTO-REFRESH (v14.1.1)
+// AUTO-REFRESH (v14.2)
 // ============================================================
 
 // Build a fingerprint that tells us if data has changed without full reload
