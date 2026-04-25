@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v14.1 — modules.js
+// 2GM Booking v14.1.1 — modules.js
 // Hours, Archive, Import/Export, Admin (checkbox permissions)
 // ============================================================
 
@@ -943,7 +943,7 @@ async function deleteRate(id){
 }
 
 // ============================================================
-// PERSONS / CUSTOMERS (v14.1)
+// PERSONS / CUSTOMERS (v14.1.1)
 // ============================================================
 let editingPersonId=null;
 
@@ -1240,7 +1240,7 @@ function onPersonNameInput(){
 }
 
 // ============================================================
-// CHARTS (v14.1) — pure SVG, no dependencies
+// CHARTS (v14.1.1) — pure SVG, no dependencies
 // ============================================================
 
 // Reusable bar chart: data = [{label, value, subtitle?}]
@@ -1549,7 +1549,7 @@ function renderHoursCharts(filtered){
 }
 
 // ============================================================
-// CLEANING EFFICIENCY ANALYSIS (v14.1)
+// CLEANING EFFICIENCY ANALYSIS (v14.1.1)
 // ============================================================
 // Compares cleaner hours against guest-nights per property, per week/month.
 // USE WITH CAUTION: Hours include breaks, transport, repairs — not just cleaning.
@@ -1902,7 +1902,7 @@ function _dateFromIsoWeek(year,week){
 }
 
 // ============================================================
-// MORE MENU (v14.1)
+// MORE MENU (v14.1.1)
 // ============================================================
 function toggleMoreMenu(e){
   if(e){e.stopPropagation();e.preventDefault()}
@@ -1929,7 +1929,7 @@ function closeMoreMenu(){
 }
 
 // ============================================================
-// FAKTURAGRUNNLAG / INVOICING (v14.1)
+// FAKTURAGRUNNLAG / INVOICING (v14.1.1)
 // ============================================================
 let invoicingInitialized=false;
 
@@ -2526,7 +2526,7 @@ function exportInvoicingCSV(companyFilterName){
 }
 
 // ============================================================
-// ADD GUEST FROM BOOKING (v14.1)
+// ADD GUEST FROM BOOKING (v14.1.1)
 // ============================================================
 function addBookingToGuests(bookingId){
   if(!can('edit_bookings')){alert('You do not have permission to add guests.');return}
@@ -2551,7 +2551,7 @@ function addBookingToGuests(bookingId){
 }
 
 // ============================================================
-// GUEST BOOKINGS HISTORY (v14.1)
+// GUEST BOOKINGS HISTORY (v14.1.1)
 // ============================================================
 function showGuestBookings(name){
   if(!name)return;
@@ -2623,7 +2623,7 @@ function showGuestBookings(name){
 }
 
 // ============================================================
-// HOURS IMPORT (v14.1)
+// HOURS IMPORT (v14.1.1)
 // ============================================================
 let importHoursData=[];
 
@@ -2773,7 +2773,7 @@ async function runImportHours(){
 }
 
 // ============================================================
-// CLEANING DIAGNOSTICS (v14.1)
+// CLEANING DIAGNOSTICS (v14.1.1)
 // ============================================================
 function showCleaningDiagnostics(){
   const today=new Date();today.setHours(0,0,0,0);
@@ -2885,7 +2885,7 @@ function showCleaningDiagnostics(){
 }
 
 // ============================================================
-// BATTERY REFRESH (v14.1)
+// BATTERY REFRESH (v14.1.1)
 // ============================================================
 const BATTERY_FILE_PATH='Batteristatus/RoomBattery.csv';
 
@@ -2964,7 +2964,7 @@ async function refreshBatteryStatus(){
 }
 
 // ============================================================
-// COMPANIES MANAGEMENT (v14.1)
+// COMPANIES MANAGEMENT (v14.1.1)
 // ============================================================
 let editingCompanyId=null;
 
@@ -3174,7 +3174,7 @@ async function quickAddCompany(name){
 }
 
 // ============================================================
-// BRREG LOOKUP (v14.1)
+// BRREG LOOKUP (v14.1.1)
 // ============================================================
 // Fetches company information from Brønnøysundregistrene open API.
 // https://data.brreg.no/enhetsregisteret/api/enheter/{orgnr}
@@ -3242,7 +3242,7 @@ async function lookupBrreg(){
 }
 
 // ============================================================
-// PDF EXPORT VIA PRINT (v14.1)
+// PDF EXPORT VIA PRINT (v14.1.1)
 // ============================================================
 // Opens a print-friendly window containing the same data as exportInvoicingCSV.
 // Browser's print dialog allows "Save as PDF" as the destination.
@@ -3520,7 +3520,7 @@ function exportInvoicingPDF(companyFilterName){
 }
 
 // ============================================================
-// PRICING TABS — Full-tenant + Long-term editors (v14.1)
+// PRICING TABS — Full-tenant + Long-term editors (v14.1.1)
 // ============================================================
 function switchPricingTab(tab){
   document.querySelectorAll('.pricing-tab').forEach(b=>{
@@ -3776,7 +3776,7 @@ async function bulkApplyLongTermContract(){
 }
 
 // ============================================================
-// BACKUP & RESTORE (v14.1)
+// BACKUP & RESTORE (v14.1.1)
 // ============================================================
 const BACKUP_LISTS=['Properties','Rooms','Bookings','Persons','Cleaning_Log','Hours','Users','Rates','Companies'];
 
@@ -3787,7 +3787,7 @@ async function exportBackup(){
   try{
     const data={
       meta:{
-        appVersion:'v14.1',
+        appVersion:'v14.1.1',
         timestamp:new Date().toISOString(),
         exportedBy:currentUser.email||'unknown',
         siteId:siteId
@@ -3952,13 +3952,13 @@ async function restoreSingleItem(listName,idx){
 }
 
 // ============================================================
-// COMPANY MERGE (v14.1)
+// COMPANY MERGE (v14.1.1)
 // ============================================================
 function openMergeCompanies(){
   if(!can('manage_companies')&&!can('admin')){alert('Permission required');return}
   // Populate datalist with all known company names
   const allCos=new Set();
-  companies.forEach(c=>{if(c.Title)allCos.add(c.Title)});
+  allCompanies.forEach(c=>{if(c.Title)allCos.add(c.Title)});
   allBookings.forEach(b=>{if(b.Company)allCos.add(b.Company);if(b.Billing_Company)allCos.add(b.Billing_Company)});
   allPersons.forEach(p=>{if(p.Company)allCos.add(p.Company)});
   document.getElementById('mergeCanonicalList').innerHTML=[...allCos].sort().map(c=>'<option value="'+escapeHtml(c)+'">').join('');
@@ -3988,7 +3988,7 @@ function _findItemsForCompany(name){
   // Rooms (LongTerm_Company)
   const roomsLT=allRooms.filter(r=>(r.LongTerm_Company||'').toLowerCase()===lc);
   // Companies-list itself
-  const cosEntries=companies.filter(c=>(c.Title||'').toLowerCase()===lc);
+  const cosEntries=allCompanies.filter(c=>(c.Title||'').toLowerCase()===lc);
   return {bookingsCompany,bookingsBilling,persons,rates,propsFT,roomsLT,cosEntries};
 }
 
@@ -4114,14 +4114,14 @@ async function confirmMergeCompanies(){
     // Rooms (LongTerm_Company)
     await updateMany('Rooms',found.roomsLT,{LongTerm_Company:canonical});
     // Companies-list: delete alias entries (only after confirming canonical exists in Companies list)
-    const canonicalExists=companies.some(c=>(c.Title||'').toLowerCase()===canonical.toLowerCase());
+    const canonicalExists=allCompanies.some(c=>(c.Title||'').toLowerCase()===canonical.toLowerCase());
     if(canonicalExists){
       for(let i=0;i<found.cosEntries.length;i++){
         try{
           await deleteListItem('Companies',found.cosEntries[i].id);
           // Remove from local cache
-          const idx=companies.indexOf(found.cosEntries[i]);
-          if(idx>=0)companies.splice(idx,1);
+          const idx=allCompanies.indexOf(found.cosEntries[i]);
+          if(idx>=0)allCompanies.splice(idx,1);
           success++;
         }catch(e){console.error('Delete Company '+found.cosEntries[i].id,e);errors.push('Companies #'+found.cosEntries[i].id+': '+e.message);failed++}
         if(i%5===4)await new Promise(r=>setTimeout(r,300));
@@ -4137,8 +4137,8 @@ async function confirmMergeCompanies(){
           for(let i=1;i<found.cosEntries.length;i++){
             try{
               await deleteListItem('Companies',found.cosEntries[i].id);
-              const idx=companies.indexOf(found.cosEntries[i]);
-              if(idx>=0)companies.splice(idx,1);
+              const idx=allCompanies.indexOf(found.cosEntries[i]);
+              if(idx>=0)allCompanies.splice(idx,1);
               success++;
             }catch(e){failed++;errors.push('Companies #'+found.cosEntries[i].id+': '+e.message)}
           }

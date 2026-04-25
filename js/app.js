@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v14.1 — app.js (Core)
+// 2GM Booking v14.1.1 — app.js (Core)
 // Auth, Graph API, Data, Rendering, Bookings
 // ============================================================
 
@@ -1621,7 +1621,7 @@ msalInstance.initialize().then(()=>{
 });
 
 // ============================================================
-// AUTO-REFRESH (v14.1)
+// AUTO-REFRESH (v14.1.1)
 // ============================================================
 
 // Build a fingerprint that tells us if data has changed without full reload
