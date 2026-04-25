@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v14.0.11 — modules.js
+// 2GM Booking v14.1 — modules.js
 // Hours, Archive, Import/Export, Admin (checkbox permissions)
 // ============================================================
 
@@ -943,7 +943,7 @@ async function deleteRate(id){
 }
 
 // ============================================================
-// PERSONS / CUSTOMERS (v14.0.11)
+// PERSONS / CUSTOMERS (v14.1)
 // ============================================================
 let editingPersonId=null;
 
@@ -1240,7 +1240,7 @@ function onPersonNameInput(){
 }
 
 // ============================================================
-// CHARTS (v14.0.11) — pure SVG, no dependencies
+// CHARTS (v14.1) — pure SVG, no dependencies
 // ============================================================
 
 // Reusable bar chart: data = [{label, value, subtitle?}]
@@ -1549,7 +1549,7 @@ function renderHoursCharts(filtered){
 }
 
 // ============================================================
-// CLEANING EFFICIENCY ANALYSIS (v14.0.11)
+// CLEANING EFFICIENCY ANALYSIS (v14.1)
 // ============================================================
 // Compares cleaner hours against guest-nights per property, per week/month.
 // USE WITH CAUTION: Hours include breaks, transport, repairs — not just cleaning.
@@ -1902,7 +1902,7 @@ function _dateFromIsoWeek(year,week){
 }
 
 // ============================================================
-// MORE MENU (v14.0.11)
+// MORE MENU (v14.1)
 // ============================================================
 function toggleMoreMenu(e){
   if(e){e.stopPropagation();e.preventDefault()}
@@ -1929,7 +1929,7 @@ function closeMoreMenu(){
 }
 
 // ============================================================
-// FAKTURAGRUNNLAG / INVOICING (v14.0.11)
+// FAKTURAGRUNNLAG / INVOICING (v14.1)
 // ============================================================
 let invoicingInitialized=false;
 
@@ -2526,7 +2526,7 @@ function exportInvoicingCSV(companyFilterName){
 }
 
 // ============================================================
-// ADD GUEST FROM BOOKING (v14.0.11)
+// ADD GUEST FROM BOOKING (v14.1)
 // ============================================================
 function addBookingToGuests(bookingId){
   if(!can('edit_bookings')){alert('You do not have permission to add guests.');return}
@@ -2551,7 +2551,7 @@ function addBookingToGuests(bookingId){
 }
 
 // ============================================================
-// GUEST BOOKINGS HISTORY (v14.0.11)
+// GUEST BOOKINGS HISTORY (v14.1)
 // ============================================================
 function showGuestBookings(name){
   if(!name)return;
@@ -2623,7 +2623,7 @@ function showGuestBookings(name){
 }
 
 // ============================================================
-// HOURS IMPORT (v14.0.11)
+// HOURS IMPORT (v14.1)
 // ============================================================
 let importHoursData=[];
 
@@ -2773,7 +2773,7 @@ async function runImportHours(){
 }
 
 // ============================================================
-// CLEANING DIAGNOSTICS (v14.0.11)
+// CLEANING DIAGNOSTICS (v14.1)
 // ============================================================
 function showCleaningDiagnostics(){
   const today=new Date();today.setHours(0,0,0,0);
@@ -2885,7 +2885,7 @@ function showCleaningDiagnostics(){
 }
 
 // ============================================================
-// BATTERY REFRESH (v14.0.11)
+// BATTERY REFRESH (v14.1)
 // ============================================================
 const BATTERY_FILE_PATH='Batteristatus/RoomBattery.csv';
 
@@ -2964,7 +2964,7 @@ async function refreshBatteryStatus(){
 }
 
 // ============================================================
-// COMPANIES MANAGEMENT (v14.0.11)
+// COMPANIES MANAGEMENT (v14.1)
 // ============================================================
 let editingCompanyId=null;
 
@@ -3174,7 +3174,7 @@ async function quickAddCompany(name){
 }
 
 // ============================================================
-// BRREG LOOKUP (v14.0.11)
+// BRREG LOOKUP (v14.1)
 // ============================================================
 // Fetches company information from Brønnøysundregistrene open API.
 // https://data.brreg.no/enhetsregisteret/api/enheter/{orgnr}
@@ -3242,7 +3242,7 @@ async function lookupBrreg(){
 }
 
 // ============================================================
-// PDF EXPORT VIA PRINT (v14.0.11)
+// PDF EXPORT VIA PRINT (v14.1)
 // ============================================================
 // Opens a print-friendly window containing the same data as exportInvoicingCSV.
 // Browser's print dialog allows "Save as PDF" as the destination.
@@ -3520,7 +3520,7 @@ function exportInvoicingPDF(companyFilterName){
 }
 
 // ============================================================
-// PRICING TABS — Full-tenant + Long-term editors (v14.0.11)
+// PRICING TABS — Full-tenant + Long-term editors (v14.1)
 // ============================================================
 function switchPricingTab(tab){
   document.querySelectorAll('.pricing-tab').forEach(b=>{
@@ -3776,7 +3776,7 @@ async function bulkApplyLongTermContract(){
 }
 
 // ============================================================
-// BACKUP & RESTORE (v14.0.11)
+// BACKUP & RESTORE (v14.1)
 // ============================================================
 const BACKUP_LISTS=['Properties','Rooms','Bookings','Persons','Cleaning_Log','Hours','Users','Rates','Companies'];
 
@@ -3787,7 +3787,7 @@ async function exportBackup(){
   try{
     const data={
       meta:{
-        appVersion:'v14.0.11',
+        appVersion:'v14.1',
         timestamp:new Date().toISOString(),
         exportedBy:currentUser.email||'unknown',
         siteId:siteId
@@ -3949,4 +3949,215 @@ async function restoreSingleItem(listName,idx){
   }catch(e){
     alert('Restore failed: '+e.message);
   }
+}
+
+// ============================================================
+// COMPANY MERGE (v14.1)
+// ============================================================
+function openMergeCompanies(){
+  if(!can('manage_companies')&&!can('admin')){alert('Permission required');return}
+  // Populate datalist with all known company names
+  const allCos=new Set();
+  companies.forEach(c=>{if(c.Title)allCos.add(c.Title)});
+  allBookings.forEach(b=>{if(b.Company)allCos.add(b.Company);if(b.Billing_Company)allCos.add(b.Billing_Company)});
+  allPersons.forEach(p=>{if(p.Company)allCos.add(p.Company)});
+  document.getElementById('mergeCanonicalList').innerHTML=[...allCos].sort().map(c=>'<option value="'+escapeHtml(c)+'">').join('');
+  document.getElementById('mergeCanonical').value='';
+  document.getElementById('mergeAliases').value='';
+  document.getElementById('mergePreview').innerHTML='<span class="muted">Skriv inn kanonisk navn og minst ett alias for å se forhåndsvisning</span>';
+  document.getElementById('mergeConfirmBtn').disabled=true;
+  document.getElementById('mergeCompaniesModal').classList.add('open');
+}
+
+function _parseAliases(text){
+  return text.split(/[\n,]/).map(s=>s.trim()).filter(s=>s.length>0);
+}
+
+function _findItemsForCompany(name){
+  const lc=name.toLowerCase();
+  // Bookings (Company)
+  const bookingsCompany=allBookings.filter(b=>(b.Company||'').toLowerCase()===lc);
+  // Bookings (Billing_Company)
+  const bookingsBilling=allBookings.filter(b=>(b.Billing_Company||'').toLowerCase()===lc);
+  // Persons
+  const persons=allPersons.filter(p=>(p.Company||'').toLowerCase()===lc);
+  // Rates
+  const rates=allRates.filter(r=>(r.Company||'').toLowerCase()===lc);
+  // Properties (FullTenant_Company)
+  const propsFT=properties.filter(p=>(p.FullTenant_Company||'').toLowerCase()===lc);
+  // Rooms (LongTerm_Company)
+  const roomsLT=allRooms.filter(r=>(r.LongTerm_Company||'').toLowerCase()===lc);
+  // Companies-list itself
+  const cosEntries=companies.filter(c=>(c.Title||'').toLowerCase()===lc);
+  return {bookingsCompany,bookingsBilling,persons,rates,propsFT,roomsLT,cosEntries};
+}
+
+function renderMergePreview(){
+  const canonical=document.getElementById('mergeCanonical').value.trim();
+  const aliasText=document.getElementById('mergeAliases').value;
+  const aliases=_parseAliases(aliasText);
+  const preview=document.getElementById('mergePreview');
+  const btn=document.getElementById('mergeConfirmBtn');
+  if(!canonical||!aliases.length){
+    preview.innerHTML='<span class="muted">Skriv inn kanonisk navn og minst ett alias for å se forhåndsvisning</span>';
+    btn.disabled=true;
+    return;
+  }
+  // Filter out aliases that match canonical (case-insensitive)
+  const realAliases=aliases.filter(a=>a.toLowerCase()!==canonical.toLowerCase());
+  if(!realAliases.length){
+    preview.innerHTML='<span style="color:var(--text-warning)">⚠ Alle alias er like det kanoniske navnet — ingenting å slå sammen</span>';
+    btn.disabled=true;
+    return;
+  }
+  // Compute totals
+  let totals={bookings:0,billing:0,persons:0,rates:0,propsFT:0,roomsLT:0,cosEntries:0};
+  const perAlias=[];
+  realAliases.forEach(a=>{
+    const found=_findItemsForCompany(a);
+    perAlias.push({alias:a,counts:{
+      bookings:found.bookingsCompany.length,
+      billing:found.bookingsBilling.length,
+      persons:found.persons.length,
+      rates:found.rates.length,
+      propsFT:found.propsFT.length,
+      roomsLT:found.roomsLT.length,
+      cosEntries:found.cosEntries.length
+    }});
+    totals.bookings+=found.bookingsCompany.length;
+    totals.billing+=found.bookingsBilling.length;
+    totals.persons+=found.persons.length;
+    totals.rates+=found.rates.length;
+    totals.propsFT+=found.propsFT.length;
+    totals.roomsLT+=found.roomsLT.length;
+    totals.cosEntries+=found.cosEntries.length;
+  });
+  const totalChanges=totals.bookings+totals.billing+totals.persons+totals.rates+totals.propsFT+totals.roomsLT+totals.cosEntries;
+  let html='<div style="margin-bottom:8px"><strong>Vil endres til "'+escapeHtml(canonical)+'":</strong></div>';
+  html+='<table style="width:100%;font-size:12px;border-collapse:collapse">'
+    +'<thead><tr style="background:rgba(239,159,39,.08)"><th style="padding:6px 8px;text-align:left">Alias</th><th style="padding:6px 8px;text-align:right">Bookings</th><th style="padding:6px 8px;text-align:right">Billing</th><th style="padding:6px 8px;text-align:right">Persons</th><th style="padding:6px 8px;text-align:right">Rates</th><th style="padding:6px 8px;text-align:right">Properties</th><th style="padding:6px 8px;text-align:right">Rooms</th><th style="padding:6px 8px;text-align:right">Co list</th></tr></thead><tbody>';
+  perAlias.forEach(a=>{
+    const c=a.counts;
+    const total=c.bookings+c.billing+c.persons+c.rates+c.propsFT+c.roomsLT+c.cosEntries;
+    const styleSuffix=total===0?';color:var(--text-tertiary)':'';
+    html+='<tr style="border-top:.5px solid var(--border-tertiary)'+styleSuffix+'">'
+      +'<td style="padding:6px 8px"><strong>'+escapeHtml(a.alias)+'</strong>'+(total===0?' <small class="muted">(ikke funnet)</small>':'')+'</td>'
+      +'<td style="padding:6px 8px;text-align:right">'+c.bookings+'</td>'
+      +'<td style="padding:6px 8px;text-align:right">'+c.billing+'</td>'
+      +'<td style="padding:6px 8px;text-align:right">'+c.persons+'</td>'
+      +'<td style="padding:6px 8px;text-align:right">'+c.rates+'</td>'
+      +'<td style="padding:6px 8px;text-align:right">'+c.propsFT+'</td>'
+      +'<td style="padding:6px 8px;text-align:right">'+c.roomsLT+'</td>'
+      +'<td style="padding:6px 8px;text-align:right">'+c.cosEntries+'</td>'
+      +'</tr>';
+  });
+  html+='<tr style="border-top:1.5px solid var(--border-secondary);font-weight:600;background:rgba(239,159,39,.04)">'
+    +'<td style="padding:6px 8px">Totalt</td>'
+    +'<td style="padding:6px 8px;text-align:right">'+totals.bookings+'</td>'
+    +'<td style="padding:6px 8px;text-align:right">'+totals.billing+'</td>'
+    +'<td style="padding:6px 8px;text-align:right">'+totals.persons+'</td>'
+    +'<td style="padding:6px 8px;text-align:right">'+totals.rates+'</td>'
+    +'<td style="padding:6px 8px;text-align:right">'+totals.propsFT+'</td>'
+    +'<td style="padding:6px 8px;text-align:right">'+totals.roomsLT+'</td>'
+    +'<td style="padding:6px 8px;text-align:right">'+totals.cosEntries+'</td>'
+    +'</tr></tbody></table>';
+  if(totalChanges===0){
+    html+='<div style="color:var(--text-warning);margin-top:8px;font-size:11px">⚠ Ingen items vil endres — sjekk skrivemåten på alias-navnene</div>';
+    btn.disabled=true;
+  }else{
+    html+='<div style="margin-top:10px;padding:8px;background:rgba(123,97,255,.06);border-radius:4px;font-size:11px;color:#5949c4"><strong>'+totalChanges+' items vil oppdateres + '+totals.cosEntries+' Companies-rader vil slettes.</strong> Operasjonen er ikke reversibel — ta backup først (More → 💾 Backup data).</div>';
+    btn.disabled=false;
+  }
+  preview.innerHTML=html;
+}
+
+async function confirmMergeCompanies(){
+  if(!can('manage_companies')&&!can('admin')){alert('Permission required');return}
+  const canonical=document.getElementById('mergeCanonical').value.trim();
+  const aliases=_parseAliases(document.getElementById('mergeAliases').value).filter(a=>a.toLowerCase()!==canonical.toLowerCase());
+  if(!canonical||!aliases.length)return;
+  if(!confirm('Slå sammen '+aliases.length+' alias til "'+canonical+'"?\n\nDette kan ikke angres. Husk backup først (More → 💾 Backup data).\n\nTrykk OK for å fortsette.'))return;
+  const btn=document.getElementById('mergeConfirmBtn');
+  btn.disabled=true;btn.textContent='⏳ Slår sammen...';
+  let success=0,failed=0;
+  const errors=[];
+  // Helper: bulk-update one list with throttling
+  async function updateMany(listName,items,fields){
+    for(let i=0;i<items.length;i++){
+      try{
+        await updateListItem(listName,items[i].id,fields);
+        // Also update local cache so UI re-renders correctly
+        Object.assign(items[i],fields);
+        success++;
+      }catch(e){
+        console.error('Failed update '+listName+' #'+items[i].id,e);
+        errors.push(listName+' #'+items[i].id+': '+e.message);
+        failed++;
+      }
+      if(i%10===9)await new Promise(r=>setTimeout(r,300));
+    }
+  }
+  for(let aIdx=0;aIdx<aliases.length;aIdx++){
+    const a=aliases[aIdx];
+    btn.textContent='⏳ Behandler "'+a+'" ('+(aIdx+1)+'/'+aliases.length+')...';
+    const found=_findItemsForCompany(a);
+    // Bookings: Company field
+    await updateMany('Bookings',found.bookingsCompany,{Company:canonical});
+    // Bookings: Billing_Company field
+    await updateMany('Bookings',found.bookingsBilling,{Billing_Company:canonical});
+    // Persons
+    await updateMany('Persons',found.persons,{Company:canonical});
+    // Rates
+    await updateMany('Rates',found.rates,{Company:canonical});
+    // Properties (FullTenant_Company)
+    await updateMany('Properties',found.propsFT,{FullTenant_Company:canonical});
+    // Rooms (LongTerm_Company)
+    await updateMany('Rooms',found.roomsLT,{LongTerm_Company:canonical});
+    // Companies-list: delete alias entries (only after confirming canonical exists in Companies list)
+    const canonicalExists=companies.some(c=>(c.Title||'').toLowerCase()===canonical.toLowerCase());
+    if(canonicalExists){
+      for(let i=0;i<found.cosEntries.length;i++){
+        try{
+          await deleteListItem('Companies',found.cosEntries[i].id);
+          // Remove from local cache
+          const idx=companies.indexOf(found.cosEntries[i]);
+          if(idx>=0)companies.splice(idx,1);
+          success++;
+        }catch(e){console.error('Delete Company '+found.cosEntries[i].id,e);errors.push('Companies #'+found.cosEntries[i].id+': '+e.message);failed++}
+        if(i%5===4)await new Promise(r=>setTimeout(r,300));
+      }
+    }else{
+      // Canonical not in Companies list yet — rename first alias to canonical instead of deleting
+      if(found.cosEntries.length){
+        try{
+          await updateListItem('Companies',found.cosEntries[0].id,{Title:canonical});
+          found.cosEntries[0].Title=canonical;
+          success++;
+          // Delete the rest
+          for(let i=1;i<found.cosEntries.length;i++){
+            try{
+              await deleteListItem('Companies',found.cosEntries[i].id);
+              const idx=companies.indexOf(found.cosEntries[i]);
+              if(idx>=0)companies.splice(idx,1);
+              success++;
+            }catch(e){failed++;errors.push('Companies #'+found.cosEntries[i].id+': '+e.message)}
+          }
+        }catch(e){failed++;errors.push('Companies rename: '+e.message)}
+      }
+    }
+  }
+  btn.disabled=false;btn.textContent='🔀 Slå sammen';
+  let msg='✓ Merge ferdig.\n\n'+success+' items oppdatert/slettet.';
+  if(failed)msg+='\n\n⚠ '+failed+' feil:\n'+errors.slice(0,5).join('\n')+(errors.length>5?'\n...':'');
+  alert(msg);
+  document.getElementById('mergeCompaniesModal').classList.remove('open');
+  // Re-render
+  if(typeof renderCompaniesList==='function')renderCompaniesList();
+  refreshLocal();
+}
+
+// Helper: deleteListItem
+async function deleteListItem(listName,itemId){
+  const s=await getSiteId();const lid=await getListId(listName);
+  return graphDelete('/sites/'+s+'/lists/'+lid+'/items/'+itemId);
 }
