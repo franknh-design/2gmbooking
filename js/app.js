@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v13.19 — app.js (Core)
+// 2GM Booking v13.20.1 — app.js (Core)
 // Auth, Graph API, Data, Rendering, Bookings
 // ============================================================
 
@@ -592,6 +592,65 @@ function getRoomFullTenant(room,date){
   return prop?getActiveFullTenant(prop,date):null;
 }
 
+// Returns active long-term contract for a single room on the given date, or null.
+// Long-term = a fixed contract on a specific room (e.g. SalMar leases Leilighet 1A monthly).
+// Distinct from full-tenant which applies to ALL rooms on a property uniformly.
+function getActiveLongTermContract(room,date){
+  if(!room)return null;
+  const company=(room.LongTerm_Company||'').trim();
+  if(!company)return null;
+  const price=Number(room.LongTerm_Price)||0;
+  if(!price)return null;
+  const checkDate=date||new Date();
+  const start=room.LongTerm_StartDate?new Date(room.LongTerm_StartDate):null;
+  const end=room.LongTerm_EndDate?new Date(room.LongTerm_EndDate):null;
+  if(start&&checkDate<start)return null;
+  if(end&&checkDate>end)return null;
+  const rateUnitRaw=(room.LongTerm_RateUnit||'Per day').toString().toLowerCase().trim();
+  const isMonthly=rateUnitRaw.indexOf('month')>=0;
+  return{company,price,start,end,isMonthly};
+}
+
+// Computes long-term contract amount for a single room over a period (handles pro-rata).
+function computeLongTermForRoomPeriod(room,fromDate,toDate){
+  const c=getActiveLongTermContract(room);
+  if(!c)return null;
+  // Recompute date overlap with agreement bounds (use start/end from contract)
+  const agreementStart=room.LongTerm_StartDate?new Date(room.LongTerm_StartDate):new Date(1970,0,1);
+  const agreementEnd=room.LongTerm_EndDate?new Date(room.LongTerm_EndDate):new Date(2100,0,1);
+  agreementStart.setHours(0,0,0,0);
+  agreementEnd.setHours(23,59,59,999);
+  const effFrom=new Date(Math.max(fromDate.getTime(),agreementStart.getTime()));
+  const effTo=new Date(Math.min(toDate.getTime(),agreementEnd.getTime()));
+  effFrom.setHours(0,0,0,0);
+  effTo.setHours(23,59,59,999);
+  if(effFrom>effTo)return null;
+  const days=Math.floor((effTo-effFrom)/86400000)+1;
+  let total,unitLabel,detailLabel;
+  if(c.isMonthly){
+    let monthFraction=0;
+    let cursor=new Date(effFrom.getFullYear(),effFrom.getMonth(),1);
+    while(cursor<=effTo){
+      const monthStart=new Date(cursor.getFullYear(),cursor.getMonth(),1);
+      const monthEnd=new Date(cursor.getFullYear(),cursor.getMonth()+1,0,23,59,59);
+      const periodInMonthStart=new Date(Math.max(monthStart.getTime(),effFrom.getTime()));
+      const periodInMonthEnd=new Date(Math.min(monthEnd.getTime(),effTo.getTime()));
+      if(periodInMonthStart<=periodInMonthEnd){
+        const daysInMonth=monthEnd.getDate();
+        const periodDaysInMonth=Math.floor((periodInMonthEnd-periodInMonthStart)/86400000)+1;
+        monthFraction+=periodDaysInMonth/daysInMonth;
+      }
+      cursor=new Date(cursor.getFullYear(),cursor.getMonth()+1,1);
+    }
+    total=Math.round(c.price*monthFraction*100)/100;
+    detailLabel=c.price.toLocaleString('nb-NO')+' kr/mnd × '+monthFraction.toFixed(3)+' mnd';
+  }else{
+    total=Math.round(c.price*days*100)/100;
+    detailLabel=c.price.toLocaleString('nb-NO')+' kr/dag × '+days+' dager';
+  }
+  return{room,company:c.company,price:c.price,isMonthly:c.isMonthly,days,total,detailLabel};
+}
+
 // Compute full-tenant lease amount for a property within a date period.
 // Handles pro-rata (partial overlap between period and agreement dates).
 // Returns {days,rooms,rate,total,company,effectiveFrom,effectiveTo} or null if not applicable.
@@ -676,16 +735,18 @@ function computeFullTenantForPeriod(property,fromDate,toDate){
 
 function renderRow(room,booking){
   const n=booking?booking.Person_Name:'';const c=booking?(booking.Company||''):'';
-  // For empty rooms: find next upcoming booking or show full-tenant reservation
+  // For empty rooms: find next upcoming booking, full-tenant, or long-term contract
   let emptyCell='<span class="empty-text">—</span>';
   if(!booking){
     const fullTenant=getRoomFullTenant(room);
-    if(fullTenant){
-      emptyCell='<span style="color:#EF9F27;font-style:italic">🔒 Reservert '+escapeHtml(fullTenant.company)+'</span>';
+    const longTerm=getActiveLongTermContract(room);
+    const reserveLabel=fullTenant?fullTenant.company:(longTerm?longTerm.company:null);
+    if(reserveLabel){
+      emptyCell='<span style="color:#EF9F27;font-style:italic">🔒 Reservert '+escapeHtml(reserveLabel)+'</span>';
     }
     const upcoming=findNextUpcomingForRoom(room.id);
     if(upcoming){
-      emptyCell=(fullTenant?'<span style="color:#EF9F27;font-style:italic">🔒 '+escapeHtml(fullTenant.company)+'</span>':'<span class="empty-text">—</span>')+' <span style="font-size:10px;color:#7B61FF;font-style:italic" title="Upcoming booking">📅 '+escapeHtml(upcoming.Person_Name||'')+(upcoming.Check_In?' · '+formatDate(upcoming.Check_In):'')+'</span>';
+      emptyCell=(reserveLabel?'<span style="color:#EF9F27;font-style:italic">🔒 '+escapeHtml(reserveLabel)+'</span>':'<span class="empty-text">—</span>')+' <span style="font-size:10px;color:#7B61FF;font-style:italic" title="Upcoming booking">📅 '+escapeHtml(upcoming.Person_Name||'')+(upcoming.Check_In?' · '+formatDate(upcoming.Check_In):'')+'</span>';
     }
   }
   return'<tr onclick="showDetail(\''+room.id+'\')">'
@@ -710,12 +771,14 @@ function renderRowWithProperty(room,booking,propName){
   let emptyCell='<span class="empty-text">—</span>';
   if(!booking){
     const fullTenant=getRoomFullTenant(room);
-    if(fullTenant){
-      emptyCell='<span style="color:#EF9F27;font-style:italic">🔒 Reservert '+escapeHtml(fullTenant.company)+'</span>';
+    const longTerm=getActiveLongTermContract(room);
+    const reserveLabel=fullTenant?fullTenant.company:(longTerm?longTerm.company:null);
+    if(reserveLabel){
+      emptyCell='<span style="color:#EF9F27;font-style:italic">🔒 Reservert '+escapeHtml(reserveLabel)+'</span>';
     }
     const upcoming=findNextUpcomingForRoom(room.id);
     if(upcoming){
-      emptyCell=(fullTenant?'<span style="color:#EF9F27;font-style:italic">🔒 '+escapeHtml(fullTenant.company)+'</span>':'<span class="empty-text">—</span>')+' <span style="font-size:10px;color:#7B61FF;font-style:italic">📅 '+escapeHtml(upcoming.Person_Name||'')+(upcoming.Check_In?' · '+formatDate(upcoming.Check_In):'')+'</span>';
+      emptyCell=(reserveLabel?'<span style="color:#EF9F27;font-style:italic">🔒 '+escapeHtml(reserveLabel)+'</span>':'<span class="empty-text">—</span>')+' <span style="font-size:10px;color:#7B61FF;font-style:italic">📅 '+escapeHtml(upcoming.Person_Name||'')+(upcoming.Check_In?' · '+formatDate(upcoming.Check_In):'')+'</span>';
     }
   }
   return'<tr onclick="showDetail(\''+room.id+'\')">'
@@ -1422,7 +1485,7 @@ msalInstance.initialize().then(()=>{
 });
 
 // ============================================================
-// AUTO-REFRESH (v13.19)
+// AUTO-REFRESH (v13.20.1)
 // ============================================================
 
 // Build a fingerprint that tells us if data has changed without full reload
@@ -1541,19 +1604,38 @@ function showFullTenantDebug(){
   lines.push('Test period: '+formatDate(fromDate)+' to '+formatDate(toDate));
   const result=computeFullTenantForPeriod(p,fromDate,toDate);
   if(!result){
-    lines.push('\n⚠ computeFullTenantForPeriod returned NULL');
-    lines.push('Possible reasons:');
-    lines.push('- Company is empty');
-    lines.push('- Rate is 0 or invalid');
-    lines.push('- Period is outside agreement dates');
-    lines.push('- 0 rooms matched');
+    lines.push('\n⚠ computeFullTenantForPeriod returned NULL (no full-tenant — that may be OK)');
   }else{
-    lines.push('\nResult:');
+    lines.push('\nFull-tenant Result:');
     lines.push('  days: '+result.days);
     lines.push('  rooms: '+result.rooms);
     lines.push('  rate: '+result.rate);
     lines.push('  TOTAL: '+result.total+' kr');
-    lines.push('  Expected: '+(result.rooms*result.rate*result.days)+' kr');
+  }
+  // Long-term contracts on individual rooms
+  lines.push('\n--- LONG-TERM CONTRACTS (per-room) ---');
+  let ltTotal=0;
+  let ltCount=0;
+  matching.forEach(r=>{
+    const lt=computeLongTermForRoomPeriod(r,fromDate,toDate);
+    if(lt){
+      ltCount++;
+      ltTotal+=lt.total;
+      lines.push('  '+r.Title+' → '+lt.company+' · '+lt.detailLabel+' = '+lt.total.toLocaleString('nb-NO')+' kr');
+    }
+  });
+  if(ltCount===0){
+    lines.push('  (no rooms with active LongTerm contracts on this property)');
+    // Show rooms that have LongTerm_Company but no active contract — likely misconfigured
+    const partialConfig=matching.filter(r=>(r.LongTerm_Company||'').trim()&&!computeLongTermForRoomPeriod(r,fromDate,toDate));
+    if(partialConfig.length){
+      lines.push('\n⚠ Rooms with LongTerm_Company but inactive contract:');
+      partialConfig.forEach(r=>{
+        lines.push('  '+r.Title+': Company="'+(r.LongTerm_Company||'')+'", Price='+r.LongTerm_Price+', Start='+r.LongTerm_StartDate+', End='+r.LongTerm_EndDate);
+      });
+    }
+  }else{
+    lines.push('  Total: '+ltCount+' rooms · '+ltTotal.toLocaleString('nb-NO')+' kr');
   }
   console.log(lines.join('\n'));
   alert(lines.join('\n'));

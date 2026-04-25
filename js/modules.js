@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v13.19 — modules.js
+// 2GM Booking v13.20.1 — modules.js
 // Hours, Archive, Import/Export, Admin (checkbox permissions)
 // ============================================================
 
@@ -943,7 +943,7 @@ async function deleteRate(id){
 }
 
 // ============================================================
-// PERSONS / CUSTOMERS (v13.19)
+// PERSONS / CUSTOMERS (v13.20.1)
 // ============================================================
 let editingPersonId=null;
 
@@ -1240,7 +1240,7 @@ function onPersonNameInput(){
 }
 
 // ============================================================
-// CHARTS (v13.19) — pure SVG, no dependencies
+// CHARTS (v13.20.1) — pure SVG, no dependencies
 // ============================================================
 
 // Reusable bar chart: data = [{label, value, subtitle?}]
@@ -1549,7 +1549,7 @@ function renderHoursCharts(filtered){
 }
 
 // ============================================================
-// CLEANING EFFICIENCY ANALYSIS (v13.19)
+// CLEANING EFFICIENCY ANALYSIS (v13.20.1)
 // ============================================================
 // Compares cleaner hours against guest-nights per property, per week/month.
 // USE WITH CAUTION: Hours include breaks, transport, repairs — not just cleaning.
@@ -1902,7 +1902,7 @@ function _dateFromIsoWeek(year,week){
 }
 
 // ============================================================
-// MORE MENU (v13.19)
+// MORE MENU (v13.20.1)
 // ============================================================
 function toggleMoreMenu(e){
   if(e){e.stopPropagation();e.preventDefault()}
@@ -1929,7 +1929,7 @@ function closeMoreMenu(){
 }
 
 // ============================================================
-// FAKTURAGRUNNLAG / INVOICING (v13.19)
+// FAKTURAGRUNNLAG / INVOICING (v13.20.1)
 // ============================================================
 let invoicingInitialized=false;
 
@@ -2017,6 +2017,17 @@ function renderInvoicing(){
   );
   let fullTenantExcludedBookings={}; // propId -> count of individual bookings hidden
 
+  // Identify rooms with active long-term contracts in this period
+  const longTermByRoomId={};
+  let longTermExcludedBookingCount=0;
+  allRooms.forEach(r=>{
+    if(!currentRoomIds.has(r.id))return;
+    if(fullTenantRoomIds.has(r.id))return; // already covered by full-tenant
+    const lt=computeLongTermForRoomPeriod(r,fromDate,toDate);
+    if(lt)longTermByRoomId[r.id]=lt;
+  });
+  const longTermRoomIds=new Set(Object.keys(longTermByRoomId));
+
   const items=[];
   allBookings.forEach(b=>{
     const rid=String(b.RoomLookupId||'');
@@ -2033,6 +2044,11 @@ function renderInvoicing(){
       const room=allRooms.find(r=>r.id===rid);
       const pid=room?room.PropertyLookupId:'';
       fullTenantExcludedBookings[pid]=(fullTenantExcludedBookings[pid]||0)+1;
+      return;
+    }
+    // If room has active long-term contract, exclude from regular invoicing
+    if(longTermRoomIds.has(rid)){
+      longTermExcludedBookingCount++;
       return;
     }
     const nights=_nightsInPeriod(b,fromDate,toDate);
@@ -2111,6 +2127,26 @@ function renderInvoicing(){
     });
   });
 
+  // LONG-TERM CONTRACTS (per-room): one line per room with active contract
+  Object.keys(longTermByRoomId).forEach(rid=>{
+    const lt=longTermByRoomId[rid];
+    items.push({
+      booking:{id:''},
+      room:lt.room.Title||'',
+      name:lt.company+' — '+(lt.room.Title||''),
+      company:lt.company,
+      guestCompany:'',
+      hasBillingOverride:false,
+      nights:lt.days,
+      rate:lt.price,
+      total:lt.total,
+      source:lt.detailLabel,
+      nearMiss:null,
+      lineType:'longterm',
+      checkoutDate:null
+    });
+  });
+
   // PERCENT-BASED FEES: compute per-company total of nights × rate and add a % fee line
   const propTitleForPercent=selectedProperty?selectedProperty.Title:'';
   const companyNightSum={};
@@ -2167,7 +2203,7 @@ function renderInvoicing(){
 
   // Grand totals — separate nights from checkout/percent fees and full-tenant leases
   const nightItems=finalItems.filter(i=>i.lineType==='nights');
-  const feeItems=finalItems.filter(i=>i.lineType==='checkout'||i.lineType==='percent'||i.lineType==='fulltenant');
+  const feeItems=finalItems.filter(i=>i.lineType==='checkout'||i.lineType==='percent'||i.lineType==='fulltenant'||i.lineType==='longterm');
   const totalNights=nightItems.reduce((a,i)=>a+i.nights,0);
   const nightRevenue=nightItems.reduce((a,i)=>a+i.total,0);
   const feeRevenue=feeItems.reduce((a,i)=>a+i.total,0);
@@ -2214,32 +2250,37 @@ function renderInvoicing(){
         const isCheckout=i.lineType==='checkout';
         const isPercent=i.lineType==='percent';
         const isFullTenant=i.lineType==='fulltenant';
+        const isLongTerm=i.lineType==='longterm';
         const ci=i.booking.Check_In?formatDate(i.booking.Check_In):'';
         const co=i.booking.Check_Out?formatDate(i.booking.Check_Out):'Open';
         let period;
         if(isFullTenant)period='🔒 Full-tenant lease';
+        else if(isLongTerm)period='🔑 Långtidsleie';
         else if(isPercent)period='📊 Monthly percent fee';
         else if(isCheckout)period='🧹 Checkout '+formatDate(i.checkoutDate);
         else period=ci+' → '+co;
-        const nightsCell=(isCheckout||isPercent)?'—':(isFullTenant?i.nights+' days':i.nights);
+        const nightsCell=(isCheckout||isPercent)?'—':((isFullTenant||isLongTerm)?i.nights+' days':i.nights);
         let rateCell;
         if(isFullTenant)rateCell='<em style="color:var(--text-tertiary)">Full-tenant</em>';
+        else if(isLongTerm)rateCell='<em style="color:var(--text-tertiary)">Långtid</em>';
         else if(isPercent)rateCell='<em style="color:var(--text-tertiary)">%-basert</em>';
         else if(isCheckout)rateCell='<em style="color:var(--text-tertiary)">Utvask</em>';
         else rateCell=(i.rate?i.rate.toLocaleString('nb-NO')+' kr':'<span style="color:var(--text-danger)">— missing</span>');
         const totalCell=i.total?i.total.toLocaleString('nb-NO')+' kr':'—';
         let sourceCell;
         if(isFullTenant)sourceCell='<span style="color:#1D9E75">🔒 '+escapeHtml(i.source)+'</span>';
+        else if(isLongTerm)sourceCell='<span style="color:#0EA5A5">🔑 '+escapeHtml(i.source)+'</span>';
         else if(isPercent)sourceCell='<span style="color:#EF9F27">📊 '+escapeHtml(i.source)+'</span>';
         else if(isCheckout)sourceCell='<span style="color:#7B61FF">🧹 Checkout fee</span>';
         else sourceCell=(i.nearMiss?'<span title="'+escapeHtml(i.nearMiss)+'" style="color:var(--text-warning)">⚠ '+escapeHtml(i.source)+'</span>':escapeHtml(i.source));
         let rowStyle;
         if(isFullTenant)rowStyle='border-top:.5px solid var(--border-tertiary);cursor:default;background:rgba(29,158,117,.08)';
+        else if(isLongTerm)rowStyle='border-top:.5px solid var(--border-tertiary);cursor:default;background:rgba(14,165,165,.07)';
         else if(isPercent)rowStyle='border-top:.5px solid var(--border-tertiary);cursor:default;background:rgba(239,159,39,.06)';
         else if(isCheckout)rowStyle='border-top:.5px solid var(--border-tertiary);cursor:pointer;background:rgba(123,97,255,.04)';
         else rowStyle='border-top:.5px solid var(--border-tertiary);cursor:pointer';
-        const hoverBg=isFullTenant?'rgba(29,158,117,.16)':(isPercent?'rgba(239,159,39,.12)':(isCheckout?'rgba(123,97,255,.12)':'var(--bg-secondary)'));
-        const restBg=isFullTenant?'rgba(29,158,117,.08)':(isPercent?'rgba(239,159,39,.06)':(isCheckout?'rgba(123,97,255,.04)':''));
+        const hoverBg=isFullTenant?'rgba(29,158,117,.16)':(isLongTerm?'rgba(14,165,165,.14)':(isPercent?'rgba(239,159,39,.12)':(isCheckout?'rgba(123,97,255,.12)':'var(--bg-secondary)')));
+        const restBg=isFullTenant?'rgba(29,158,117,.08)':(isLongTerm?'rgba(14,165,165,.07)':(isPercent?'rgba(239,159,39,.06)':(isCheckout?'rgba(123,97,255,.04)':'')));
         // Flag company mismatch when grouping by company: if company field differs from group key, highlight
         const groupKey=k;
         const actualCompany=i.company||'(no company)';
@@ -2254,11 +2295,12 @@ function renderInvoicing(){
         }
         let nameCell;
         if(isFullTenant)nameCell='<span style="color:#1D9E75;font-weight:500">'+escapeHtml(i.name)+'</span>';
+        else if(isLongTerm)nameCell='<span style="color:#0EA5A5;font-weight:500">🔑 '+escapeHtml(i.name)+'</span>';
         else if(isPercent)nameCell='<span style="color:var(--text-warning);font-weight:500">'+escapeHtml(i.name)+'</span>';
         else if(isCheckout)nameCell='<span style="color:var(--text-tertiary)">↳ '+guestMarkedName(i.name)+'</span>';
         else nameCell=guestMarkedName(i.name);
-        // Full-tenant and percent rows are not clickable
-        const clickAttr=(isPercent||isFullTenant)?'':'onclick="openEditBooking(\''+i.booking.id+'\')"';
+        // Full-tenant, long-term and percent rows are not clickable
+        const clickAttr=(isPercent||isFullTenant||isLongTerm)?'':'onclick="openEditBooking(\''+i.booking.id+'\')"';
         html+='<tr '+clickAttr+' style="'+rowStyle+'" onmouseover="this.style.background=\''+hoverBg+'\'" onmouseout="this.style.background=\''+restBg+'\'">'
           +'<td style="padding:6px 10px">'+nameCell+'</td>'
           +'<td style="padding:6px 10px">'+companyCell+'</td>'
@@ -2345,6 +2387,15 @@ function exportInvoicingCSV(companyFilterName){
   const fullTenantRoomIds=new Set(
     allRooms.filter(r=>fullTenantByPropId[r.PropertyLookupId]).map(r=>r.id)
   );
+  // LongTerm contracts per room
+  const longTermByRoomIdCsv={};
+  allRooms.forEach(r=>{
+    if(!currentRoomIds.has(r.id))return;
+    if(fullTenantRoomIds.has(r.id))return;
+    const lt=computeLongTermForRoomPeriod(r,fromDate,toDate);
+    if(lt)longTermByRoomIdCsv[r.id]=lt;
+  });
+  const longTermRoomIdsCsv=new Set(Object.keys(longTermByRoomIdCsv));
   allBookings.forEach(b=>{
     const rid=String(b.RoomLookupId||'');
     if(!currentRoomIds.has(rid))return;
@@ -2352,6 +2403,8 @@ function exportInvoicingCSV(companyFilterName){
     if(b.Status==='Cancelled')return;
     // Skip bookings on full-tenant rooms (covered by lease)
     if(fullTenantRoomIds.has(rid))return;
+    // Skip bookings on long-term contract rooms
+    if(longTermRoomIdsCsv.has(rid))return;
     const effectiveCo=getEffectiveCompany(b);
     // Apply company filter — filter against effective (billing) company
     if(companyFilterName&&effectiveCo!==companyFilterName)return;
@@ -2423,6 +2476,24 @@ function exportInvoicingCSV(companyFilterName){
     ]);
   });
 
+  // Long-term per-room contracts
+  Object.keys(longTermByRoomIdCsv).forEach(rid=>{
+    const lt=longTermByRoomIdCsv[rid];
+    if(companyFilterName&&lt.company!==companyFilterName)return;
+    rows.push([
+      lt.company+' — '+(lt.room.Title||''),
+      '',
+      lt.company,
+      lt.room.Title||'',
+      '',
+      '',
+      lt.days,
+      lt.price,
+      lt.total,
+      'Långtid: '+lt.detailLabel
+    ]);
+  });
+
   // Percent-based fee lines (by effective/billing company)
   Object.keys(companyNightSum).forEach(c=>{
     const pct=getPercentFeeRate(c,propTitleForPercent);
@@ -2455,7 +2526,7 @@ function exportInvoicingCSV(companyFilterName){
 }
 
 // ============================================================
-// ADD GUEST FROM BOOKING (v13.19)
+// ADD GUEST FROM BOOKING (v13.20.1)
 // ============================================================
 function addBookingToGuests(bookingId){
   if(!can('edit_bookings')){alert('You do not have permission to add guests.');return}
@@ -2480,7 +2551,7 @@ function addBookingToGuests(bookingId){
 }
 
 // ============================================================
-// GUEST BOOKINGS HISTORY (v13.19)
+// GUEST BOOKINGS HISTORY (v13.20.1)
 // ============================================================
 function showGuestBookings(name){
   if(!name)return;
@@ -2552,7 +2623,7 @@ function showGuestBookings(name){
 }
 
 // ============================================================
-// HOURS IMPORT (v13.19)
+// HOURS IMPORT (v13.20.1)
 // ============================================================
 let importHoursData=[];
 
@@ -2702,7 +2773,7 @@ async function runImportHours(){
 }
 
 // ============================================================
-// CLEANING DIAGNOSTICS (v13.19)
+// CLEANING DIAGNOSTICS (v13.20.1)
 // ============================================================
 function showCleaningDiagnostics(){
   const today=new Date();today.setHours(0,0,0,0);
@@ -2814,7 +2885,7 @@ function showCleaningDiagnostics(){
 }
 
 // ============================================================
-// BATTERY REFRESH (v13.19)
+// BATTERY REFRESH (v13.20.1)
 // ============================================================
 const BATTERY_FILE_PATH='Batteristatus/RoomBattery.csv';
 
@@ -2893,7 +2964,7 @@ async function refreshBatteryStatus(){
 }
 
 // ============================================================
-// COMPANIES MANAGEMENT (v13.19)
+// COMPANIES MANAGEMENT (v13.20.1)
 // ============================================================
 let editingCompanyId=null;
 
@@ -3103,7 +3174,7 @@ async function quickAddCompany(name){
 }
 
 // ============================================================
-// BRREG LOOKUP (v13.19)
+// BRREG LOOKUP (v13.20.1)
 // ============================================================
 // Fetches company information from Brønnøysundregistrene open API.
 // https://data.brreg.no/enhetsregisteret/api/enheter/{orgnr}
@@ -3171,7 +3242,7 @@ async function lookupBrreg(){
 }
 
 // ============================================================
-// PDF EXPORT VIA PRINT (v13.19)
+// PDF EXPORT VIA PRINT (v13.20.1)
 // ============================================================
 // Opens a print-friendly window containing the same data as exportInvoicingCSV.
 // Browser's print dialog allows "Save as PDF" as the destination.
@@ -3211,6 +3282,15 @@ function exportInvoicingPDF(companyFilterName){
   const fullTenantRoomIds=new Set(
     allRooms.filter(r=>fullTenantByPropId[r.PropertyLookupId]).map(r=>r.id)
   );
+  // LongTerm contracts per room
+  const longTermByRoomIdPdf={};
+  allRooms.forEach(r=>{
+    if(!currentRoomIds.has(r.id))return;
+    if(fullTenantRoomIds.has(r.id))return;
+    const lt=computeLongTermForRoomPeriod(r,fromDate,toDate);
+    if(lt)longTermByRoomIdPdf[r.id]=lt;
+  });
+  const longTermRoomIdsPdf=new Set(Object.keys(longTermByRoomIdPdf));
 
   // Collect line items — grouped by effective billing company
   const groups={};
@@ -3221,6 +3301,7 @@ function exportInvoicingPDF(companyFilterName){
     if(!b.Check_In)return;
     if(b.Status==='Cancelled')return;
     if(fullTenantRoomIds.has(rid))return;
+    if(longTermRoomIdsPdf.has(rid))return;
     const effectiveCo=getEffectiveCompany(b);
     if(companyFilterName&&effectiveCo!==companyFilterName)return;
     const ci=new Date(b.Check_In);ci.setHours(0,0,0,0);
@@ -3231,7 +3312,7 @@ function exportInvoicingPDF(companyFilterName){
     const room=allRooms.find(r=>r.id===rid);
     const origCo=(b.Company||'').trim();
     const key=effectiveCo||'(uten firma)';
-    if(!groups[key])groups[key]={nights:[],fees:[],percent:null,fullTenant:null};
+    if(!groups[key])groups[key]={nights:[],fees:[],percent:null,fullTenant:null,longTerm:[]};
     if(nights>0){
       groups[key].nights.push({
         name:b.Person_Name||'',guestCompany:origCo,effectiveCo,
@@ -3261,7 +3342,7 @@ function exportInvoicingPDF(companyFilterName){
     const pct=getPercentFeeRate(c,propTitleForPercent);
     if(pct>0){
       const feeAmount=Math.round(companyNightSum[c]*pct);
-      if(!groups[c])groups[c]={nights:[],fees:[],percent:null,fullTenant:null};
+      if(!groups[c])groups[c]={nights:[],fees:[],percent:null,fullTenant:null,longTerm:[]};
       groups[c].percent={rate:pct,base:companyNightSum[c],amount:feeAmount};
     }
   });
@@ -3271,8 +3352,23 @@ function exportInvoicingPDF(companyFilterName){
     if(companyFilterName&&ft.company!==companyFilterName)return;
     const prop=properties.find(p=>String(p.id)===String(pid));
     const key=ft.company;
-    if(!groups[key])groups[key]={nights:[],fees:[],percent:null,fullTenant:null};
+    if(!groups[key])groups[key]={nights:[],fees:[],percent:null,fullTenant:null,longTerm:[]};
     groups[key].fullTenant={property:prop?prop.Title:'',rooms:ft.rooms,days:ft.days,rate:ft.rate,total:ft.total,detailLabel:ft.detailLabel};
+  });
+  // Long-term per-room contracts
+  Object.keys(longTermByRoomIdPdf).forEach(rid=>{
+    const lt=longTermByRoomIdPdf[rid];
+    if(companyFilterName&&lt.company!==companyFilterName)return;
+    const key=lt.company;
+    if(!groups[key])groups[key]={nights:[],fees:[],percent:null,fullTenant:null,longTerm:[]};
+    if(!groups[key].longTerm)groups[key].longTerm=[];
+    groups[key].longTerm.push({
+      roomTitle:lt.room.Title||'',
+      price:lt.price,
+      total:lt.total,
+      detailLabel:lt.detailLabel,
+      isMonthly:lt.isMonthly
+    });
   });
 
   const groupKeys=Object.keys(groups).sort();
@@ -3299,6 +3395,28 @@ function exportInvoicingPDF(companyFilterName){
       const ft=g.fullTenant;
       groupTotal+=ft.total;
       tableRows+='<tr class="ft-row"><td colspan="4"><strong>🔒 Full-tenant lease — '+escapeHtml(ft.property)+'</strong><br><small>'+escapeHtml(ft.detailLabel||'')+'</small></td><td class="num"><strong>'+fmtKr(ft.total)+'</strong></td></tr>';
+    }
+
+    // Long-term per-room contracts: summary + collapsible detail rows
+    if(g.longTerm&&g.longTerm.length){
+      const ltTotal=g.longTerm.reduce((s,lt)=>s+lt.total,0);
+      groupTotal+=ltTotal;
+      const sectionId='lt-'+escapeHtml(key).replace(/[^a-zA-Z0-9]/g,'_');
+      // Summary row — clickable for screen, always shows on print
+      tableRows+='<tr class="lt-row lt-summary" onclick="document.querySelectorAll(\'.'+sectionId+'\').forEach(el=>el.classList.toggle(\'lt-hidden\'))">'
+        +'<td colspan="4"><strong>🔑 Långtidsleie ('+g.longTerm.length+' rom)</strong> <span class="muted no-print">▼ klikk for detaljer</span></td>'
+        +'<td class="num"><strong>'+fmtKr(ltTotal)+'</strong></td>'
+        +'</tr>';
+      // Detail rows — hidden by default on screen, always shown on print
+      g.longTerm.forEach(lt=>{
+        tableRows+='<tr class="lt-row lt-detail '+sectionId+' lt-hidden">'
+          +'<td style="padding-left:24px"><small>↳ '+escapeHtml(lt.roomTitle)+'</small></td>'
+          +'<td><small>'+escapeHtml(lt.roomTitle)+'</small></td>'
+          +'<td><small>'+escapeHtml(lt.detailLabel||'')+'</small></td>'
+          +'<td class="num"><small>'+fmtKr(lt.price)+(lt.isMonthly?'/mnd':'/dag')+'</small></td>'
+          +'<td class="num"><small>'+fmtKr(lt.total)+'</small></td>'
+          +'</tr>';
+      });
     }
 
     // Night bookings
@@ -3362,6 +3480,11 @@ function exportInvoicingPDF(companyFilterName){
     +'.num{text-align:right;font-variant-numeric:tabular-nums}'
     +'.muted{color:#888;font-size:9pt}'
     +'.ft-row{background:rgba(29,158,117,.08)}'
+    +'.lt-row{background:rgba(14,165,165,.07)}'
+    +'.lt-summary{cursor:pointer}'
+    +'.lt-summary:hover{background:rgba(14,165,165,.14)}'
+    +'.lt-hidden{display:none}'
+    +'@media print{.lt-hidden{display:table-row !important}}'
     +'.fee-row{background:rgba(123,97,255,.04);color:#555}'
     +'.pct-row{background:rgba(239,159,39,.08)}'
     +'tfoot td{border-top:1.5px solid #1a1a1a;border-bottom:0;padding-top:8px;font-size:11pt}'
