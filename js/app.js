@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v13.20.1 — app.js (Core)
+// 2GM Booking v13.20.2 — app.js (Core)
 // Auth, Graph API, Data, Rendering, Bookings
 // ============================================================
 
@@ -1485,7 +1485,7 @@ msalInstance.initialize().then(()=>{
 });
 
 // ============================================================
-// AUTO-REFRESH (v13.20.1)
+// AUTO-REFRESH (v13.20.2)
 // ============================================================
 
 // Build a fingerprint that tells us if data has changed without full reload
@@ -1638,5 +1638,17 @@ function showFullTenantDebug(){
     lines.push('  Total: '+ltCount+' rooms · '+ltTotal.toLocaleString('nb-NO')+' kr');
   }
   console.log(lines.join('\n'));
-  alert(lines.join('\n'));
+  // Use a popup window for long output (alert() truncates above ~1024 chars in Chrome)
+  const txt=lines.join('\n');
+  if(txt.length>800){
+    const w=window.open('','_blank','width=700,height=600');
+    if(w){
+      w.document.write('<pre style="font-family:Consolas,monospace;font-size:12px;white-space:pre-wrap;padding:20px">'+txt.replace(/</g,'&lt;')+'</pre>');
+      w.document.close();
+    }else{
+      alert(txt);
+    }
+  }else{
+    alert(txt);
+  }
 }

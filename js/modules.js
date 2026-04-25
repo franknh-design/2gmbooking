@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v13.20.1 — modules.js
+// 2GM Booking v13.20.2 — modules.js
 // Hours, Archive, Import/Export, Admin (checkbox permissions)
 // ============================================================
 
@@ -943,7 +943,7 @@ async function deleteRate(id){
 }
 
 // ============================================================
-// PERSONS / CUSTOMERS (v13.20.1)
+// PERSONS / CUSTOMERS (v13.20.2)
 // ============================================================
 let editingPersonId=null;
 
@@ -1240,7 +1240,7 @@ function onPersonNameInput(){
 }
 
 // ============================================================
-// CHARTS (v13.20.1) — pure SVG, no dependencies
+// CHARTS (v13.20.2) — pure SVG, no dependencies
 // ============================================================
 
 // Reusable bar chart: data = [{label, value, subtitle?}]
@@ -1549,7 +1549,7 @@ function renderHoursCharts(filtered){
 }
 
 // ============================================================
-// CLEANING EFFICIENCY ANALYSIS (v13.20.1)
+// CLEANING EFFICIENCY ANALYSIS (v13.20.2)
 // ============================================================
 // Compares cleaner hours against guest-nights per property, per week/month.
 // USE WITH CAUTION: Hours include breaks, transport, repairs — not just cleaning.
@@ -1902,7 +1902,7 @@ function _dateFromIsoWeek(year,week){
 }
 
 // ============================================================
-// MORE MENU (v13.20.1)
+// MORE MENU (v13.20.2)
 // ============================================================
 function toggleMoreMenu(e){
   if(e){e.stopPropagation();e.preventDefault()}
@@ -1929,7 +1929,7 @@ function closeMoreMenu(){
 }
 
 // ============================================================
-// FAKTURAGRUNNLAG / INVOICING (v13.20.1)
+// FAKTURAGRUNNLAG / INVOICING (v13.20.2)
 // ============================================================
 let invoicingInitialized=false;
 
@@ -2526,7 +2526,7 @@ function exportInvoicingCSV(companyFilterName){
 }
 
 // ============================================================
-// ADD GUEST FROM BOOKING (v13.20.1)
+// ADD GUEST FROM BOOKING (v13.20.2)
 // ============================================================
 function addBookingToGuests(bookingId){
   if(!can('edit_bookings')){alert('You do not have permission to add guests.');return}
@@ -2551,7 +2551,7 @@ function addBookingToGuests(bookingId){
 }
 
 // ============================================================
-// GUEST BOOKINGS HISTORY (v13.20.1)
+// GUEST BOOKINGS HISTORY (v13.20.2)
 // ============================================================
 function showGuestBookings(name){
   if(!name)return;
@@ -2623,7 +2623,7 @@ function showGuestBookings(name){
 }
 
 // ============================================================
-// HOURS IMPORT (v13.20.1)
+// HOURS IMPORT (v13.20.2)
 // ============================================================
 let importHoursData=[];
 
@@ -2773,7 +2773,7 @@ async function runImportHours(){
 }
 
 // ============================================================
-// CLEANING DIAGNOSTICS (v13.20.1)
+// CLEANING DIAGNOSTICS (v13.20.2)
 // ============================================================
 function showCleaningDiagnostics(){
   const today=new Date();today.setHours(0,0,0,0);
@@ -2885,7 +2885,7 @@ function showCleaningDiagnostics(){
 }
 
 // ============================================================
-// BATTERY REFRESH (v13.20.1)
+// BATTERY REFRESH (v13.20.2)
 // ============================================================
 const BATTERY_FILE_PATH='Batteristatus/RoomBattery.csv';
 
@@ -2964,7 +2964,7 @@ async function refreshBatteryStatus(){
 }
 
 // ============================================================
-// COMPANIES MANAGEMENT (v13.20.1)
+// COMPANIES MANAGEMENT (v13.20.2)
 // ============================================================
 let editingCompanyId=null;
 
@@ -3174,7 +3174,7 @@ async function quickAddCompany(name){
 }
 
 // ============================================================
-// BRREG LOOKUP (v13.20.1)
+// BRREG LOOKUP (v13.20.2)
 // ============================================================
 // Fetches company information from Brønnøysundregistrene open API.
 // https://data.brreg.no/enhetsregisteret/api/enheter/{orgnr}
@@ -3242,7 +3242,7 @@ async function lookupBrreg(){
 }
 
 // ============================================================
-// PDF EXPORT VIA PRINT (v13.20.1)
+// PDF EXPORT VIA PRINT (v13.20.2)
 // ============================================================
 // Opens a print-friendly window containing the same data as exportInvoicingCSV.
 // Browser's print dialog allows "Save as PDF" as the destination.
