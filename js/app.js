@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v14.0.8 — app.js (Core)
+// 2GM Booking v14.0.9 — app.js (Core)
 // Auth, Graph API, Data, Rendering, Bookings
 // ============================================================
 
@@ -209,7 +209,36 @@ async function createListItem(listName,fields){
   console.log('[SharePoint] CREATE '+listName+' payload:',JSON.parse(JSON.stringify(final)));
   console.log('[SharePoint] CREATE '+listName+' field names:',Object.keys(final).join(', '));
   console.log('[SharePoint] Known columns:',[..._knownColumnsByList[listName]||[]].sort().join(', '));
-  return graphPost('/sites/'+s+'/lists/'+lid+'/items',{fields:final});
+  try{
+    return await graphPost('/sites/'+s+'/lists/'+lid+'/items',{fields:final});
+  }catch(e){
+    if(String(e.message||'').indexOf('500')<0&&String(e.message||'').indexOf('General exception')<0)throw e;
+    // 500 with no useful info → automatically bisect to find offending field
+    console.warn('[BISECT] 500 received. Identifying problematic field by removing one at a time...');
+    const keys=Object.keys(final);
+    let problemField=null;
+    for(let i=0;i<keys.length;i++){
+      const testFields={...final};
+      delete testFields[keys[i]];
+      console.log('[BISECT] Trying without "'+keys[i]+'"...');
+      try{
+        const r=await graphPost('/sites/'+s+'/lists/'+lid+'/items',{fields:testFields});
+        // Success! This field was the problem. But we also created an item — delete it.
+        problemField=keys[i];
+        console.warn('[BISECT] ✓ Save succeeded WITHOUT "'+keys[i]+'". This is the problematic field. Cleaning up test item id='+r.id);
+        try{await graphDelete('/sites/'+s+'/lists/'+lid+'/items/'+r.id)}catch(e2){console.warn('[BISECT] Could not delete test item '+r.id+' — please remove manually')}
+        break;
+      }catch(e2){
+        if(String(e2.message||'').indexOf('500')<0&&String(e2.message||'').indexOf('General exception')<0){
+          console.log('[BISECT] Still failed but with different error: '+e2.message);
+        }
+      }
+    }
+    if(problemField){
+      throw new Error('Save failed. Problematic field identified: "'+problemField+'" with value: '+JSON.stringify(final[problemField])+'. Check SharePoint column type/configuration.');
+    }
+    throw new Error('Save failed with 500 and bisect could not identify a single field. May be a combination of fields or schema issue. Original error: '+e.message);
+  }
 }
 async function updateListItem(listName,itemId,fields){
   const cleaned=await _stripUnknownFieldsAsync(listName,fields);
@@ -1564,7 +1593,7 @@ msalInstance.initialize().then(()=>{
 });
 
 // ============================================================
-// AUTO-REFRESH (v14.0.8)
+// AUTO-REFRESH (v14.0.9)
 // ============================================================
 
 // Build a fingerprint that tells us if data has changed without full reload
