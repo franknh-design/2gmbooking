@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v13.18 — app.js (Core)
+// 2GM Booking v13.19 — app.js (Core)
 // Auth, Graph API, Data, Rendering, Bookings
 // ============================================================
 
@@ -621,10 +621,10 @@ function computeFullTenantForPeriod(property,fromDate,toDate){
   if(rooms===0)return null;
   // Two pricing models:
   // A) Property has FullTenant_RatePerRoom set → uniform rate × rooms (Rigg 44 style)
-  // B) Property rate is empty → sum each room's NightlyRate (Strandveien style, per-room)
+  // B) Property rate is empty → sum each room's FullTenant_RoomPrice (Strandveien style, per-room)
   const useUniformRate=propertyRate>0;
-  const sumRoomNightlyRates=propRooms.reduce((s,r)=>s+(Number(r.NightlyRate)||0),0);
-  const usePerRoomRates=!useUniformRate&&sumRoomNightlyRates>0;
+  const sumRoomFullTenantPrices=propRooms.reduce((s,r)=>s+(Number(r.FullTenant_RoomPrice)||0),0);
+  const usePerRoomRates=!useUniformRate&&sumRoomFullTenantPrices>0;
   if(!useUniformRate&&!usePerRoomRates)return null;
   let total,unitLabel,detailLabel,rate;
   // Pre-compute month fraction for both monthly modes
@@ -658,17 +658,17 @@ function computeFullTenantForPeriod(property,fromDate,toDate){
       detailLabel=rooms+' rom × '+rate.toLocaleString('nb-NO')+' kr/dag × '+days+' dager';
     }
   }else{
-    // Per-room pricing model: sum each room's NightlyRate
-    rate=sumRoomNightlyRates; // total per day for all rooms combined
-    const roomsWithRate=propRooms.filter(r=>Number(r.NightlyRate)>0).length;
+    // Per-room pricing model: sum each room's FullTenant_RoomPrice
+    rate=sumRoomFullTenantPrices; // total per unit (day or month) for all rooms combined
+    const roomsWithRate=propRooms.filter(r=>Number(r.FullTenant_RoomPrice)>0).length;
     if(isMonthly){
-      total=Math.round(sumRoomNightlyRates*monthFraction*100)/100;
+      total=Math.round(sumRoomFullTenantPrices*monthFraction*100)/100;
       unitLabel='/mnd (per rom)';
-      detailLabel='Sum '+roomsWithRate+'/'+rooms+' rom-priser ('+sumRoomNightlyRates.toLocaleString('nb-NO')+' kr/mnd) × '+monthFraction.toFixed(3)+' mnd';
+      detailLabel='Sum '+roomsWithRate+'/'+rooms+' rom-priser ('+sumRoomFullTenantPrices.toLocaleString('nb-NO')+' kr/mnd) × '+monthFraction.toFixed(3)+' mnd';
     }else{
-      total=Math.round(sumRoomNightlyRates*days*100)/100;
+      total=Math.round(sumRoomFullTenantPrices*days*100)/100;
       unitLabel='/dag (per rom)';
-      detailLabel='Sum '+roomsWithRate+'/'+rooms+' rom-priser ('+sumRoomNightlyRates.toLocaleString('nb-NO')+' kr/dag) × '+days+' dager';
+      detailLabel='Sum '+roomsWithRate+'/'+rooms+' rom-priser ('+sumRoomFullTenantPrices.toLocaleString('nb-NO')+' kr/dag) × '+days+' dager';
     }
   }
   return{days,rooms,rate,total,company,effectiveFrom:effFrom,effectiveTo:effTo,isMonthly,unitLabel,detailLabel,usePerRoomRates};
@@ -1422,7 +1422,7 @@ msalInstance.initialize().then(()=>{
 });
 
 // ============================================================
-// AUTO-REFRESH (v13.18)
+// AUTO-REFRESH (v13.19)
 // ============================================================
 
 // Build a fingerprint that tells us if data has changed without full reload
