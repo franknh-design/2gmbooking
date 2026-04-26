@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v14.5.2 — modules.js
+// 2GM Booking v14.5.4 — modules.js
 // Hours, Archive, Import/Export, Admin (checkbox permissions)
 // ============================================================
 
@@ -44,7 +44,8 @@ function renderIncoming(){
   if(!upcoming.length){body.innerHTML='<tr><td colspan="7" class="loading">No upcoming bookings</td></tr>';return}
   body.innerHTML=upcoming.map(b=>{
     const room=rooms.find(r=>r.id===String(b.RoomLookupId));const roomTitle=room?room.Title:'?';
-    const daysUntil=Math.round((new Date(b.Check_In)-today)/864e5);let badge='';
+    const ciDate=new Date(b.Check_In);ciDate.setHours(0,0,0,0);
+    const daysUntil=Math.round((ciDate-today)/864e5);let badge='';
     if(daysUntil<=3)badge='<span class="pill danger">'+daysUntil+'d</span>';
     else if(daysUntil<=7)badge='<span class="pill warning">'+daysUntil+'d</span>';
     return'<tr onclick="showDetail(\''+(room?room.id:'')+'\')">'
@@ -988,7 +989,7 @@ async function deleteRate(id){
 }
 
 // ============================================================
-// PERSONS / CUSTOMERS (v14.5.2)
+// PERSONS / CUSTOMERS (v14.5.4)
 // ============================================================
 let editingPersonId=null;
 
@@ -1288,7 +1289,7 @@ function onPersonNameInput(){
 }
 
 // ============================================================
-// CHARTS (v14.5.2) — pure SVG, no dependencies
+// CHARTS (v14.5.4) — pure SVG, no dependencies
 // ============================================================
 
 // Reusable bar chart: data = [{label, value, subtitle?}]
@@ -1597,7 +1598,7 @@ function renderHoursCharts(filtered){
 }
 
 // ============================================================
-// CLEANING EFFICIENCY ANALYSIS (v14.5.2)
+// CLEANING EFFICIENCY ANALYSIS (v14.5.4)
 // ============================================================
 // Compares cleaner hours against guest-nights per property, per week/month.
 // USE WITH CAUTION: Hours include breaks, transport, repairs — not just cleaning.
@@ -1950,7 +1951,7 @@ function _dateFromIsoWeek(year,week){
 }
 
 // ============================================================
-// MORE MENU (v14.5.2)
+// MORE MENU (v14.5.4)
 // ============================================================
 function toggleMoreMenu(e){
   if(e){e.stopPropagation();e.preventDefault()}
@@ -1977,7 +1978,7 @@ function closeMoreMenu(){
 }
 
 // ============================================================
-// FAKTURAGRUNNLAG / INVOICING (v14.5.2)
+// FAKTURAGRUNNLAG / INVOICING (v14.5.4)
 // ============================================================
 let invoicingInitialized=false;
 
@@ -2178,7 +2179,7 @@ function renderInvoicing(){
     });
   });
 
-  // LONG-TERM CONTRACTS (per-room): segmented by guests/gaps (v14.5.2)
+  // LONG-TERM CONTRACTS (per-room): segmented by guests/gaps (v14.5.4)
   Object.keys(longTermByRoomId).forEach(rid=>{
     const room=allRooms.find(r=>r.id===rid);
     if(!room)return;
@@ -2537,7 +2538,7 @@ function exportInvoicingCSV(companyFilterName){
     ]);
   });
 
-  // Long-term per-room contracts (v14.5.2 segmented)
+  // Long-term per-room contracts (v14.5.4 segmented)
   Object.keys(longTermByRoomIdCsv).forEach(rid=>{
     const lt=longTermByRoomIdCsv[rid];
     if(companyFilterName&&lt.company!==companyFilterName)return;
@@ -2594,7 +2595,7 @@ function exportInvoicingCSV(companyFilterName){
 }
 
 // ============================================================
-// ADD GUEST FROM BOOKING (v14.5.2)
+// ADD GUEST FROM BOOKING (v14.5.4)
 // ============================================================
 function addBookingToGuests(bookingId){
   if(!can('edit_bookings')){alert('You do not have permission to add guests.');return}
@@ -2619,7 +2620,7 @@ function addBookingToGuests(bookingId){
 }
 
 // ============================================================
-// GUEST BOOKINGS HISTORY (v14.5.2)
+// GUEST BOOKINGS HISTORY (v14.5.4)
 // ============================================================
 function showGuestBookings(name){
   if(!name)return;
@@ -2691,7 +2692,7 @@ function showGuestBookings(name){
 }
 
 // ============================================================
-// HOURS IMPORT (v14.5.2)
+// HOURS IMPORT (v14.5.4)
 // ============================================================
 let importHoursData=[];
 
@@ -2841,7 +2842,7 @@ async function runImportHours(){
 }
 
 // ============================================================
-// CLEANING DIAGNOSTICS (v14.5.2)
+// CLEANING DIAGNOSTICS (v14.5.4)
 // ============================================================
 function showCleaningDiagnostics(){
   const today=new Date();today.setHours(0,0,0,0);
@@ -2953,7 +2954,7 @@ function showCleaningDiagnostics(){
 }
 
 // ============================================================
-// BATTERY REFRESH (v14.5.2)
+// BATTERY REFRESH (v14.5.4)
 // ============================================================
 const BATTERY_FILE_PATH='Batteristatus/RoomBattery.csv';
 
@@ -3025,7 +3026,7 @@ async function refreshBatteryStatus(){
     if(notFound.length)summary+='\n\nRooms not found in system: '+notFound.slice(0,20).join(', ')+(notFound.length>20?' (and '+(notFound.length-20)+' more)':'');
     alert(summary);
     if(typeof renderFloors==='function')renderFloors();
-    // Show low-battery alert (v14.5.2) — locks under 30%
+    // Show low-battery alert (v14.5.4) — locks under 30%
     showLowBatteryAlert();
     if(typeof updateStats==='function')updateStats();
   }catch(e){
@@ -3036,7 +3037,7 @@ async function refreshBatteryStatus(){
 }
 
 // ============================================================
-// COMPANIES MANAGEMENT (v14.5.2)
+// COMPANIES MANAGEMENT (v14.5.4)
 // ============================================================
 let editingCompanyId=null;
 
@@ -3264,7 +3265,7 @@ async function quickAddCompany(name){
 }
 
 // ============================================================
-// BRREG LOOKUP (v14.5.2)
+// BRREG LOOKUP (v14.5.4)
 // ============================================================
 // Fetches company information from Brønnøysundregistrene open API.
 // https://data.brreg.no/enhetsregisteret/api/enheter/{orgnr}
@@ -3332,7 +3333,7 @@ async function lookupBrreg(){
 }
 
 // ============================================================
-// PDF EXPORT VIA PRINT (v14.5.2)
+// PDF EXPORT VIA PRINT (v14.5.4)
 // ============================================================
 // Opens a print-friendly window containing the same data as exportInvoicingCSV.
 // Browser's print dialog allows "Save as PDF" as the destination.
@@ -3445,7 +3446,7 @@ function exportInvoicingPDF(companyFilterName){
     if(!groups[key])groups[key]={nights:[],fees:[],percent:null,fullTenant:null,longTerm:[]};
     groups[key].fullTenant={property:prop?prop.Title:'',rooms:ft.rooms,days:ft.days,rate:ft.rate,total:ft.total,detailLabel:ft.detailLabel};
   });
-  // Long-term per-room contracts (v14.5.2 segmented)
+  // Long-term per-room contracts (v14.5.4 segmented)
   Object.keys(longTermByRoomIdPdf).forEach(rid=>{
     const lt=longTermByRoomIdPdf[rid];
     if(companyFilterName&&lt.company!==companyFilterName)return;
@@ -3498,7 +3499,7 @@ function exportInvoicingPDF(companyFilterName){
       tableRows+='<tr class="ft-row"><td colspan="4"><strong>🔒 Full-tenant lease — '+escapeHtml(ft.property)+'</strong><br><small>'+escapeHtml(ft.detailLabel||'')+'</small></td><td class="num"><strong>'+fmtKr(ft.total)+'</strong></td></tr>';
     }
 
-    // Long-term per-room contracts (v14.5.2 segmented): summary + collapsible detail rows
+    // Long-term per-room contracts (v14.5.4 segmented): summary + collapsible detail rows
     if(g.longTerm&&g.longTerm.length){
       const ltTotal=g.longTerm.reduce((s,lt)=>s+lt.total,0);
       groupTotal+=ltTotal;
@@ -3625,7 +3626,7 @@ function exportInvoicingPDF(companyFilterName){
 }
 
 // ============================================================
-// PRICING TABS — Full-tenant + Long-term editors (v14.5.2)
+// PRICING TABS — Full-tenant + Long-term editors (v14.5.4)
 // ============================================================
 function switchPricingTab(tab){
   document.querySelectorAll('.pricing-tab').forEach(b=>{
@@ -3881,7 +3882,7 @@ async function bulkApplyLongTermContract(){
 }
 
 // ============================================================
-// BACKUP & RESTORE (v14.5.2)
+// BACKUP & RESTORE (v14.5.4)
 // ============================================================
 const BACKUP_LISTS=['Properties','Rooms','Bookings','Persons','Cleaning_Log','Hours','Users','Rates','Companies'];
 
@@ -3892,7 +3893,7 @@ async function exportBackup(){
   try{
     const data={
       meta:{
-        appVersion:'v14.5.2',
+        appVersion:'v14.5.4',
         timestamp:new Date().toISOString(),
         exportedBy:currentUser.email||'unknown',
         siteId:siteId
@@ -4057,7 +4058,7 @@ async function restoreSingleItem(listName,idx){
 }
 
 // ============================================================
-// COMPANY MERGE (v14.5.2)
+// COMPANY MERGE (v14.5.4)
 // ============================================================
 function openMergeCompanies(){
   if(!can('manage_companies')&&!can('admin')){alert('Permission required');return}
@@ -4268,35 +4269,38 @@ async function deleteListItem(listName,itemId){
 }
 
 // ============================================================
-// MESSAGING — SMS & E-post (v14.5.2)
+// MESSAGING — SMS & E-post (v14.5.4)
 // ============================================================
-const DEFAULT_SMS_TEMPLATE=`Hei {first_name}!
-Velkommen til {property}.
-Rom: {room}, dørkode: {room_door_code}
+const DEFAULT_SMS_TEMPLATE=`Hello {first_name},
+Welcome to {property}.
+Room: {room}, door code: {room_door_code}
 WiFi: {wifi_ssid} / {wifi_password}
+{floor_info}
 {welcome_message}
-- Frank, 2GM`;
+Best regards, Frank — 2GM`;
 
-const DEFAULT_EMAIL_TEMPLATE=`Hei {first_name},
+const DEFAULT_EMAIL_TEMPLATE=`Dear {first_name},
 
-Velkommen til {property}!
+Welcome to {property}.
 
-Rom: {room}
-Dørkode: {room_door_code}
+Room: {room}
+Door code: {room_door_code}
 WiFi: {wifi_ssid}
-WiFi-passord: {wifi_password}
-Sjekk inn: {check_in_date}
+WiFi password: {wifi_password}
+Check-in date: {check_in_date}
+
+{floor_info}
 
 {welcome_message}
 
-Ha en hyggelig opphold.
+We hope you enjoy your stay.
 
-Vennlig hilsen,
+Best regards,
 {my_name}
 {my_phone}
 {my_email}`;
 
-const DEFAULT_EMAIL_SUBJECT='Velkommen til {property} — rom {room}';
+const DEFAULT_EMAIL_SUBJECT='Welcome to {property} — room {room}';
 
 function _renderTemplate(template,vars){
   let out=template||'';
@@ -4315,15 +4319,23 @@ function _buildMessageVars(booking){
   const checkIn=booking.Check_In?formatDate(booking.Check_In):'';
   // Find person record to get phone/email
   const person=allPersons.find(p=>(p.Name||p.Title||'').toLowerCase()===fullName.toLowerCase());
+  // Floor-specific info (v14.5.4): pick Floor1_Info or Floor2_Info based on room.Floor
+  let floorInfo='';
+  if(property&&room){
+    const floor=String(room.Floor||'').trim();
+    if(floor==='1')floorInfo=property.Floor1_Info||'';
+    else if(floor==='2')floorInfo=property.Floor2_Info||'';
+  }
   return{
     guest_name:fullName,
     first_name:firstName,
     property:property?property.Title:'',
     room:room?room.Title:'',
-    room_door_code:room?room.Door_Code||'(ikke satt)':'',
-    wifi_ssid:property?property.WiFi_SSID||'(ikke satt)':'',
-    wifi_password:property?property.WiFi_Password||'(ikke satt)':'',
+    room_door_code:room?room.Door_Code||'(not set)':'',
+    wifi_ssid:property?property.WiFi_SSID||'(not set)':'',
+    wifi_password:property?property.WiFi_Password||'(not set)':'',
     welcome_message:property?property.Welcome_Message||'':'',
+    floor_info:floorInfo,
     check_in_date:checkIn,
     my_name:'Frank Haugan',
     my_phone:'+47 99 10 10 41',
@@ -4504,19 +4516,39 @@ function loadTemplateForProperty(){
   document.getElementById('tmplWifiSsid').value=p.WiFi_SSID||'';
   document.getElementById('tmplWifiPwd').value=p.WiFi_Password||'';
   document.getElementById('tmplWelcome').value=p.Welcome_Message||'';
+  const f1=document.getElementById('tmplFloor1');if(f1)f1.value=p.Floor1_Info||'';
+  const f2=document.getElementById('tmplFloor2');if(f2)f2.value=p.Floor2_Info||'';
   document.getElementById('tmplSms').value=p.SMS_Template||DEFAULT_SMS_TEMPLATE;
   document.getElementById('tmplEmailSubj').value=p.Email_Subject_Template||DEFAULT_EMAIL_SUBJECT;
   document.getElementById('tmplEmail').value=p.Email_Template||DEFAULT_EMAIL_TEMPLATE;
+}
+
+// v14.5.4: Reset-knapper for hver mal
+function resetTemplateField(field){
+  if(field==='sms'){
+    if(!confirm('Reset SMS template to default for this property?\n\n(Click "Lagre for valgt eiendom" after to save.)'))return;
+    document.getElementById('tmplSms').value=DEFAULT_SMS_TEMPLATE;
+  }else if(field==='subject'){
+    if(!confirm('Reset Email subject to default for this property?\n\n(Click "Lagre for valgt eiendom" after to save.)'))return;
+    document.getElementById('tmplEmailSubj').value=DEFAULT_EMAIL_SUBJECT;
+  }else if(field==='email'){
+    if(!confirm('Reset Email template to default for this property?\n\n(Click "Lagre for valgt eiendom" after to save.)'))return;
+    document.getElementById('tmplEmail').value=DEFAULT_EMAIL_TEMPLATE;
+  }
 }
 
 async function saveTemplateForProperty(){
   const propId=document.getElementById('tmplPropSel').value;
   const p=properties.find(x=>String(x.id)===String(propId));
   if(!p)return;
+  const f1=document.getElementById('tmplFloor1');
+  const f2=document.getElementById('tmplFloor2');
   const fields={
     WiFi_SSID:document.getElementById('tmplWifiSsid').value.trim()||null,
     WiFi_Password:document.getElementById('tmplWifiPwd').value.trim()||null,
     Welcome_Message:document.getElementById('tmplWelcome').value||null,
+    Floor1_Info:f1?(f1.value||null):null,
+    Floor2_Info:f2?(f2.value||null):null,
     SMS_Template:document.getElementById('tmplSms').value||null,
     Email_Subject_Template:document.getElementById('tmplEmailSubj').value.trim()||null,
     Email_Template:document.getElementById('tmplEmail').value||null
@@ -4524,7 +4556,7 @@ async function saveTemplateForProperty(){
   try{
     await updateListItem('Properties',p.id,fields);
     Object.assign(p,fields);
-    _toast('✓ Mal lagret for '+p.Title);
+    _toast('✓ Template saved for '+p.Title);
   }catch(e){alert('Save failed: '+e.message)}
 }
 
@@ -4551,7 +4583,7 @@ function previewTemplate(kind){
 }
 
 // ============================================================
-// DOOR CODE GENERATOR — Phase 1 (v14.5.2)
+// DOOR CODE GENERATOR — Phase 1 (v14.5.4)
 // Generates 6-digit codes per room, stored in Rooms.Door_Code.
 // Tuya integration is Phase 2 (later).
 // ============================================================
@@ -4639,7 +4671,7 @@ function showDoorCodeDisplay(room,code){
 }
 
 // ============================================================
-// BATTERY DISPLAY (v14.5.2)
+// BATTERY DISPLAY (v14.5.4)
 // ============================================================
 function _formatRelativeTime(iso){
   if(!iso)return '(ukjent)';

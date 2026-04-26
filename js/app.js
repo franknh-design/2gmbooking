@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v14.5.2 — app.js (Core)
+// 2GM Booking v14.5.4 — app.js (Core)
 // Auth, Graph API, Data, Rendering, Bookings
 // ============================================================
 
@@ -440,7 +440,7 @@ async function loadProperties(){
       resetViewStateForPropertyChange();
       loadData();
     };
-    selectedProperty=null; // v14.5.2: default to "All properties" instead of first property
+    selectedProperty=null; // v14.5.4: default to "All properties" instead of first property
   }catch(e){console.error('Error loading properties:',e)}
 }
 
@@ -1732,7 +1732,7 @@ msalInstance.initialize().then(()=>{
 });
 
 // ============================================================
-// AUTO-REFRESH (v14.5.2)
+// AUTO-REFRESH (v14.5.4)
 // ============================================================
 
 // Build a fingerprint that tells us if data has changed without full reload
