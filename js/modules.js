@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v14.5 — modules.js
+// 2GM Booking v14.5.2 — modules.js
 // Hours, Archive, Import/Export, Admin (checkbox permissions)
 // ============================================================
 
@@ -988,7 +988,7 @@ async function deleteRate(id){
 }
 
 // ============================================================
-// PERSONS / CUSTOMERS (v14.5)
+// PERSONS / CUSTOMERS (v14.5.2)
 // ============================================================
 let editingPersonId=null;
 
@@ -1288,7 +1288,7 @@ function onPersonNameInput(){
 }
 
 // ============================================================
-// CHARTS (v14.5) — pure SVG, no dependencies
+// CHARTS (v14.5.2) — pure SVG, no dependencies
 // ============================================================
 
 // Reusable bar chart: data = [{label, value, subtitle?}]
@@ -1597,7 +1597,7 @@ function renderHoursCharts(filtered){
 }
 
 // ============================================================
-// CLEANING EFFICIENCY ANALYSIS (v14.5)
+// CLEANING EFFICIENCY ANALYSIS (v14.5.2)
 // ============================================================
 // Compares cleaner hours against guest-nights per property, per week/month.
 // USE WITH CAUTION: Hours include breaks, transport, repairs — not just cleaning.
@@ -1950,7 +1950,7 @@ function _dateFromIsoWeek(year,week){
 }
 
 // ============================================================
-// MORE MENU (v14.5)
+// MORE MENU (v14.5.2)
 // ============================================================
 function toggleMoreMenu(e){
   if(e){e.stopPropagation();e.preventDefault()}
@@ -1977,7 +1977,7 @@ function closeMoreMenu(){
 }
 
 // ============================================================
-// FAKTURAGRUNNLAG / INVOICING (v14.5)
+// FAKTURAGRUNNLAG / INVOICING (v14.5.2)
 // ============================================================
 let invoicingInitialized=false;
 
@@ -2178,7 +2178,7 @@ function renderInvoicing(){
     });
   });
 
-  // LONG-TERM CONTRACTS (per-room): segmented by guests/gaps (v14.5)
+  // LONG-TERM CONTRACTS (per-room): segmented by guests/gaps (v14.5.2)
   Object.keys(longTermByRoomId).forEach(rid=>{
     const room=allRooms.find(r=>r.id===rid);
     if(!room)return;
@@ -2537,7 +2537,7 @@ function exportInvoicingCSV(companyFilterName){
     ]);
   });
 
-  // Long-term per-room contracts (v14.5 segmented)
+  // Long-term per-room contracts (v14.5.2 segmented)
   Object.keys(longTermByRoomIdCsv).forEach(rid=>{
     const lt=longTermByRoomIdCsv[rid];
     if(companyFilterName&&lt.company!==companyFilterName)return;
@@ -2594,7 +2594,7 @@ function exportInvoicingCSV(companyFilterName){
 }
 
 // ============================================================
-// ADD GUEST FROM BOOKING (v14.5)
+// ADD GUEST FROM BOOKING (v14.5.2)
 // ============================================================
 function addBookingToGuests(bookingId){
   if(!can('edit_bookings')){alert('You do not have permission to add guests.');return}
@@ -2619,7 +2619,7 @@ function addBookingToGuests(bookingId){
 }
 
 // ============================================================
-// GUEST BOOKINGS HISTORY (v14.5)
+// GUEST BOOKINGS HISTORY (v14.5.2)
 // ============================================================
 function showGuestBookings(name){
   if(!name)return;
@@ -2691,7 +2691,7 @@ function showGuestBookings(name){
 }
 
 // ============================================================
-// HOURS IMPORT (v14.5)
+// HOURS IMPORT (v14.5.2)
 // ============================================================
 let importHoursData=[];
 
@@ -2841,7 +2841,7 @@ async function runImportHours(){
 }
 
 // ============================================================
-// CLEANING DIAGNOSTICS (v14.5)
+// CLEANING DIAGNOSTICS (v14.5.2)
 // ============================================================
 function showCleaningDiagnostics(){
   const today=new Date();today.setHours(0,0,0,0);
@@ -2953,7 +2953,7 @@ function showCleaningDiagnostics(){
 }
 
 // ============================================================
-// BATTERY REFRESH (v14.5)
+// BATTERY REFRESH (v14.5.2)
 // ============================================================
 const BATTERY_FILE_PATH='Batteristatus/RoomBattery.csv';
 
@@ -3025,7 +3025,7 @@ async function refreshBatteryStatus(){
     if(notFound.length)summary+='\n\nRooms not found in system: '+notFound.slice(0,20).join(', ')+(notFound.length>20?' (and '+(notFound.length-20)+' more)':'');
     alert(summary);
     if(typeof renderFloors==='function')renderFloors();
-    // Show low-battery alert (v14.5) — locks under 30%
+    // Show low-battery alert (v14.5.2) — locks under 30%
     showLowBatteryAlert();
     if(typeof updateStats==='function')updateStats();
   }catch(e){
@@ -3036,7 +3036,7 @@ async function refreshBatteryStatus(){
 }
 
 // ============================================================
-// COMPANIES MANAGEMENT (v14.5)
+// COMPANIES MANAGEMENT (v14.5.2)
 // ============================================================
 let editingCompanyId=null;
 
@@ -3264,7 +3264,7 @@ async function quickAddCompany(name){
 }
 
 // ============================================================
-// BRREG LOOKUP (v14.5)
+// BRREG LOOKUP (v14.5.2)
 // ============================================================
 // Fetches company information from Brønnøysundregistrene open API.
 // https://data.brreg.no/enhetsregisteret/api/enheter/{orgnr}
@@ -3332,7 +3332,7 @@ async function lookupBrreg(){
 }
 
 // ============================================================
-// PDF EXPORT VIA PRINT (v14.5)
+// PDF EXPORT VIA PRINT (v14.5.2)
 // ============================================================
 // Opens a print-friendly window containing the same data as exportInvoicingCSV.
 // Browser's print dialog allows "Save as PDF" as the destination.
@@ -3445,7 +3445,7 @@ function exportInvoicingPDF(companyFilterName){
     if(!groups[key])groups[key]={nights:[],fees:[],percent:null,fullTenant:null,longTerm:[]};
     groups[key].fullTenant={property:prop?prop.Title:'',rooms:ft.rooms,days:ft.days,rate:ft.rate,total:ft.total,detailLabel:ft.detailLabel};
   });
-  // Long-term per-room contracts (v14.5 segmented)
+  // Long-term per-room contracts (v14.5.2 segmented)
   Object.keys(longTermByRoomIdPdf).forEach(rid=>{
     const lt=longTermByRoomIdPdf[rid];
     if(companyFilterName&&lt.company!==companyFilterName)return;
@@ -3498,7 +3498,7 @@ function exportInvoicingPDF(companyFilterName){
       tableRows+='<tr class="ft-row"><td colspan="4"><strong>🔒 Full-tenant lease — '+escapeHtml(ft.property)+'</strong><br><small>'+escapeHtml(ft.detailLabel||'')+'</small></td><td class="num"><strong>'+fmtKr(ft.total)+'</strong></td></tr>';
     }
 
-    // Long-term per-room contracts (v14.5 segmented): summary + collapsible detail rows
+    // Long-term per-room contracts (v14.5.2 segmented): summary + collapsible detail rows
     if(g.longTerm&&g.longTerm.length){
       const ltTotal=g.longTerm.reduce((s,lt)=>s+lt.total,0);
       groupTotal+=ltTotal;
@@ -3625,7 +3625,7 @@ function exportInvoicingPDF(companyFilterName){
 }
 
 // ============================================================
-// PRICING TABS — Full-tenant + Long-term editors (v14.5)
+// PRICING TABS — Full-tenant + Long-term editors (v14.5.2)
 // ============================================================
 function switchPricingTab(tab){
   document.querySelectorAll('.pricing-tab').forEach(b=>{
@@ -3881,7 +3881,7 @@ async function bulkApplyLongTermContract(){
 }
 
 // ============================================================
-// BACKUP & RESTORE (v14.5)
+// BACKUP & RESTORE (v14.5.2)
 // ============================================================
 const BACKUP_LISTS=['Properties','Rooms','Bookings','Persons','Cleaning_Log','Hours','Users','Rates','Companies'];
 
@@ -3892,7 +3892,7 @@ async function exportBackup(){
   try{
     const data={
       meta:{
-        appVersion:'v14.5',
+        appVersion:'v14.5.2',
         timestamp:new Date().toISOString(),
         exportedBy:currentUser.email||'unknown',
         siteId:siteId
@@ -4057,7 +4057,7 @@ async function restoreSingleItem(listName,idx){
 }
 
 // ============================================================
-// COMPANY MERGE (v14.5)
+// COMPANY MERGE (v14.5.2)
 // ============================================================
 function openMergeCompanies(){
   if(!can('manage_companies')&&!can('admin')){alert('Permission required');return}
@@ -4268,7 +4268,7 @@ async function deleteListItem(listName,itemId){
 }
 
 // ============================================================
-// MESSAGING — SMS & E-post (v14.5)
+// MESSAGING — SMS & E-post (v14.5.2)
 // ============================================================
 const DEFAULT_SMS_TEMPLATE=`Hei {first_name}!
 Velkommen til {property}.
@@ -4551,7 +4551,7 @@ function previewTemplate(kind){
 }
 
 // ============================================================
-// DOOR CODE GENERATOR — Phase 1 (v14.5)
+// DOOR CODE GENERATOR — Phase 1 (v14.5.2)
 // Generates 6-digit codes per room, stored in Rooms.Door_Code.
 // Tuya integration is Phase 2 (later).
 // ============================================================
@@ -4639,7 +4639,7 @@ function showDoorCodeDisplay(room,code){
 }
 
 // ============================================================
-// BATTERY DISPLAY (v14.5)
+// BATTERY DISPLAY (v14.5.2)
 // ============================================================
 function _formatRelativeTime(iso){
   if(!iso)return '(ukjent)';

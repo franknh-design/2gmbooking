@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v14.5 — app.js (Core)
+// 2GM Booking v14.5.2 — app.js (Core)
 // Auth, Graph API, Data, Rendering, Bookings
 // ============================================================
 
@@ -440,14 +440,14 @@ async function loadProperties(){
       resetViewStateForPropertyChange();
       loadData();
     };
-    selectedProperty=properties[0];
+    selectedProperty=null; // v14.5.2: default to "All properties" instead of first property
   }catch(e){console.error('Error loading properties:',e)}
 }
 
 async function loadData(){
   _lastRefreshTime=Date.now();
   const isAll=selectedProperty===null;
-  document.getElementById('headerTitle').textContent='2GM Booking'+(isAll?' — All properties':(selectedProperty?' — '+selectedProperty.Title:''));
+  document.getElementById('headerTitle').textContent='2GM Eiendom AS – Booking'+(isAll?' — All properties':(selectedProperty?' — '+selectedProperty.Title:''));
   document.getElementById('floor1Body').innerHTML='<tr><td colspan="7" class="loading">Loading...</td></tr>';
   document.getElementById('floor2Body').innerHTML='<tr><td colspan="7" class="loading">Loading...</td></tr>';
   closeDetail();
@@ -1567,11 +1567,11 @@ function printDoorTag(bookingId){
 }
 
 // --- VIEW SWITCHING ---
-function showMainView(){currentView='main';document.getElementById('mainView').style.display='';document.getElementById('hoursView').style.display='none';document.getElementById('propertySelect').style.display='';if(selectedProperty)document.getElementById('headerTitle').textContent='2GM Booking — '+selectedProperty.Title;updateNavActiveState()}
+function showMainView(){currentView='main';document.getElementById('mainView').style.display='';document.getElementById('hoursView').style.display='none';document.getElementById('propertySelect').style.display='';if(selectedProperty)document.getElementById('headerTitle').textContent='2GM Eiendom AS – Booking — '+selectedProperty.Title;updateNavActiveState()}
 function showHoursView(){currentView='hours';document.getElementById('mainView').style.display='none';document.getElementById('mainView').classList.remove('panel-mode');document.getElementById('incomingPanel').classList.remove('open');document.getElementById('archivePanel').classList.remove('open');const pp=document.getElementById('personsPanel');if(pp)pp.classList.remove('open');const ip=document.getElementById('invoicingPanel');if(ip)ip.classList.remove('open');const cp=document.getElementById('companiesPanel');if(cp)cp.classList.remove('open');
   const pr=document.getElementById('pricingPanel');if(pr)pr.classList.remove('open');
   const ap=document.getElementById('adminPanel');if(ap)ap.classList.remove('open');
-  document.getElementById('hoursView').style.display='';document.getElementById('propertySelect').style.display='none';document.getElementById('headerTitle').textContent='2GM Booking — Hours';updateNavActiveState()}
+  document.getElementById('hoursView').style.display='';document.getElementById('propertySelect').style.display='none';document.getElementById('headerTitle').textContent='2GM Eiendom AS – Booking — Hours';updateNavActiveState()}
 function ensureMainView(){if(currentView==='hours')showMainView()}
 
 // --- FILTER ---
@@ -1732,7 +1732,7 @@ msalInstance.initialize().then(()=>{
 });
 
 // ============================================================
-// AUTO-REFRESH (v14.5)
+// AUTO-REFRESH (v14.5.2)
 // ============================================================
 
 // Build a fingerprint that tells us if data has changed without full reload
