@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v14.5.5 — app.js (Core)
+// 2GM Booking v14.5.7 — app.js (Core)
 // Auth, Graph API, Data, Rendering, Bookings
 // ============================================================
 
@@ -440,7 +440,7 @@ async function loadProperties(){
       resetViewStateForPropertyChange();
       loadData();
     };
-    selectedProperty=null; // v14.5.5: default to "All properties" instead of first property
+    selectedProperty=null; // v14.5.7: default to "All properties" instead of first property
   }catch(e){console.error('Error loading properties:',e)}
 }
 
@@ -476,16 +476,15 @@ async function loadData(){
 
 function filterBookingsForView(){
   const roomIds=new Set(rooms.map(r=>r.id));
-  const now=new Date();
   bookings=allBookings.filter(b=>{
     const rid=String(b.RoomLookupId||'');
     if(!roomIds.has(rid))return false;
     if(b.Status==='Active')return true;
     if(b.Status==='Upcoming'){
+      // v14.5.7: Show Upcoming in main list as soon as Check_In <= today (no kl-12 rule)
       const ci=new Date(b.Check_In);ci.setHours(0,0,0,0);
       const today=new Date();today.setHours(0,0,0,0);
-      if(ci.getTime()<today.getTime())return true;
-      if(ci.getTime()===today.getTime()&&now.getHours()>=12)return true;
+      if(ci.getTime()<=today.getTime())return true;
     }
     return false;
   });
@@ -706,7 +705,7 @@ function datesCell(b){
   const today=new Date();today.setHours(0,0,0,0);const ind=new Date(b.Check_In);ind.setHours(0,0,0,0);
   const days=Math.round((ind-today)/864e5);let s='';
   if(b.Status==='Upcoming'||days>0){if(days>=0&&days<=4)s='color:var(--accent);font-weight:500;';else if(days>4&&days<=30)s='color:#EF9F27;font-weight:500;'}
-  // v14.5.5: overdue badges
+  // v14.5.7: overdue badges
   let overdueBadge='';
   if(isOverdueCheckIn(b)){
     const d=daysOverdueCheckIn(b);
@@ -1059,7 +1058,8 @@ function renderFloors(){
   document.getElementById('floor1Body').innerHTML=f1.length?f1.map(renderFn).join(''):noMatch;
   document.getElementById('floor2Body').innerHTML=f2.length?f2.map(renderFn).join(''):noMatch;
 
-  if(activeFilter==='dirty'||isAllProps){
+  const isStatFilter=activeFilter&&['dirty','checkedIn','empty','doorTag','battery','overdueCheckIn','overdueCheckOut'].includes(activeFilter);
+  if(isStatFilter||isAllProps){
     document.getElementById('floor1Sub').textContent=f1.length+' rooms — all properties';
     document.getElementById('floor2Sub').textContent=f2.length+' rooms — all properties';
   }else{
@@ -1071,59 +1071,114 @@ function renderFloors(){
 }
 
 function updateStats(){
-  const tr=rooms.length;
+  // v14.5.7: All stat cards count across ALL assigned properties (regardless of selected property)
+  const assignedPropIds=new Set(properties.map(p=>String(p.id)));
+  const allAssignedRooms=allRooms.filter(r=>assignedPropIds.has(String(r.PropertyLookupId)));
+  const allAssignedRoomIds=new Set(allAssignedRooms.map(r=>r.id));
+  const tr=allAssignedRooms.length;
+  // Active bookings (current) across all
+  const today=new Date();today.setHours(0,0,0,0);
   const occupiedRoomIds=new Set();
-  bookings.forEach(b=>occupiedRoomIds.add(String(b.RoomLookupId||'')));
+  allBookings.forEach(b=>{
+    const rid=String(b.RoomLookupId||'');
+    if(!allAssignedRoomIds.has(rid))return;
+    // Active bookings: Status='Active' OR (Status='Upcoming' with Check_In <= today)
+    if(b.Status==='Active'){occupiedRoomIds.add(rid);return}
+    if(b.Status==='Upcoming'&&b.Check_In){
+      const ci=new Date(b.Check_In);ci.setHours(0,0,0,0);
+      if(ci.getTime()<=today.getTime())occupiedRoomIds.add(rid);
+    }
+  });
   document.getElementById('statCheckedIn').textContent=occupiedRoomIds.size+' / '+tr;
   document.getElementById('statEmpty').textContent=tr-occupiedRoomIds.size;
-  // Dirty: only current property (matches filter view)
-  const currentRoomIds=new Set(rooms.map(r=>r.id));
+  // Dirty: across all
   const allDirtyRoomIds=new Set();
   allBookings.forEach(b=>{
     const rid=String(b.RoomLookupId||'');
-    if(!currentRoomIds.has(rid))return;
+    if(!allAssignedRoomIds.has(rid))return;
     if(b.Cleaning_Status==='Dirty'&&(b.Status==='Active'||b.Status==='Upcoming'))allDirtyRoomIds.add(rid);
     if(b.Status==='Active'&&b.Check_In){const w=calcWashDates(b.Check_In,b.Check_Out);if(w.some(x=>x.isToday))allDirtyRoomIds.add(rid)}
   });
   document.getElementById('statDirty').textContent=allDirtyRoomIds.size;
-  document.getElementById('statDoorTag').textContent=bookings.filter(b=>b.Door_Tag_Status==='Needs-print').length;
-  document.getElementById('statBattery').textContent=rooms.filter(r=>r.Door_Battery_Level!=null&&r.Door_Battery_Level<30).length;
-  // v14.5.5: Overdue check-in / check-out (count from current view's bookings — already filtered by selected property/all)
-  const sourceBookingsForOverdue=allBookings.filter(b=>{const rid=String(b.RoomLookupId||'');return currentRoomIds.has(rid)});
-  const overdueCheckInCount=sourceBookingsForOverdue.filter(b=>isOverdueCheckIn(b)).length;
-  const overdueCheckOutCount=sourceBookingsForOverdue.filter(b=>isOverdueCheckOut(b)).length;
+  // Door tag: across all
+  document.getElementById('statDoorTag').textContent=allBookings.filter(b=>{const rid=String(b.RoomLookupId||'');return allAssignedRoomIds.has(rid)&&b.Door_Tag_Status==='Needs-print'&&(b.Status==='Active'||b.Status==='Upcoming')}).length;
+  // Battery: across all
+  document.getElementById('statBattery').textContent=allAssignedRooms.filter(r=>r.Door_Battery_Level!=null&&r.Door_Battery_Level<30).length;
+  // Overdue: across all
+  const overdueBookings=allBookings.filter(b=>{const rid=String(b.RoomLookupId||'');return allAssignedRoomIds.has(rid)});
+  const overdueCheckInCount=overdueBookings.filter(b=>isOverdueCheckIn(b)).length;
+  const overdueCheckOutCount=overdueBookings.filter(b=>isOverdueCheckOut(b)).length;
   document.getElementById('statOverdueCheckIn').textContent=overdueCheckInCount;
   document.getElementById('statOverdueCheckOut').textContent=overdueCheckOutCount;
-  // Color stat-box red if any overdue
   const ciBox=document.getElementById('statOverdueCheckInBox');
   if(ciBox)ciBox.style.cssText=overdueCheckInCount>0?'background:rgba(209,67,67,.10);border-color:#D14343':'';
   const coBox=document.getElementById('statOverdueCheckOutBox');
   if(coBox)coBox.style.cssText=overdueCheckOutCount>0?'background:rgba(209,67,67,.10);border-color:#D14343':'';
-  // Occupancy: current month for selected property
+
+  // v14.5.7: Occupancy across ALL properties — month-to-date
+  // Counts a room as "occupied" on a day if any of:
+  //  1. An Active or Completed booking covers that day
+  //  2. The property has an active full-tenant agreement that day
+  //  3. The room has an active long-term contract that day
   const now=new Date();const curMonth=now.getMonth();const curYear=now.getFullYear();
-  const daysInMonth=new Date(curYear,curMonth+1,0).getDate();
-  const today=now.getDate();
-  const propRoomIds=new Set(rooms.map(r=>r.id));
-  let occupiedNights=0;
-  allBookings.forEach(b=>{
-    if(b.Status!=='Active'&&b.Status!=='Completed')return;
-    const rid=String(b.RoomLookupId||'');if(!propRoomIds.has(rid))return;
-    const ci=new Date(b.Check_In);const co=b.Check_Out?new Date(b.Check_Out):now;
-    const monthStart=new Date(curYear,curMonth,1);const monthEnd=new Date(curYear,curMonth,today+1);
-    const start=ci>monthStart?ci:monthStart;const end=co<monthEnd?co:monthEnd;
-    const nights=Math.max(0,Math.round((end-start)/864e5));
-    occupiedNights+=nights;
+  const todayDate=now.getDate();
+  const monthStart=new Date(curYear,curMonth,1);monthStart.setHours(0,0,0,0);
+  const todayEnd=new Date(curYear,curMonth,todayDate);todayEnd.setHours(0,0,0,0);
+  const totalDaysSoFar=todayDate;
+  let occupiedRoomDays=0;
+  allAssignedRooms.forEach(room=>{
+    const property=properties.find(p=>String(p.id)===String(room.PropertyLookupId));
+    // For each day in the month so far, check if room is occupied
+    for(let d=1;d<=todayDate;d++){
+      const checkDate=new Date(curYear,curMonth,d);checkDate.setHours(0,0,0,0);
+      let occupied=false;
+      // 1. Full-tenant agreement
+      if(property){
+        const ftCompany=(property.FullTenant_Company||'').trim();
+        const ftRate=Number(property.FullTenant_RatePerRoom)||0;
+        if(ftCompany&&ftRate>0){
+          const ftStart=property.FullTenant_StartDate?new Date(property.FullTenant_StartDate):null;
+          const ftEnd=property.FullTenant_EndDate?new Date(property.FullTenant_EndDate):null;
+          if((!ftStart||checkDate>=ftStart)&&(!ftEnd||checkDate<=ftEnd))occupied=true;
+        }
+      }
+      // 2. Long-term contract on the room
+      if(!occupied){
+        const ltCompany=(room.LongTerm_Company||'').trim();
+        const ltPrice=Number(room.LongTerm_Price)||0;
+        if(ltCompany&&ltPrice>0){
+          const ltStart=room.LongTerm_StartDate?new Date(room.LongTerm_StartDate):null;
+          const ltEnd=room.LongTerm_EndDate?new Date(room.LongTerm_EndDate):null;
+          if((!ltStart||checkDate>=ltStart)&&(!ltEnd||checkDate<=ltEnd))occupied=true;
+        }
+      }
+      // 3. Actual booking
+      if(!occupied){
+        for(let i=0;i<allBookings.length;i++){
+          const b=allBookings[i];
+          if(String(b.RoomLookupId)!==String(room.id))continue;
+          if(b.Status==='Cancelled')continue;
+          if(!b.Check_In)continue;
+          const ci=new Date(b.Check_In);ci.setHours(0,0,0,0);
+          const co=b.Check_Out?new Date(b.Check_Out):now;
+          if(co instanceof Date)co.setHours(0,0,0,0);
+          if(checkDate>=ci&&checkDate<=co){occupied=true;break}
+        }
+      }
+      if(occupied)occupiedRoomDays++;
+    }
   });
-  const totalPossible=tr*today;
-  const occPct=totalPossible>0?Math.round(occupiedNights/totalPossible*100):0;
+  const totalPossible=tr*totalDaysSoFar;
+  const occPct=totalPossible>0?Math.round(occupiedRoomDays/totalPossible*100):0;
   document.getElementById('statOccupancy').textContent=occPct+'%';
 }
 
 // --- DETAIL PANEL ---
 function showDetail(roomId){
-  const room=(activeFilter==='dirty'?allRooms:rooms).find(r=>r.id===roomId);
+  const isStatFilter=activeFilter&&['dirty','checkedIn','empty','doorTag','battery','overdueCheckIn','overdueCheckOut'].includes(activeFilter);
+  const room=isStatFilter?allRooms.find(r=>r.id===roomId):rooms.find(r=>r.id===roomId);
   if(!room)return;
-  const sourceBk=(activeFilter==='dirty')?allBookings:bookings;
+  const sourceBk=isStatFilter?allBookings:bookings;
   const booking=sourceBk.find(b=>String(b.RoomLookupId)===roomId&&b.Status==='Active')
     ||sourceBk.find(b=>String(b.RoomLookupId)===roomId&&b.Status==='Upcoming');
   selectedRoom=room;selectedBooking=booking;
@@ -1165,7 +1220,7 @@ function showDetail(roomId){
       const phone=person?(person.Mobile||person.Phone||person.Telefon||''):'';
       const email=person?(person.Email||''):'';
       const addr=person?(person.Address||''):'';
-      // v14.5.5: Overdue banner at top of detail
+      // v14.5.7: Overdue banner at top of detail
       let overdueBanner='';
       if(isOverdueCheckIn(booking)){
         const d=daysOverdueCheckIn(booking);
@@ -1678,12 +1733,15 @@ function printAllPendingDoorTags(){
 }
 
 function getFilteredRoomsForFloor(floor){
-  // For dirty filter: show rooms from all assigned properties (not just selected)
+  // v14.5.7: All stat filters now show across ALL assigned properties (not just selected)
   const assignedPropIds=new Set(properties.map(p=>p.id));
-  const sourceRooms=(activeFilter==='dirty')?allRooms.filter(r=>assignedPropIds.has(String(r.PropertyLookupId))):rooms;
+  const allAssignedRooms=allRooms.filter(r=>assignedPropIds.has(String(r.PropertyLookupId)));
+  // For stat filters, use cross-property source. For non-filter view, use selected property
+  const isStatFilter=activeFilter&&['dirty','checkedIn','empty','doorTag','battery','overdueCheckIn','overdueCheckOut'].includes(activeFilter);
+  const sourceRooms=isStatFilter?allAssignedRooms:rooms;
   let floorRooms=sourceRooms.filter(r=>r.Floor===floor||String(r.Floor)===String(floor));
   if(!activeFilter)return floorRooms;
-  const sourceBookings=(activeFilter==='dirty')?allBookings:bookings;
+  const sourceBookings=isStatFilter?allBookings:bookings;
   const bMap={};sourceBookings.forEach(b=>{const rid=String(b.RoomLookupId||'');if(rid&&(b.Status==='Active'||b.Status==='Upcoming')&&(!bMap[rid]||b.Status==='Active'))bMap[rid]=b});
   switch(activeFilter){
     case 'checkedIn':return floorRooms.filter(r=>!!bMap[r.id]);
@@ -1763,7 +1821,7 @@ msalInstance.initialize().then(()=>{
 });
 
 // ============================================================
-// AUTO-REFRESH (v14.5.5)
+// AUTO-REFRESH (v14.5.7)
 // ============================================================
 
 // Build a fingerprint that tells us if data has changed without full reload
@@ -1948,7 +2006,7 @@ function showFullTenantDebug(){
 }
 
 // ============================================================
-// OVERDUE CHECK-IN / CHECK-OUT (v14.5.5)
+// OVERDUE CHECK-IN / CHECK-OUT (v14.5.7)
 // ============================================================
 function isOverdueCheckIn(b){
   if(!b||b.Status!=='Upcoming'||!b.Check_In)return false;
