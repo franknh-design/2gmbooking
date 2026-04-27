@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v14.5.4 — app.js (Core)
+// 2GM Booking v14.5.5 — app.js (Core)
 // Auth, Graph API, Data, Rendering, Bookings
 // ============================================================
 
@@ -440,7 +440,7 @@ async function loadProperties(){
       resetViewStateForPropertyChange();
       loadData();
     };
-    selectedProperty=null; // v14.5.4: default to "All properties" instead of first property
+    selectedProperty=null; // v14.5.5: default to "All properties" instead of first property
   }catch(e){console.error('Error loading properties:',e)}
 }
 
@@ -706,7 +706,16 @@ function datesCell(b){
   const today=new Date();today.setHours(0,0,0,0);const ind=new Date(b.Check_In);ind.setHours(0,0,0,0);
   const days=Math.round((ind-today)/864e5);let s='';
   if(b.Status==='Upcoming'||days>0){if(days>=0&&days<=4)s='color:var(--accent);font-weight:500;';else if(days>4&&days<=30)s='color:#EF9F27;font-weight:500;'}
-  return'<span style="'+s+'">'+ci+'</span> — '+co;
+  // v14.5.5: overdue badges
+  let overdueBadge='';
+  if(isOverdueCheckIn(b)){
+    const d=daysOverdueCheckIn(b);
+    overdueBadge=' <span style="background:rgba(209,67,67,.12);color:#A32D2D;padding:1px 6px;border-radius:3px;font-size:10px;font-weight:500" title="Should have been checked in '+d+' day'+(d===1?'':'s')+' ago">⚠ Check-in '+d+'d</span>';
+  }else if(isOverdueCheckOut(b)){
+    const d=daysOverdueCheckOut(b);
+    overdueBadge=' <span style="background:rgba(209,67,67,.12);color:#A32D2D;padding:1px 6px;border-radius:3px;font-size:10px;font-weight:500" title="Should have been checked out '+d+' day'+(d===1?'':'s')+' ago">⚠ Check-out '+d+'d</span>';
+  }
+  return'<span style="'+s+'">'+ci+'</span> — '+co+overdueBadge;
 }
 
 // Returns the full-tenant company for a property if active on the given date (default today), else null
@@ -981,7 +990,7 @@ function renderRow(room,booking){
     }
     const upcoming=findNextUpcomingForRoom(room.id);
     if(upcoming){
-      emptyCell=(reserveLabel?'<span style="color:#EF9F27;font-style:italic">🔒 '+escapeHtml(reserveLabel)+'</span>':'<span class="empty-text">—</span>')+' <span style="font-size:10px;color:#7B61FF;font-style:italic" title="Upcoming booking">📅 '+escapeHtml(upcoming.Person_Name||'')+(upcoming.Check_In?' · '+formatDate(upcoming.Check_In):'')+'</span>';
+      emptyCell=(reserveLabel?'<span style="color:#EF9F27;font-style:italic">🔒 '+escapeHtml(reserveLabel)+'</span>':'<span class="empty-text">—</span>')+' <span style="font-size:10px;color:#2C7A7B;font-style:italic" title="Upcoming booking">📅 '+escapeHtml(upcoming.Person_Name||'')+(upcoming.Check_In?' · '+formatDate(upcoming.Check_In):'')+'</span>';
     }
   }
   return'<tr onclick="showDetail(\''+room.id+'\')">'
@@ -1013,7 +1022,7 @@ function renderRowWithProperty(room,booking,propName){
     }
     const upcoming=findNextUpcomingForRoom(room.id);
     if(upcoming){
-      emptyCell=(reserveLabel?'<span style="color:#EF9F27;font-style:italic">🔒 '+escapeHtml(reserveLabel)+'</span>':'<span class="empty-text">—</span>')+' <span style="font-size:10px;color:#7B61FF;font-style:italic">📅 '+escapeHtml(upcoming.Person_Name||'')+(upcoming.Check_In?' · '+formatDate(upcoming.Check_In):'')+'</span>';
+      emptyCell=(reserveLabel?'<span style="color:#EF9F27;font-style:italic">🔒 '+escapeHtml(reserveLabel)+'</span>':'<span class="empty-text">—</span>')+' <span style="font-size:10px;color:#2C7A7B;font-style:italic">📅 '+escapeHtml(upcoming.Person_Name||'')+(upcoming.Check_In?' · '+formatDate(upcoming.Check_In):'')+'</span>';
     }
   }
   return'<tr onclick="showDetail(\''+room.id+'\')">'
@@ -1079,6 +1088,17 @@ function updateStats(){
   document.getElementById('statDirty').textContent=allDirtyRoomIds.size;
   document.getElementById('statDoorTag').textContent=bookings.filter(b=>b.Door_Tag_Status==='Needs-print').length;
   document.getElementById('statBattery').textContent=rooms.filter(r=>r.Door_Battery_Level!=null&&r.Door_Battery_Level<30).length;
+  // v14.5.5: Overdue check-in / check-out (count from current view's bookings — already filtered by selected property/all)
+  const sourceBookingsForOverdue=allBookings.filter(b=>{const rid=String(b.RoomLookupId||'');return currentRoomIds.has(rid)});
+  const overdueCheckInCount=sourceBookingsForOverdue.filter(b=>isOverdueCheckIn(b)).length;
+  const overdueCheckOutCount=sourceBookingsForOverdue.filter(b=>isOverdueCheckOut(b)).length;
+  document.getElementById('statOverdueCheckIn').textContent=overdueCheckInCount;
+  document.getElementById('statOverdueCheckOut').textContent=overdueCheckOutCount;
+  // Color stat-box red if any overdue
+  const ciBox=document.getElementById('statOverdueCheckInBox');
+  if(ciBox)ciBox.style.cssText=overdueCheckInCount>0?'background:rgba(209,67,67,.10);border-color:#D14343':'';
+  const coBox=document.getElementById('statOverdueCheckOutBox');
+  if(coBox)coBox.style.cssText=overdueCheckOutCount>0?'background:rgba(209,67,67,.10);border-color:#D14343':'';
   // Occupancy: current month for selected property
   const now=new Date();const curMonth=now.getMonth();const curYear=now.getFullYear();
   const daysInMonth=new Date(curYear,curMonth+1,0).getDate();
@@ -1145,7 +1165,16 @@ function showDetail(roomId){
       const phone=person?(person.Mobile||person.Phone||person.Telefon||''):'';
       const email=person?(person.Email||''):'';
       const addr=person?(person.Address||''):'';
-      infoHtml='<div class="detail-name">'+booking.Person_Name+'</div>'
+      // v14.5.5: Overdue banner at top of detail
+      let overdueBanner='';
+      if(isOverdueCheckIn(booking)){
+        const d=daysOverdueCheckIn(booking);
+        overdueBanner='<div style="background:rgba(209,67,67,.10);border-left:3px solid #D14343;padding:10px 14px;margin-bottom:12px;border-radius:6px;display:flex;align-items:center;gap:10px"><div style="flex:1;font-size:13px;color:#A32D2D"><strong>⚠ Overdue check-in:</strong> This booking should have been checked in '+d+' day'+(d===1?'':'s')+' ago.</div>'+(can('checkin_out')?'<button onclick="checkIn(\''+booking.id+'\')" style="padding:6px 14px;background:#1D9E75;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px;font-family:inherit;font-weight:500">✓ Check in now</button>':'')+'</div>';
+      }else if(isOverdueCheckOut(booking)){
+        const d=daysOverdueCheckOut(booking);
+        overdueBanner='<div style="background:rgba(209,67,67,.10);border-left:3px solid #D14343;padding:10px 14px;margin-bottom:12px;border-radius:6px;display:flex;align-items:center;gap:10px"><div style="flex:1;font-size:13px;color:#A32D2D"><strong>⚠ Overdue check-out:</strong> This booking should have been checked out '+d+' day'+(d===1?'':'s')+' ago.</div>'+(can('checkin_out')?'<button onclick="openCheckoutModal(\''+booking.id+'\')" style="padding:6px 14px;background:#1D9E75;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px;font-family:inherit;font-weight:500">✓ Mark as Completed</button>':'')+'</div>';
+      }
+      infoHtml=overdueBanner+'<div class="detail-name">'+booking.Person_Name+'</div>'
         +'<div class="detail-sub">Room '+room.Title+' · '+(booking.Company||'')+' · '+propName+'</div>'
         +'<table class="detail-info">'
         +(phone?'<tr><td>Mobile</td><td><a href="tel:'+phone+'" style="color:var(--accent)">'+phone+'</a></td></tr>':'')
@@ -1662,6 +1691,8 @@ function getFilteredRoomsForFloor(floor){
     case 'dirty':return floorRooms.filter(r=>{const b=bMap[r.id];if(!b)return false;if(b.Cleaning_Status==='Dirty')return true;if(b.Status==='Active'&&b.Check_In){const w=calcWashDates(b.Check_In,b.Check_Out);if(w.some(x=>x.isToday))return true}return false});
     case 'doorTag':return floorRooms.filter(r=>bMap[r.id]&&bMap[r.id].Door_Tag_Status==='Needs-print');
     case 'battery':return floorRooms.filter(r=>r.Door_Battery_Level!=null&&r.Door_Battery_Level<30);
+    case 'overdueCheckIn':return floorRooms.filter(r=>{const b=bMap[r.id];return b&&isOverdueCheckIn(b)});
+    case 'overdueCheckOut':return floorRooms.filter(r=>{const b=bMap[r.id];return b&&isOverdueCheckOut(b)});
     default:return floorRooms;
   }
 }
@@ -1732,7 +1763,7 @@ msalInstance.initialize().then(()=>{
 });
 
 // ============================================================
-// AUTO-REFRESH (v14.5.4)
+// AUTO-REFRESH (v14.5.5)
 // ============================================================
 
 // Build a fingerprint that tells us if data has changed without full reload
@@ -1914,4 +1945,32 @@ function showFullTenantDebug(){
   }else{
     alert(txt);
   }
+}
+
+// ============================================================
+// OVERDUE CHECK-IN / CHECK-OUT (v14.5.5)
+// ============================================================
+function isOverdueCheckIn(b){
+  if(!b||b.Status!=='Upcoming'||!b.Check_In)return false;
+  const ci=new Date(b.Check_In);ci.setHours(0,0,0,0);
+  const today=new Date();today.setHours(0,0,0,0);
+  return ci.getTime()<today.getTime();
+}
+function isOverdueCheckOut(b){
+  if(!b||b.Status!=='Active'||!b.Check_Out)return false;
+  const co=new Date(b.Check_Out);co.setHours(0,0,0,0);
+  const today=new Date();today.setHours(0,0,0,0);
+  return co.getTime()<today.getTime();
+}
+function daysOverdueCheckIn(b){
+  if(!isOverdueCheckIn(b))return 0;
+  const ci=new Date(b.Check_In);ci.setHours(0,0,0,0);
+  const today=new Date();today.setHours(0,0,0,0);
+  return Math.round((today-ci)/864e5);
+}
+function daysOverdueCheckOut(b){
+  if(!isOverdueCheckOut(b))return 0;
+  const co=new Date(b.Check_Out);co.setHours(0,0,0,0);
+  const today=new Date();today.setHours(0,0,0,0);
+  return Math.round((today-co)/864e5);
 }
