@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v14.5.7 — app.js (Core)
+// 2GM Booking v14.5.8 — app.js (Core)
 // Auth, Graph API, Data, Rendering, Bookings
 // ============================================================
 
@@ -440,7 +440,7 @@ async function loadProperties(){
       resetViewStateForPropertyChange();
       loadData();
     };
-    selectedProperty=null; // v14.5.7: default to "All properties" instead of first property
+    selectedProperty=null; // v14.5.8: default to "All properties" instead of first property
   }catch(e){console.error('Error loading properties:',e)}
 }
 
@@ -481,7 +481,7 @@ function filterBookingsForView(){
     if(!roomIds.has(rid))return false;
     if(b.Status==='Active')return true;
     if(b.Status==='Upcoming'){
-      // v14.5.7: Show Upcoming in main list as soon as Check_In <= today (no kl-12 rule)
+      // v14.5.8: Show Upcoming in main list as soon as Check_In <= today (no kl-12 rule)
       const ci=new Date(b.Check_In);ci.setHours(0,0,0,0);
       const today=new Date();today.setHours(0,0,0,0);
       if(ci.getTime()<=today.getTime())return true;
@@ -691,8 +691,15 @@ function doorTagBtn(b){
   if(s==='Printed')return'<button class="status-btn printed" onclick="cycleDT(event,\''+b.id+'\')">✓</button>';
   return'<button class="status-btn" onclick="cycleDT(event,\''+b.id+'\')"></button>';
 }
-function cleanBtn(b){
-  if(!b)return'<button class="clean-btn" disabled></button>';
+function cleanBtn(b,room){
+  // v14.5.8: Support cleaning status on empty rooms via Room.Cleaning_Status
+  if(!b){
+    if(!room)return'<button class="clean-btn" disabled></button>';
+    const rs=room.Cleaning_Status||'None';
+    if(rs==='Dirty')return'<button class="clean-btn dirty" onclick="cycleRoomCS(event,\''+room.id+'\')" title="Empty room — cleaning status"></button>';
+    if(rs==='Clean')return'<button class="clean-btn clean" onclick="cycleRoomCS(event,\''+room.id+'\')" title="Empty room — cleaning status"></button>';
+    return'<button class="clean-btn" onclick="cycleRoomCS(event,\''+room.id+'\')" title="Empty room — cleaning status"></button>';
+  }
   const s=b.Cleaning_Status||'None';
   if(s==='Dirty')return'<button class="clean-btn dirty" onclick="cycleCS(event,\''+b.id+'\')"></button>';
   if(s==='Clean')return'<button class="clean-btn clean" onclick="cycleCS(event,\''+b.id+'\')"></button>';
@@ -705,7 +712,7 @@ function datesCell(b){
   const today=new Date();today.setHours(0,0,0,0);const ind=new Date(b.Check_In);ind.setHours(0,0,0,0);
   const days=Math.round((ind-today)/864e5);let s='';
   if(b.Status==='Upcoming'||days>0){if(days>=0&&days<=4)s='color:var(--accent);font-weight:500;';else if(days>4&&days<=30)s='color:#EF9F27;font-weight:500;'}
-  // v14.5.7: overdue badges
+  // v14.5.8: overdue badges
   let overdueBadge='';
   if(isOverdueCheckIn(b)){
     const d=daysOverdueCheckIn(b);
@@ -993,7 +1000,7 @@ function renderRow(room,booking){
     }
   }
   return'<tr onclick="showDetail(\''+room.id+'\')">'
-    +'<td>'+doorTagBtn(booking)+'</td><td>'+cleanBtn(booking)+'</td>'
+    +'<td>'+doorTagBtn(booking)+'</td><td>'+cleanBtn(booking,room)+'</td>'
     +'<td style="font-variant-numeric:tabular-nums;font-weight:500">'+room.Title+'</td>'
     +'<td>'+(n?guestMarkedName(n):emptyCell)+(booking&&booking.Notes?'<span class="note-dot"></span>':'')+'</td>'
     +'<td class="muted">'+c+'</td>'
@@ -1025,7 +1032,7 @@ function renderRowWithProperty(room,booking,propName){
     }
   }
   return'<tr onclick="showDetail(\''+room.id+'\')">'
-    +'<td>'+cleanBtn(booking)+'</td>'
+    +'<td>'+cleanBtn(booking,room)+'</td>'
     +'<td style="font-variant-numeric:tabular-nums;font-weight:500">'+room.Title+'</td>'
     +'<td class="muted" style="font-size:11px">'+propName+'</td>'
     +'<td>'+(n?guestMarkedName(n):emptyCell)+'</td>'
@@ -1071,7 +1078,7 @@ function renderFloors(){
 }
 
 function updateStats(){
-  // v14.5.7: All stat cards count across ALL assigned properties (regardless of selected property)
+  // v14.5.8: All stat cards count across ALL assigned properties (regardless of selected property)
   const assignedPropIds=new Set(properties.map(p=>String(p.id)));
   const allAssignedRooms=allRooms.filter(r=>assignedPropIds.has(String(r.PropertyLookupId)));
   const allAssignedRoomIds=new Set(allAssignedRooms.map(r=>r.id));
@@ -1091,7 +1098,17 @@ function updateStats(){
   });
   document.getElementById('statCheckedIn').textContent=occupiedRoomIds.size+' / '+tr;
   document.getElementById('statEmpty').textContent=tr-occupiedRoomIds.size;
-  // Dirty: across all
+
+  // v14.5.8 PERF: pre-build bookings-by-room map ONCE
+  const bookingsByRoom={};
+  allBookings.forEach(b=>{
+    const rid=String(b.RoomLookupId||'');
+    if(!allAssignedRoomIds.has(rid))return;
+    if(!bookingsByRoom[rid])bookingsByRoom[rid]=[];
+    bookingsByRoom[rid].push(b);
+  });
+
+  // Dirty rooms — both booked dirty AND empty rooms with Cleaning_Status='Dirty'
   const allDirtyRoomIds=new Set();
   allBookings.forEach(b=>{
     const rid=String(b.RoomLookupId||'');
@@ -1099,12 +1116,15 @@ function updateStats(){
     if(b.Cleaning_Status==='Dirty'&&(b.Status==='Active'||b.Status==='Upcoming'))allDirtyRoomIds.add(rid);
     if(b.Status==='Active'&&b.Check_In){const w=calcWashDates(b.Check_In,b.Check_Out);if(w.some(x=>x.isToday))allDirtyRoomIds.add(rid)}
   });
+  // v14.5.8: empty rooms with Cleaning_Status='Dirty'
+  allAssignedRooms.forEach(r=>{
+    if(!occupiedRoomIds.has(r.id)&&r.Cleaning_Status==='Dirty')allDirtyRoomIds.add(r.id);
+  });
   document.getElementById('statDirty').textContent=allDirtyRoomIds.size;
-  // Door tag: across all
+
   document.getElementById('statDoorTag').textContent=allBookings.filter(b=>{const rid=String(b.RoomLookupId||'');return allAssignedRoomIds.has(rid)&&b.Door_Tag_Status==='Needs-print'&&(b.Status==='Active'||b.Status==='Upcoming')}).length;
-  // Battery: across all
   document.getElementById('statBattery').textContent=allAssignedRooms.filter(r=>r.Door_Battery_Level!=null&&r.Door_Battery_Level<30).length;
-  // Overdue: across all
+
   const overdueBookings=allBookings.filter(b=>{const rid=String(b.RoomLookupId||'');return allAssignedRoomIds.has(rid)});
   const overdueCheckInCount=overdueBookings.filter(b=>isOverdueCheckIn(b)).length;
   const overdueCheckOutCount=overdueBookings.filter(b=>isOverdueCheckOut(b)).length;
@@ -1115,60 +1135,56 @@ function updateStats(){
   const coBox=document.getElementById('statOverdueCheckOutBox');
   if(coBox)coBox.style.cssText=overdueCheckOutCount>0?'background:rgba(209,67,67,.10);border-color:#D14343':'';
 
-  // v14.5.7: Occupancy across ALL properties — month-to-date
-  // Counts a room as "occupied" on a day if any of:
-  //  1. An Active or Completed booking covers that day
-  //  2. The property has an active full-tenant agreement that day
-  //  3. The room has an active long-term contract that day
+  // v14.5.8 PERF: Optimized occupancy with pre-processed boundaries
   const now=new Date();const curMonth=now.getMonth();const curYear=now.getFullYear();
   const todayDate=now.getDate();
-  const monthStart=new Date(curYear,curMonth,1);monthStart.setHours(0,0,0,0);
-  const todayEnd=new Date(curYear,curMonth,todayDate);todayEnd.setHours(0,0,0,0);
-  const totalDaysSoFar=todayDate;
   let occupiedRoomDays=0;
   allAssignedRooms.forEach(room=>{
     const property=properties.find(p=>String(p.id)===String(room.PropertyLookupId));
-    // For each day in the month so far, check if room is occupied
+    // Pre-compute Full-tenant boundaries once
+    let ftStart=null,ftEnd=null,hasFT=false;
+    if(property){
+      const ftCompany=(property.FullTenant_Company||'').trim();
+      const ftRate=Number(property.FullTenant_RatePerRoom)||0;
+      if(ftCompany&&ftRate>0){
+        hasFT=true;
+        ftStart=property.FullTenant_StartDate?new Date(property.FullTenant_StartDate):null;
+        ftEnd=property.FullTenant_EndDate?new Date(property.FullTenant_EndDate):null;
+        if(ftStart)ftStart.setHours(0,0,0,0);
+        if(ftEnd)ftEnd.setHours(0,0,0,0);
+      }
+    }
+    // Long-term boundaries
+    let ltStart=null,ltEnd=null,hasLT=false;
+    const ltCompany=(room.LongTerm_Company||'').trim();
+    const ltPrice=Number(room.LongTerm_Price)||0;
+    if(ltCompany&&ltPrice>0){
+      hasLT=true;
+      ltStart=room.LongTerm_StartDate?new Date(room.LongTerm_StartDate):null;
+      ltEnd=room.LongTerm_EndDate?new Date(room.LongTerm_EndDate):null;
+      if(ltStart)ltStart.setHours(0,0,0,0);
+      if(ltEnd)ltEnd.setHours(0,0,0,0);
+    }
+    // Pre-process bookings for this room
+    const roomBookings=(bookingsByRoom[room.id]||[]).filter(b=>b.Status!=='Cancelled'&&b.Check_In).map(b=>{
+      const ci=new Date(b.Check_In);ci.setHours(0,0,0,0);
+      const co=b.Check_Out?new Date(b.Check_Out):now;
+      if(co instanceof Date)co.setHours(0,0,0,0);
+      return{ci,co};
+    });
+    // Iterate days
     for(let d=1;d<=todayDate;d++){
       const checkDate=new Date(curYear,curMonth,d);checkDate.setHours(0,0,0,0);
-      let occupied=false;
-      // 1. Full-tenant agreement
-      if(property){
-        const ftCompany=(property.FullTenant_Company||'').trim();
-        const ftRate=Number(property.FullTenant_RatePerRoom)||0;
-        if(ftCompany&&ftRate>0){
-          const ftStart=property.FullTenant_StartDate?new Date(property.FullTenant_StartDate):null;
-          const ftEnd=property.FullTenant_EndDate?new Date(property.FullTenant_EndDate):null;
-          if((!ftStart||checkDate>=ftStart)&&(!ftEnd||checkDate<=ftEnd))occupied=true;
-        }
+      if(hasFT&&(!ftStart||checkDate>=ftStart)&&(!ftEnd||checkDate<=ftEnd)){occupiedRoomDays++;continue}
+      if(hasLT&&(!ltStart||checkDate>=ltStart)&&(!ltEnd||checkDate<=ltEnd)){occupiedRoomDays++;continue}
+      let occ=false;
+      for(let i=0;i<roomBookings.length;i++){
+        if(checkDate>=roomBookings[i].ci&&checkDate<=roomBookings[i].co){occ=true;break}
       }
-      // 2. Long-term contract on the room
-      if(!occupied){
-        const ltCompany=(room.LongTerm_Company||'').trim();
-        const ltPrice=Number(room.LongTerm_Price)||0;
-        if(ltCompany&&ltPrice>0){
-          const ltStart=room.LongTerm_StartDate?new Date(room.LongTerm_StartDate):null;
-          const ltEnd=room.LongTerm_EndDate?new Date(room.LongTerm_EndDate):null;
-          if((!ltStart||checkDate>=ltStart)&&(!ltEnd||checkDate<=ltEnd))occupied=true;
-        }
-      }
-      // 3. Actual booking
-      if(!occupied){
-        for(let i=0;i<allBookings.length;i++){
-          const b=allBookings[i];
-          if(String(b.RoomLookupId)!==String(room.id))continue;
-          if(b.Status==='Cancelled')continue;
-          if(!b.Check_In)continue;
-          const ci=new Date(b.Check_In);ci.setHours(0,0,0,0);
-          const co=b.Check_Out?new Date(b.Check_Out):now;
-          if(co instanceof Date)co.setHours(0,0,0,0);
-          if(checkDate>=ci&&checkDate<=co){occupied=true;break}
-        }
-      }
-      if(occupied)occupiedRoomDays++;
+      if(occ)occupiedRoomDays++;
     }
   });
-  const totalPossible=tr*totalDaysSoFar;
+  const totalPossible=tr*todayDate;
   const occPct=totalPossible>0?Math.round(occupiedRoomDays/totalPossible*100):0;
   document.getElementById('statOccupancy').textContent=occPct+'%';
 }
@@ -1189,13 +1205,17 @@ function showDetail(roomId){
   if(!booking){
     // Check if room has an Upcoming booking (future)
     const upcoming=findNextUpcomingForRoom(room.id);
-    let subHtml='Empty — '+propName;
+    // v14.5.8: cleaning status for empty rooms
+    const roomCl=room.Cleaning_Status||'None';
+    const roomClLabel={'None':'—','Dirty':'● Needs cleaning','Clean':'● Clean'}[roomCl];
+    const roomClColor=roomCl==='Dirty'?'#A32D2D':(roomCl==='Clean'?'#0F6E56':'var(--text-tertiary)');
+    let subHtml='Empty — '+propName+' · <span style="color:'+roomClColor+';font-weight:500">'+roomClLabel+'</span>';
     if(upcoming){
       const ci=upcoming.Check_In?formatDate(upcoming.Check_In):'?';
       const name=upcoming.Person_Name||'(unnamed)';
       const company=upcoming.Company?' · '+escapeHtml(upcoming.Company):'';
-      subHtml='<div>Empty — '+propName+'</div>'
-        +'<div style="margin-top:8px;padding:8px 10px;background:rgba(123,97,255,.08);border-left:3px solid #7B61FF;border-radius:4px;font-size:12px">'
+      subHtml='<div>Empty — '+propName+' · <span style="color:'+roomClColor+';font-weight:500">'+roomClLabel+'</span></div>'
+        +'<div style="margin-top:8px;padding:8px 10px;background:rgba(44,122,123,.08);border-left:3px solid #2C7A7B;border-radius:4px;font-size:12px">'
         +'📅 <strong>Upcoming booking:</strong> '+escapeHtml(name)+company+' · Check-in <strong>'+ci+'</strong>'
         +'</div>';
     }
@@ -1220,7 +1240,7 @@ function showDetail(roomId){
       const phone=person?(person.Mobile||person.Phone||person.Telefon||''):'';
       const email=person?(person.Email||''):'';
       const addr=person?(person.Address||''):'';
-      // v14.5.7: Overdue banner at top of detail
+      // v14.5.8: Overdue banner at top of detail
       let overdueBanner='';
       if(isOverdueCheckIn(booking)){
         const d=daysOverdueCheckIn(booking);
@@ -1324,6 +1344,13 @@ async function cycleCS(e,id){
   const c={'None':'Dirty','Dirty':'Clean','Clean':'None'};const ns=c[b.Cleaning_Status||'None'];
   try{await updateListItem('Bookings',id,{Cleaning_Status:ns});b.Cleaning_Status=ns;renderFloors();updateStats()}catch(er){console.error(er);alert('Failed')}
 }
+// v14.5.8: Cycle cleaning status on empty rooms (Room.Cleaning_Status)
+async function cycleRoomCS(e,roomId){
+  e.stopPropagation();if(!can('cleaning'))return;
+  const r=allRooms.find(x=>x.id===roomId);if(!r)return;
+  const c={'None':'Dirty','Dirty':'Clean','Clean':'None'};const ns=c[r.Cleaning_Status||'None'];
+  try{await updateListItem('Rooms',roomId,{Cleaning_Status:ns});r.Cleaning_Status=ns;renderFloors();updateStats()}catch(er){console.error(er);alert('Failed: '+er.message)}
+}
 async function markClean(id){try{await updateListItem('Bookings',id,{Cleaning_Status:'Clean'});const l=allBookings.find(x=>x.id===id);if(l)l.Cleaning_Status='Clean';closeDetail();refreshLocal();loadData()}catch(e){alert('Failed')}}
 async function markDirty(id){try{await updateListItem('Bookings',id,{Cleaning_Status:'Dirty'});const l=allBookings.find(x=>x.id===id);if(l)l.Cleaning_Status='Dirty';closeDetail();refreshLocal();loadData()}catch(e){alert('Failed')}}
 
@@ -1342,7 +1369,16 @@ function closeCheckoutModal(){document.getElementById('checkoutModal').classList
 async function confirmCheckout(){
   if(!checkoutBookingId)return;const dateVal=document.getElementById('fCheckOutDate').value;if(!dateVal){alert('Select a date');return}
   const btn=document.getElementById('checkoutConfirmBtn');btn.disabled=true;btn.textContent='Processing...';
-  try{await updateListItem('Bookings',checkoutBookingId,{Status:'Completed',Cleaning_Status:'Dirty',Check_Out:dateVal+'T12:00:00Z'});const l=allBookings.find(x=>x.id===checkoutBookingId);if(l){l.Status='Completed';l.Cleaning_Status='Dirty';l.Check_Out=dateVal+'T12:00:00Z'}closeCheckoutModal();closeDetail();refreshLocal();loadData()}catch(e){alert('Failed: '+e.message)}finally{btn.disabled=false;btn.textContent='Confirm check-out'}
+  try{
+    await updateListItem('Bookings',checkoutBookingId,{Status:'Completed',Cleaning_Status:'Dirty',Check_Out:dateVal+'T12:00:00Z'});
+    const l=allBookings.find(x=>x.id===checkoutBookingId);
+    if(l){l.Status='Completed';l.Cleaning_Status='Dirty';l.Check_Out=dateVal+'T12:00:00Z';
+      // v14.5.8: copy cleaning status to room
+      const r=allRooms.find(x=>x.id===String(l.RoomLookupId));
+      if(r){try{await updateListItem('Rooms',r.id,{Cleaning_Status:'Dirty'});r.Cleaning_Status='Dirty'}catch(_){}}
+    }
+    closeCheckoutModal();closeDetail();refreshLocal();loadData()
+  }catch(e){alert('Failed: '+e.message)}finally{btn.disabled=false;btn.textContent='Confirm check-out'}
 }
 async function cancelBooking(id){
   return cancelBookingConfirmed(id);
@@ -1733,7 +1769,7 @@ function printAllPendingDoorTags(){
 }
 
 function getFilteredRoomsForFloor(floor){
-  // v14.5.7: All stat filters now show across ALL assigned properties (not just selected)
+  // v14.5.8: All stat filters now show across ALL assigned properties (not just selected)
   const assignedPropIds=new Set(properties.map(p=>p.id));
   const allAssignedRooms=allRooms.filter(r=>assignedPropIds.has(String(r.PropertyLookupId)));
   // For stat filters, use cross-property source. For non-filter view, use selected property
@@ -1821,7 +1857,7 @@ msalInstance.initialize().then(()=>{
 });
 
 // ============================================================
-// AUTO-REFRESH (v14.5.7)
+// AUTO-REFRESH (v14.5.8)
 // ============================================================
 
 // Build a fingerprint that tells us if data has changed without full reload
@@ -2006,7 +2042,7 @@ function showFullTenantDebug(){
 }
 
 // ============================================================
-// OVERDUE CHECK-IN / CHECK-OUT (v14.5.7)
+// OVERDUE CHECK-IN / CHECK-OUT (v14.5.8)
 // ============================================================
 function isOverdueCheckIn(b){
   if(!b||b.Status!=='Upcoming'||!b.Check_In)return false;
