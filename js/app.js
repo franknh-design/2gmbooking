@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v14.5.22 — app.js (Core)
+// 2GM Booking v14.5.23 — app.js (Core)
 // Auth, Graph API, Data, Rendering, Bookings
 // ============================================================
 
@@ -790,11 +790,16 @@ function getWashScheduleHtml(booking){
   const washes=calcWashDates(booking.Check_In,booking.Check_Out,booking.id);
   const show=washes.filter(w=>!w.isPast).slice(0,6);if(!show.length)return'';
   const days=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-  let html='<div style="margin-top:14px"><div style="font-size:12px;color:var(--text-secondary);margin-bottom:4px;font-weight:500">Wash schedule</div><table style="font-size:12px;width:auto">';
+  // v14.5.23: Manage button for cleaners/admin
+  const manageBtn=canManageWashSchedule()
+    ?' <button onclick="openWashScheduleModal(\''+booking.id+'\')" style="margin-left:8px;padding:2px 8px;border:1px solid var(--accent);border-radius:4px;background:rgba(29,158,117,.1);color:var(--accent);cursor:pointer;font-size:10px;font-family:inherit">Manage</button>'
+    :'';
+  let html='<div style="margin-top:14px"><div style="font-size:12px;color:var(--text-secondary);margin-bottom:4px;font-weight:500">Wash schedule'+manageBtn+'</div><table style="font-size:12px;width:auto">';
   show.forEach(w=>{
     let s='',badge='';
     if(w.isToday){s='color:var(--text-danger);font-weight:500';badge=' <span class="pill danger">Today</span>'}
     else if(w.isNext){s='color:var(--accent);font-weight:500';badge=' <span class="pill" style="background:var(--bg-success);color:var(--text-success)">Next</span>'}
+    if(w.custom)badge+=' <span class="pill" style="background:rgba(239,159,39,.15);color:#854F0B;font-size:10px">custom</span>';
     html+='<tr style="'+s+'"><td style="padding:2px 12px 2px 0">'+days[w.date.getDay()]+' '+formatDate(w.date)+badge+'</td><td style="padding:2px 0">'+w.type+'</td></tr>';
   });
   return html+'</table></div>';
@@ -807,6 +812,136 @@ function getNextWashDate(booking){
   const days=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
   if(next.isToday)return'<span class="pill danger">Today — '+next.type+'</span>';
   return days[next.date.getDay()]+' '+formatDate(next.date)+' — '+next.type;
+}
+
+// ============================================================
+// WASH SCHEDULE MODAL (v14.5.23) — Iteration 3: UI for cleaners/admin
+// Allows Move / Remove / Add operations on wash dates with audit trail.
+// ============================================================
+let _washScheduleBookingId=null;
+
+function canManageWashSchedule(){return can('admin')||can('cleaning')}
+
+function openWashScheduleModal(bookingId){
+  if(!canManageWashSchedule()){alert('No permission to manage wash schedule.');return}
+  const b=allBookings.find(x=>String(x.id)===String(bookingId));
+  if(!b){alert('Booking not found.');return}
+  if(!b.Check_In){alert('Booking has no Check-in date.');return}
+  _washScheduleBookingId=bookingId;
+  const room=allRooms.find(r=>r.id===String(b.RoomLookupId));
+  document.getElementById('washScheduleTitle').textContent='Manage wash schedule — '+(b.Person_Name||'(no name)')+', Room '+(room?room.Title:'?');
+  renderWashScheduleModal();
+  document.getElementById('washScheduleModal').classList.add('open');
+}
+
+function closeWashScheduleModal(){
+  _washScheduleBookingId=null;
+  document.getElementById('washScheduleModal').classList.remove('open');
+}
+
+function renderWashScheduleModal(){
+  const bid=_washScheduleBookingId;if(!bid)return;
+  const b=allBookings.find(x=>String(x.id)===String(bid));if(!b)return;
+  const washes=calcWashDates(b.Check_In,b.Check_Out,b.id);
+  const days=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+
+  // Min/max for date pickers — entire stay period (no future-only restriction)
+  const minDate=toISODate(b.Check_In);
+  const maxDate=b.Check_Out?toISODate(b.Check_Out):'';
+
+  // Section 1: Wash list with Move/Skip buttons per row
+  let listHtml='<table style="width:100%;font-size:13px;margin-bottom:16px"><thead><tr><th style="text-align:left">Date</th><th style="text-align:left">Type</th><th style="text-align:left;width:40px"></th><th style="width:160px"></th></tr></thead><tbody>';
+  if(!washes.length){
+    listHtml+='<tr><td colspan="4" class="muted" style="padding:12px 0">No wash dates in current schedule.</td></tr>';
+  }else{
+    washes.forEach((w,idx)=>{
+      const dateStr=days[w.date.getDay()]+' '+formatDate(w.date);
+      let stylings='';
+      if(w.isPast)stylings='color:var(--text-tertiary)';
+      else if(w.isToday)stylings='color:var(--text-danger);font-weight:500';
+      else if(w.isNext)stylings='color:var(--accent);font-weight:500';
+      const customBadge=w.custom?' <span class="pill" style="background:rgba(239,159,39,.15);color:#854F0B;font-size:10px">custom</span>':'';
+      const moveDateInputId='wsMoveDate_'+idx;
+      const buttons='<button onclick="washMove(\''+w.date.toISOString()+'\',\''+moveDateInputId+'\')" style="padding:3px 8px;border:1px solid var(--border-tertiary);border-radius:4px;background:var(--bg-secondary);cursor:pointer;font-size:11px;font-family:inherit">Move</button> '
+        +'<button onclick="washRemove(\''+w.date.toISOString()+'\')" style="padding:3px 8px;border:1px solid var(--border-tertiary);border-radius:4px;background:var(--bg-secondary);cursor:pointer;font-size:11px;font-family:inherit">Skip</button>';
+      listHtml+='<tr style="'+stylings+'"><td style="padding:6px 0">'+dateStr+customBadge+'</td><td>'+w.type+'</td><td><input type="date" id="'+moveDateInputId+'" min="'+minDate+'" '+(maxDate?'max="'+maxDate+'"':'')+' style="padding:2px 4px;font-size:11px;width:130px"></td><td style="text-align:right">'+buttons+'</td></tr>';
+    });
+  }
+  listHtml+='</tbody></table>';
+
+  // Section 2: Add extra wash
+  const addHtml='<div style="border-top:1px solid var(--border-tertiary);padding-top:12px;margin-bottom:16px">'
+    +'<div style="font-size:12px;font-weight:500;margin-bottom:6px">Add extra wash</div>'
+    +'<div style="display:flex;gap:8px;align-items:center">'
+    +'<input type="date" id="wsAddDate" min="'+minDate+'" '+(maxDate?'max="'+maxDate+'"':'')+' style="padding:4px 8px;font-size:12px">'
+    +'<button onclick="washAdd()" style="padding:4px 12px;border:1px solid var(--accent);border-radius:4px;background:var(--accent);color:#fff;cursor:pointer;font-size:12px;font-family:inherit">+ Add</button>'
+    +'</div></div>';
+
+  // Section 3: Reason (optional, applies to next action)
+  const reasonHtml='<div style="margin-bottom:16px">'
+    +'<label style="display:block;font-size:12px;font-weight:500;margin-bottom:4px">Reason <span class="muted" style="font-weight:normal">(optional, applied to next change)</span></label>'
+    +'<input type="text" id="wsReason" placeholder="e.g. Guest declined, holiday, sick day..." style="width:100%;padding:6px 10px;font-size:13px;border:1px solid var(--border-tertiary);border-radius:4px">'
+    +'</div>';
+
+  // Section 4: Recent changes (last 5 overrides)
+  const overrides=getWashOverridesForBooking(bid).slice(-5).reverse();
+  let historyHtml='<div style="border-top:1px solid var(--border-tertiary);padding-top:12px"><div style="font-size:12px;font-weight:500;margin-bottom:6px">Recent changes</div>';
+  if(!overrides.length){
+    historyHtml+='<div class="muted" style="font-size:12px">No changes yet.</div>';
+  }else{
+    historyHtml+='<table style="width:100%;font-size:11px"><tbody>';
+    overrides.forEach(o=>{
+      const ts=o.ChangedAt?new Date(o.ChangedAt):null;
+      const tsStr=ts?formatDate(ts)+' '+String(ts.getHours()).padStart(2,'0')+':'+String(ts.getMinutes()).padStart(2,'0'):'?';
+      let desc='';
+      if(o.Action==='Move')desc='Moved '+(o.OriginalDate?formatDate(o.OriginalDate):'?')+' → '+(o.NewDate?formatDate(o.NewDate):'?');
+      else if(o.Action==='Remove')desc='Removed '+(o.OriginalDate?formatDate(o.OriginalDate):'?');
+      else if(o.Action==='Add')desc='Added '+(o.NewDate?formatDate(o.NewDate):'?');
+      const who=o.ChangedBy_Email||'?';
+      const reason=o.Reason?' — <em>'+escapeHtml(o.Reason)+'</em>':'';
+      historyHtml+='<tr><td style="padding:3px 0;color:var(--text-secondary);width:130px">'+tsStr+'</td><td>'+desc+reason+'</td><td style="color:var(--text-tertiary);text-align:right">'+escapeHtml(who)+'</td></tr>';
+    });
+    historyHtml+='</tbody></table>';
+  }
+  historyHtml+='</div>';
+
+  document.getElementById('washScheduleBody').innerHTML=listHtml+addHtml+reasonHtml+historyHtml;
+}
+
+async function washMove(originalDateIso,newDateInputId){
+  const newDateInput=document.getElementById(newDateInputId);
+  const newDateStr=newDateInput.value;
+  if(!newDateStr){alert('Pick a new date first.');newDateInput.focus();return}
+  const reason=(document.getElementById('wsReason')||{}).value||'';
+  const newDate=new Date(newDateStr+'T12:00:00');
+  try{
+    await saveWashOverride(_washScheduleBookingId,'Move',new Date(originalDateIso),newDate,reason);
+    document.getElementById('wsReason').value='';
+    renderWashScheduleModal();
+  }catch(e){console.error(e);alert('Failed to save: '+e.message)}
+}
+
+async function washRemove(originalDateIso){
+  if(!confirm('Skip this wash date?'))return;
+  const reason=(document.getElementById('wsReason')||{}).value||'';
+  try{
+    await saveWashOverride(_washScheduleBookingId,'Remove',new Date(originalDateIso),null,reason);
+    document.getElementById('wsReason').value='';
+    renderWashScheduleModal();
+  }catch(e){console.error(e);alert('Failed to save: '+e.message)}
+}
+
+async function washAdd(){
+  const dateStr=document.getElementById('wsAddDate').value;
+  if(!dateStr){alert('Pick a date first.');return}
+  const reason=(document.getElementById('wsReason')||{}).value||'';
+  const newDate=new Date(dateStr+'T12:00:00');
+  try{
+    await saveWashOverride(_washScheduleBookingId,'Add',null,newDate,reason);
+    document.getElementById('wsAddDate').value='';
+    document.getElementById('wsReason').value='';
+    renderWashScheduleModal();
+  }catch(e){console.error(e);alert('Failed to save: '+e.message)}
 }
 
 // --- RENDERING ---
