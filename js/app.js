@@ -734,8 +734,9 @@ function calcWashDates(checkInDate,checkOutDate,bookingId){
   }
 
   // 1. Baseline: anchor = Check_In + 7 days, weeks 1..N
+  // parityStart=0 means w=1 → 'Towels', w=2 → 'Towels + Beddings' (matches legacy logic)
   const firstAnchor=new Date(ci);firstAnchor.setDate(firstAnchor.getDate()+7);
-  let washes=generateFrom(getNextWeekday(firstAnchor),1,1);
+  let washes=generateFrom(getNextWeekday(firstAnchor),1,0);
 
   // 2. Apply overrides in chronological order
   const overrides=bookingId?getWashOverridesForBooking(bookingId):[];
@@ -751,14 +752,10 @@ function calcWashDates(checkInDate,checkOutDate,bookingId){
       const idx=washes.findIndex(w=>w.date.getTime()===origDate.getTime());
       if(idx<0)continue; // override references a date not in current schedule — skip silently
       const movedWeek=washes[idx].week;
-      // Compute parity for the moved week (so towel/bedding cycle continues)
-      // Original parity at week W: (W-1) % 2 === 0 → Towels
-      // We want the moved date to keep the same parity
-      const parity=((movedWeek-1)%2===0)?1:2; // 1 = start with Towels, 2 = start with Bedding
-      // Drop washes from idx onwards (we'll regenerate)
+      // Drop washes from idx onwards and regenerate from newDate.
+      // parityStart=0 keeps the towel/bedding cycle aligned with the original week numbers.
       washes=washes.slice(0,idx);
-      // Regenerate from newDate with the same week number
-      const regen=generateFrom(newDate,movedWeek,parity);
+      const regen=generateFrom(newDate,movedWeek,0);
       regen.forEach(r=>{r.overrideId=ov.id;r.custom=true});
       washes=washes.concat(regen);
     }else if(action==='Remove'&&origDate){
