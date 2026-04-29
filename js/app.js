@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v14.5.14 — app.js (Core)
+// 2GM Booking v14.5.15 — app.js (Core)
 // Auth, Graph API, Data, Rendering, Bookings
 // ============================================================
 
@@ -746,16 +746,25 @@ function calcBookingNights(booking){
   return Math.max(0,Math.round((co-ci)/864e5));
 }
 
-// v14.5.12: Resolve property title for a booking. Used by all rate-calc callsites
+// v14.5.15: Resolve property title for a booking. Used by all rate-calc callsites
 // so they work correctly in "All Properties" mode (where selectedProperty is null).
 // Lookup order:
-//   1. b.Property_Name (snapshot saved on booking)
+//   1. b.Property_Name (snapshot saved on booking) — BUT only if it matches a known property.
+//      Old bookings sometimes have legacy values like "Private" that don't match — we treat those
+//      as if Property_Name was missing and fall through to the room lookup.
 //   2. Room → Property lookup via b.RoomLookupId
 //   3. selectedProperty.Title (fallback for current view)
 //   4. '' (last resort — calcBookingCost will return missing rate)
 function getBookingPropertyTitle(b){
   if(!b)return selectedProperty?selectedProperty.Title:'';
-  if(b.Property_Name&&String(b.Property_Name).trim())return String(b.Property_Name).trim();
+  // 1. Try Property_Name, but verify it matches a known property
+  const pname=b.Property_Name?String(b.Property_Name).trim():'';
+  if(pname){
+    const known=properties.find(p=>(p.Title||'').trim().toLowerCase()===pname.toLowerCase());
+    if(known)return known.Title; // use canonical casing from Properties list
+    // pname is set but not a known property (e.g. legacy "Private") — fall through to room lookup
+  }
+  // 2. Look up property via room
   const rid=String(b.RoomLookupId||'');
   if(rid){
     const room=allRooms.find(r=>r.id===rid);
@@ -764,6 +773,7 @@ function getBookingPropertyTitle(b){
       if(prop&&prop.Title)return prop.Title;
     }
   }
+  // 3. Fallback to current view
   return selectedProperty?selectedProperty.Title:'';
 }
 
