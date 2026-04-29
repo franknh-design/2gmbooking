@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v14.5.18 — app.js (Core)
+// 2GM Booking v14.5.19 — app.js (Core)
 // Auth, Graph API, Data, Rendering, Bookings
 // ============================================================
 
@@ -1183,7 +1183,21 @@ function renderRowWithProperty(room,booking,propName){
 function renderFloors(){
   const sourceBk=(activeFilter==='dirty')?allBookings:bookings;
   const bMap={};
-  sourceBk.forEach(b=>{const rid=String(b.RoomLookupId||'');if(rid&&(b.Status==='Active'||b.Status==='Upcoming')&&(!bMap[rid]||b.Status==='Active'))bMap[rid]=b});
+  // v14.5.19: When needsAttention filter is active, surface the problematic booking on each row,
+  // even if it's behind another Active/Upcoming booking. Otherwise the row appears under the filter
+  // but shows a non-problematic booking with no warning badge — confusing UX.
+  if(activeFilter==='needsAttention'){
+    // First pass: any problematic booking takes priority on its room
+    allBookings.forEach(b=>{
+      const rid=String(b.RoomLookupId||'');
+      if(!rid)return;
+      if(bookingNeedsAttention(b)!==null&&!bMap[rid])bMap[rid]=b;
+    });
+    // Second pass: rooms without problematic booking get their normal active/upcoming
+    sourceBk.forEach(b=>{const rid=String(b.RoomLookupId||'');if(rid&&(b.Status==='Active'||b.Status==='Upcoming')&&!bMap[rid])bMap[rid]=b});
+  }else{
+    sourceBk.forEach(b=>{const rid=String(b.RoomLookupId||'');if(rid&&(b.Status==='Active'||b.Status==='Upcoming')&&(!bMap[rid]||b.Status==='Active'))bMap[rid]=b});
+  }
   const cols=7;
   const f1=getFilteredRoomsForFloor(1).sort((a,b)=>(a.Title||'').localeCompare(b.Title||'',undefined,{numeric:true}));
   const f2=getFilteredRoomsForFloor(2).sort((a,b)=>(a.Title||'').localeCompare(b.Title||'',undefined,{numeric:true}));
@@ -1951,7 +1965,13 @@ function getFilteredRoomsForFloor(floor){
     case 'battery':return floorRooms.filter(r=>r.Door_Battery_Level!=null&&r.Door_Battery_Level<30);
     case 'overdueCheckIn':return floorRooms.filter(r=>{const b=bMap[r.id];return b&&isOverdueCheckIn(b)});
     case 'overdueCheckOut':return floorRooms.filter(r=>{const b=bMap[r.id];return b&&isOverdueCheckOut(b)});
-    case 'needsAttention':return floorRooms.filter(r=>{const b=bMap[r.id];return b&&bookingNeedsAttention(b)!==null});
+    // v14.5.19: needsAttention-filter must check ALL bookings on the room, not just the one in bMap.
+    // bMap only keeps the "active" booking per room (preferring Active over Upcoming), but a
+    // problematic booking may be hidden behind a newer one. Without this fix, the count and
+    // filter results disagree (count says 1, filter returns 0).
+    case 'needsAttention':return floorRooms.filter(r=>{
+      return allBookings.some(b=>String(b.RoomLookupId||'')===r.id&&bookingNeedsAttention(b)!==null);
+    });
     default:return floorRooms;
   }
 }
