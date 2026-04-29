@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v14.5.21 — app.js (Core)
+// 2GM Booking v14.5.22 — app.js (Core)
 // Auth, Graph API, Data, Rendering, Bookings
 // ============================================================
 
@@ -694,26 +694,103 @@ async function _hardDeleteWashOverride(overrideId){
   return true;
 }
 
-function calcWashDates(checkInDate,checkOutDate){
+// v14.5.22: Calculate wash dates with optional overrides applied.
+// Overrides are applied in chronological order (by ChangedAt) — each Move shifts the
+// baseline weekday for ALL following weeks, per Frank's spec ("alle påfølgende vasker
+// følger den nye ukedagen").
+//
+// Algorithm:
+//   1. Generate baseline schedule starting from Check_In, weekly (skipping weekends).
+//   2. For each override in ChangedAt order:
+//      - Move(O, N): Find baseline date matching O. From that date forward, regenerate
+//                    using N as new anchor (N + 7d, N + 14d, ...). Discard any baseline
+//                    dates that came strictly after O. Type cycle (towels/beddings)
+//                    continues from the moved week's parity.
+//      - Add(N):     Insert N as a one-off date. Does NOT shift baseline. Marked custom.
+//      - Remove(O):  Drop the date matching O from current schedule. Does NOT shift baseline.
+//   3. Sort by date, recompute isPast/isToday/isNext flags.
+//
+// Returns: array of {date, type, week, isPast, isToday, isNext, custom?, overrideId?}
+function calcWashDates(checkInDate,checkOutDate,bookingId){
   const ci=new Date(checkInDate);ci.setHours(0,0,0,0);
   const co=checkOutDate?new Date(checkOutDate):null;if(co)co.setHours(0,0,0,0);
   const today=new Date();today.setHours(0,0,0,0);
-  const washes=[];let week=1;
-  while(week<=52){
-    const rawDate=new Date(ci);rawDate.setDate(rawDate.getDate()+week*7);
-    const washDate=getNextWeekday(rawDate);
-    if(co&&washDate>=co)break;
-    const type=(week%2===1)?'Towels':'Towels + Beddings';
-    const isPast=washDate<today;const isToday=washDate.getTime()===today.getTime();
-    const isNext=!isPast&&!isToday&&washes.every(w=>w.isPast||w.isToday);
-    washes.push({date:washDate,type,week,isPast,isToday,isNext});week++;
+
+  // Helper: generate weekly schedule from given anchor date, starting at weekOffset
+  // (anchor itself is at weekOffset, then anchor+7, anchor+14, ...).
+  // The 'parityStart' param controls towels/beddings cycle (so it continues across moves).
+  function generateFrom(anchorDate,weekOffset,parityStart){
+    const out=[];
+    let w=weekOffset;
+    while(w<=52){
+      const raw=new Date(anchorDate);raw.setDate(raw.getDate()+(w-weekOffset)*7);
+      const d=getNextWeekday(raw);
+      if(co&&d>=co)break;
+      const type=((w-1+parityStart)%2===0)?'Towels':'Towels + Beddings';
+      out.push({date:d,type,week:w});
+      w++;
+    }
+    return out;
   }
+
+  // 1. Baseline: anchor = Check_In + 7 days, weeks 1..N
+  const firstAnchor=new Date(ci);firstAnchor.setDate(firstAnchor.getDate()+7);
+  let washes=generateFrom(getNextWeekday(firstAnchor),1,1);
+
+  // 2. Apply overrides in chronological order
+  const overrides=bookingId?getWashOverridesForBooking(bookingId):[];
+  for(const ov of overrides){
+    const action=ov.Action;
+    const origDate=ov.OriginalDate?new Date(ov.OriginalDate):null;
+    const newDate=ov.NewDate?new Date(ov.NewDate):null;
+    if(origDate)origDate.setHours(0,0,0,0);
+    if(newDate)newDate.setHours(0,0,0,0);
+
+    if(action==='Move'&&origDate&&newDate){
+      // Find the wash matching origDate
+      const idx=washes.findIndex(w=>w.date.getTime()===origDate.getTime());
+      if(idx<0)continue; // override references a date not in current schedule — skip silently
+      const movedWeek=washes[idx].week;
+      // Compute parity for the moved week (so towel/bedding cycle continues)
+      // Original parity at week W: (W-1) % 2 === 0 → Towels
+      // We want the moved date to keep the same parity
+      const parity=((movedWeek-1)%2===0)?1:2; // 1 = start with Towels, 2 = start with Bedding
+      // Drop washes from idx onwards (we'll regenerate)
+      washes=washes.slice(0,idx);
+      // Regenerate from newDate with the same week number
+      const regen=generateFrom(newDate,movedWeek,parity);
+      regen.forEach(r=>{r.overrideId=ov.id;r.custom=true});
+      washes=washes.concat(regen);
+    }else if(action==='Remove'&&origDate){
+      const idx=washes.findIndex(w=>w.date.getTime()===origDate.getTime());
+      if(idx>=0)washes.splice(idx,1);
+    }else if(action==='Add'&&newDate){
+      // Add as one-off — does not shift baseline
+      // Type defaults to Towels for ad-hoc; could be smarter but keep simple for now
+      washes.push({date:newDate,type:'Towels (custom)',week:0,custom:true,overrideId:ov.id});
+    }
+  }
+
+  // 3. Sort by date and recompute flags
+  washes.sort((a,b)=>a.date-b.date);
+  washes.forEach((w,i)=>{
+    w.isPast=w.date<today;
+    w.isToday=w.date.getTime()===today.getTime();
+  });
+  // isNext = first non-past, non-today wash
+  let foundNext=false;
+  washes.forEach(w=>{
+    if(!foundNext&&!w.isPast&&!w.isToday){w.isNext=true;foundNext=true}
+    else w.isNext=false;
+  });
+
   return washes;
 }
 
 function getWashScheduleHtml(booking){
   if(!booking||!booking.Check_In||!(booking.Status==='Active'||booking.Status==='Upcoming'))return'';
-  const washes=calcWashDates(booking.Check_In,booking.Check_Out);
+  // v14.5.22: pass booking.id so overrides are applied
+  const washes=calcWashDates(booking.Check_In,booking.Check_Out,booking.id);
   const show=washes.filter(w=>!w.isPast).slice(0,6);if(!show.length)return'';
   const days=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
   let html='<div style="margin-top:14px"><div style="font-size:12px;color:var(--text-secondary);margin-bottom:4px;font-weight:500">Wash schedule</div><table style="font-size:12px;width:auto">';
@@ -728,7 +805,7 @@ function getWashScheduleHtml(booking){
 
 function getNextWashDate(booking){
   if(!booking||!booking.Check_In||booking.Status!=='Active')return'';
-  const washes=calcWashDates(booking.Check_In,booking.Check_Out);
+  const washes=calcWashDates(booking.Check_In,booking.Check_Out,booking.id);
   const next=washes.find(w=>!w.isPast);if(!next)return'<span class="muted">—</span>';
   const days=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
   if(next.isToday)return'<span class="pill danger">Today — '+next.type+'</span>';
@@ -1361,7 +1438,7 @@ function updateStats(){
     const rid=String(b.RoomLookupId||'');
     if(!allAssignedRoomIds.has(rid))return;
     if(b.Cleaning_Status==='Dirty'&&(b.Status==='Active'||b.Status==='Upcoming'))allDirtyRoomIds.add(rid);
-    if(b.Status==='Active'&&b.Check_In){const w=calcWashDates(b.Check_In,b.Check_Out);if(w.some(x=>x.isToday))allDirtyRoomIds.add(rid)}
+    if(b.Status==='Active'&&b.Check_In){const w=calcWashDates(b.Check_In,b.Check_Out,b.id);if(w.some(x=>x.isToday))allDirtyRoomIds.add(rid)}
   });
   // v14.5.10: empty rooms with Cleaning_Status='Dirty'
   allAssignedRooms.forEach(r=>{
@@ -2053,7 +2130,7 @@ function getFilteredRoomsForFloor(floor){
   switch(activeFilter){
     case 'checkedIn':return floorRooms.filter(r=>!!bMap[r.id]);
     case 'empty':return floorRooms.filter(r=>!bMap[r.id]);
-    case 'dirty':return floorRooms.filter(r=>{const b=bMap[r.id];if(!b)return false;if(b.Cleaning_Status==='Dirty')return true;if(b.Status==='Active'&&b.Check_In){const w=calcWashDates(b.Check_In,b.Check_Out);if(w.some(x=>x.isToday))return true}return false});
+    case 'dirty':return floorRooms.filter(r=>{const b=bMap[r.id];if(!b)return false;if(b.Cleaning_Status==='Dirty')return true;if(b.Status==='Active'&&b.Check_In){const w=calcWashDates(b.Check_In,b.Check_Out,b.id);if(w.some(x=>x.isToday))return true}return false});
     case 'doorTag':return floorRooms.filter(r=>bMap[r.id]&&bMap[r.id].Door_Tag_Status==='Needs-print');
     case 'battery':return floorRooms.filter(r=>r.Door_Battery_Level!=null&&r.Door_Battery_Level<30);
     case 'overdueCheckIn':return floorRooms.filter(r=>{const b=bMap[r.id];return b&&isOverdueCheckIn(b)});

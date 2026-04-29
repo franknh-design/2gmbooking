@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v14.5.21 — modules.js
+// 2GM Booking v14.5.22 — modules.js
 // Hours, Archive, Import/Export, Admin (checkbox permissions)
 // ============================================================
 
@@ -1047,7 +1047,7 @@ function renderPersons(){
       // Check for today's wash
       let todayBadge='';
       if(active.Check_In){
-        const washes=calcWashDates(active.Check_In,active.Check_Out);
+        const washes=calcWashDates(active.Check_In,active.Check_Out,active.id);
         const todayWash=washes.find(w=>w.isToday);
         if(todayWash)todayBadge=' <span class="pill danger" style="font-size:10px">Today — '+todayWash.type+'</span>';
         else if(active.Cleaning_Status==='Dirty')todayBadge=' <span class="pill danger" style="font-size:10px">Needs cleaning</span>';
@@ -2978,7 +2978,7 @@ function showCleaningDiagnostics(){
     if(!b.Check_In)g.noCheckIn++;
     if(!b.RoomLookupId)g.noRoomLink++;
     if(b.Status==='Active'&&b.Check_In){
-      const w=calcWashDates(b.Check_In,b.Check_Out);
+      const w=calcWashDates(b.Check_In,b.Check_Out,b.id);
       if(w.some(x=>x.isToday)){g.washToday++;g.bookings.push(b)}
     }
   });
@@ -3039,7 +3039,7 @@ function showCleaningDiagnostics(){
         const roomTitle=room?room.Title:'(no room)';
         const ci=new Date(b.Check_In);ci.setHours(0,0,0,0);
         const daysSince=Math.round((today-ci)/864e5);
-        const washes=calcWashDates(b.Check_In,b.Check_Out);
+        const washes=calcWashDates(b.Check_In,b.Check_Out,b.id);
         const past=washes.filter(w=>w.isPast);
         const lastWash=past.length?past[past.length-1]:null;
         const todayWash=washes.find(w=>w.isToday);
