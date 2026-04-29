@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v14.5.23 — app.js (Core)
+// 2GM Booking v14.5.24 — app.js (Core)
 // Auth, Graph API, Data, Rendering, Bookings
 // ============================================================
 
@@ -476,6 +476,8 @@ function applyPermissions(){
   show('btnArchive',can('archive')||can('view_bookings'));
   show('btnUpcoming',can('view_bookings'));
   show('btnHours',can('view_hours')||can('edit_hours'));
+  // v14.5.24: Cleaning calendar — admin or cleaning permission
+  show('btnCleaningCalendar',can('admin')||can('cleaning'));
   show('efficiencyBtn',can('view_efficiency'));
   showBlock('adminBar',can('admin')||can('manage_rates'));
   // Rates button only if manage_rates
@@ -790,7 +792,7 @@ function getWashScheduleHtml(booking){
   const washes=calcWashDates(booking.Check_In,booking.Check_Out,booking.id);
   const show=washes.filter(w=>!w.isPast).slice(0,6);if(!show.length)return'';
   const days=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-  // v14.5.23: Manage button for cleaners/admin
+  // v14.5.24: Manage button for cleaners/admin
   const manageBtn=canManageWashSchedule()
     ?' <button onclick="openWashScheduleModal(\''+booking.id+'\')" style="margin-left:8px;padding:2px 8px;border:1px solid var(--accent);border-radius:4px;background:rgba(29,158,117,.1);color:var(--accent);cursor:pointer;font-size:10px;font-family:inherit">Manage</button>'
     :'';
@@ -815,7 +817,7 @@ function getNextWashDate(booking){
 }
 
 // ============================================================
-// WASH SCHEDULE MODAL (v14.5.23) — Iteration 3: UI for cleaners/admin
+// WASH SCHEDULE MODAL (v14.5.24) — Iteration 3: UI for cleaners/admin
 // Allows Move / Remove / Add operations on wash dates with audit trail.
 // ============================================================
 let _washScheduleBookingId=null;
@@ -942,6 +944,166 @@ async function washAdd(){
     document.getElementById('wsReason').value='';
     renderWashScheduleModal();
   }catch(e){console.error(e);alert('Failed to save: '+e.message)}
+}
+
+// ============================================================
+// CLEANING CALENDAR (v14.5.24) — Visualize cleaning load over the next 4 weeks
+// Helps spot clustering days (30-40 rooms on one day) before they happen.
+// ============================================================
+
+function toggleCleaningCalendar(){
+  const m=document.getElementById('cleaningCalendarModal');
+  if(m.classList.contains('open')){closeCleaningCalendar();return}
+  renderCleaningCalendar();
+  m.classList.add('open');
+}
+
+function closeCleaningCalendar(){
+  document.getElementById('cleaningCalendarModal').classList.remove('open');
+}
+
+// Build map: ISO-date-string -> array of {booking, room, washType}
+function buildCleaningLoadMap(weeksAhead){
+  const map={};
+  const today=new Date();today.setHours(0,0,0,0);
+  const endDate=new Date(today);endDate.setDate(endDate.getDate()+weeksAhead*7);
+
+  // Iterate active + upcoming bookings, compute their wash dates within window
+  allBookings.forEach(b=>{
+    if(!b.Check_In)return;
+    if(b.Status!=='Active'&&b.Status!=='Upcoming')return;
+    const washes=calcWashDates(b.Check_In,b.Check_Out,b.id);
+    washes.forEach(w=>{
+      if(w.date<today||w.date>endDate)return;
+      const key=toISODate(w.date);
+      if(!map[key])map[key]=[];
+      const room=allRooms.find(r=>r.id===String(b.RoomLookupId));
+      map[key].push({booking:b,room:room,washType:w.type,custom:!!w.custom});
+    });
+
+    // Also include checkout (utvask) within window — that's also cleaning load
+    if(b.Check_Out&&(b.Status==='Active'||b.Status==='Upcoming')){
+      const co=new Date(b.Check_Out);co.setHours(0,0,0,0);
+      if(co>=today&&co<=endDate){
+        const key=toISODate(co);
+        if(!map[key])map[key]=[];
+        const room=allRooms.find(r=>r.id===String(b.RoomLookupId));
+        map[key].push({booking:b,room:room,washType:'Checkout (utvask)',isCheckout:true});
+      }
+    }
+  });
+  return map;
+}
+
+function renderCleaningCalendar(){
+  const weeks=4;
+  const loadMap=buildCleaningLoadMap(weeks);
+
+  // Determine relative color thresholds: greatest count = red, ≤1/3 of that = green, between = yellow
+  const counts=Object.values(loadMap).map(arr=>arr.length);
+  const maxCount=counts.length?Math.max(...counts):0;
+  const greenThreshold=Math.max(2,Math.floor(maxCount/3));
+  const yellowThreshold=Math.max(4,Math.floor(maxCount*2/3));
+
+  // Find Monday of the week containing today
+  const today=new Date();today.setHours(0,0,0,0);
+  const dayOfWeek=today.getDay(); // 0=Sun, 1=Mon, ..., 6=Sat
+  const offsetToMon=(dayOfWeek===0)?-6:(1-dayOfWeek);
+  const startMon=new Date(today);startMon.setDate(startMon.getDate()+offsetToMon);
+
+  const dayLabels=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  const months=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+  let html='<div style="margin-bottom:12px;font-size:12px;color:var(--text-secondary)">'
+    +'Showing cleaning load (towel/bedding washes + checkouts) for the next '+weeks+' weeks. '
+    +'Colors are relative to busiest day. Click a day to see rooms.</div>';
+
+  html+='<div style="display:flex;gap:16px;margin-bottom:12px;font-size:11px"><span><span style="display:inline-block;width:10px;height:10px;background:#D4F4E2;border:1px solid #1D9E75;border-radius:2px"></span> Light (≤'+greenThreshold+')</span> '
+    +'<span><span style="display:inline-block;width:10px;height:10px;background:#FCE4B6;border:1px solid #EF9F27;border-radius:2px"></span> Medium</span> '
+    +'<span><span style="display:inline-block;width:10px;height:10px;background:#F7CACA;border:1px solid #D14343;border-radius:2px"></span> Heavy ('+yellowThreshold+'+)</span> '
+    +'<span style="color:var(--text-tertiary)">Max: '+maxCount+' rooms</span></div>';
+
+  // Calendar grid: 4 weeks × 7 days
+  html+='<table style="width:100%;table-layout:fixed;border-collapse:separate;border-spacing:4px"><thead><tr>';
+  dayLabels.forEach(d=>{html+='<th style="font-size:11px;color:var(--text-secondary);padding:4px;text-align:center;font-weight:500">'+d+'</th>'});
+  html+='</tr></thead><tbody>';
+
+  for(let wk=0;wk<weeks;wk++){
+    html+='<tr>';
+    for(let d=0;d<7;d++){
+      const cellDate=new Date(startMon);cellDate.setDate(cellDate.getDate()+wk*7+d);
+      const isWeekend=(d===5||d===6);
+      const isToday=cellDate.getTime()===today.getTime();
+      const isPast=cellDate<today;
+      const key=toISODate(cellDate);
+      const items=loadMap[key]||[];
+      const count=items.length;
+
+      // Color
+      let bg='#fff',border='var(--border-tertiary)',textColor='var(--text-primary)';
+      if(isPast){bg='#f5f5f5';textColor='var(--text-tertiary)'}
+      else if(isWeekend){bg='#fafafa';textColor='var(--text-tertiary)'}
+      else if(count>=yellowThreshold){bg='#F7CACA';border='#D14343'}
+      else if(count>=greenThreshold){bg='#FCE4B6';border='#EF9F27'}
+      else if(count>0){bg='#D4F4E2';border='#1D9E75'}
+
+      const todayRing=isToday?'box-shadow:0 0 0 2px var(--accent);':'';
+      const cursor=(count>0&&!isPast)?'cursor:pointer;':'';
+      const onclick=(count>0&&!isPast)?'onclick="openCleaningDayModal(\''+key+'\')"':'';
+      const dateStr=cellDate.getDate()+'. '+months[cellDate.getMonth()];
+
+      html+='<td style="background:'+bg+';border:1px solid '+border+';border-radius:6px;padding:8px 4px;text-align:center;height:70px;'+todayRing+cursor+'" '+onclick+'>'
+        +'<div style="font-size:11px;color:'+textColor+';font-weight:500">'+dateStr+'</div>'
+        +'<div style="font-size:18px;color:'+textColor+';font-weight:600;margin-top:4px">'+(count||(isPast||isWeekend?'':'·'))+'</div>'
+        +'</td>';
+    }
+    html+='</tr>';
+  }
+  html+='</tbody></table>';
+
+  document.getElementById('cleaningCalendarBody').innerHTML=html;
+}
+
+// Day detail: show all rooms scheduled for one specific date with Manage links
+function openCleaningDayModal(isoDate){
+  const loadMap=buildCleaningLoadMap(4);
+  const items=loadMap[isoDate]||[];
+  const date=new Date(isoDate+'T00:00:00');
+  const days=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  document.getElementById('cleaningDayTitle').textContent=days[date.getDay()]+' '+formatDate(date)+' — '+items.length+' room'+(items.length===1?'':'s');
+
+  let html='';
+  if(!items.length){
+    html='<div class="muted">No cleaning scheduled this day.</div>';
+  }else{
+    // Sort: checkouts first (more time-critical), then by room number
+    const sorted=[...items].sort((a,b)=>{
+      if(a.isCheckout&&!b.isCheckout)return -1;
+      if(b.isCheckout&&!a.isCheckout)return 1;
+      const ra=a.room?a.room.Title:'';
+      const rb=b.room?b.room.Title:'';
+      return String(ra).localeCompare(String(rb),undefined,{numeric:true});
+    });
+    html='<table style="width:100%;font-size:13px"><thead><tr><th style="text-align:left">Room</th><th style="text-align:left">Guest</th><th style="text-align:left">Type</th><th style="text-align:right;width:90px"></th></tr></thead><tbody>';
+    sorted.forEach(it=>{
+      const room=it.room?it.room.Title:'?';
+      const name=it.booking.Person_Name||'(no name)';
+      const typeStyle=it.isCheckout?'color:#EF9F27;font-weight:500':(it.custom?'color:#854F0B':'');
+      const customMark=it.custom?' <span class="pill" style="background:rgba(239,159,39,.15);color:#854F0B;font-size:10px">custom</span>':'';
+      const manageBtn=canManageWashSchedule()&&!it.isCheckout
+        ?'<button onclick="closeCleaningDayModal();openWashScheduleModal(\''+it.booking.id+'\')" style="padding:3px 8px;border:1px solid var(--accent);border-radius:4px;background:rgba(29,158,117,.1);color:var(--accent);cursor:pointer;font-size:11px;font-family:inherit">Manage</button>'
+        :'';
+      html+='<tr><td style="padding:5px 0">'+escapeHtml(room)+'</td><td>'+escapeHtml(name)+'</td><td style="'+typeStyle+'">'+escapeHtml(it.washType)+customMark+'</td><td style="text-align:right">'+manageBtn+'</td></tr>';
+    });
+    html+='</tbody></table>';
+  }
+
+  document.getElementById('cleaningDayBody').innerHTML=html;
+  document.getElementById('cleaningDayModal').classList.add('open');
+}
+
+function closeCleaningDayModal(){
+  document.getElementById('cleaningDayModal').classList.remove('open');
 }
 
 // --- RENDERING ---
