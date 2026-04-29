@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v14.5.19 — app.js (Core)
+// 2GM Booking v14.5.21 — app.js (Core)
 // Auth, Graph API, Data, Rendering, Bookings
 // ============================================================
 
@@ -18,7 +18,7 @@ const msalConfig={auth:{clientId:'f8e2259d-c440-41d3-94e3-3a2dce095817',authorit
 const msalInstance=new msal.PublicClientApplication(msalConfig);
 const SITE_HOST='2gmeiendom.sharepoint.com';
 const SITE_PATH='/sites/2GMBooking';
-const LIST_IDS={Properties:'d842d574-f238-442a-be3d-77334727e89f',Rooms:'bfa962a0-5eb2-416c-abe8-adba06558c11',Bookings:'fe1dfe34-23df-4864-b0b1-b01bf60bfb75',Persons:'ebbe517d-83f8-4169-9423-70c63a3f8c07',Cleaning_Log:'6b1bd5f9-c54f-42ee-892f-d50c79481375',Hours:'9db53c54-70dd-483d-ad1d-565d0e4ac7ac',Users:'1b9b866f-0944-4f43-a80d-2a630e1e7c25',Rates:'a604493f-e879-48a0-bcab-cdeb9ae2195e'};
+const LIST_IDS={Properties:'d842d574-f238-442a-be3d-77334727e89f',Rooms:'bfa962a0-5eb2-416c-abe8-adba06558c11',Bookings:'fe1dfe34-23df-4864-b0b1-b01bf60bfb75',Persons:'ebbe517d-83f8-4169-9423-70c63a3f8c07',Cleaning_Log:'6b1bd5f9-c54f-42ee-892f-d50c79481375',Hours:'9db53c54-70dd-483d-ad1d-565d0e4ac7ac',Users:'1b9b866f-0944-4f43-a80d-2a630e1e7c25',Rates:'a604493f-e879-48a0-bcab-cdeb9ae2195e',WashOverrides:'626a9546-60b2-4203-91fe-ca28a1a77e94'};
 
 // --- PERMISSIONS LIST ---
 const ALL_PERMS=[
@@ -48,7 +48,7 @@ let accessToken=null,siteId=null;
 let _tokenExpiresAt=0; // ms epoch — cached token expiry (v14.5.11)
 const TOKEN_REFRESH_MARGIN_MS=5*60*1000; // refresh if < 5 min until expiry
 let currentUser={email:'',displayName:'',permissions:[]};
-let properties=[],rooms=[],allRooms=[],bookings=[],allBookings=[],allUsers=[],allPersons=[],allRates=[],allCompanies=[];
+let properties=[],rooms=[],allRooms=[],bookings=[],allBookings=[],allUsers=[],allPersons=[],allRates=[],allCompanies=[],allWashOverrides=[];
 let selectedProperty=null,selectedRoom=null,selectedBooking=null;
 let editingBookingId=null,checkoutBookingId=null;
 let activeFilter=null;
@@ -557,6 +557,8 @@ async function loadData(){
     try{allPersons=await getListItems('Persons')}catch(e){allPersons=[]}
     try{allRates=await getListItems('Rates')}catch(e){allRates=[]}
     try{allCompanies=await getListItems('Companies')}catch(e){allCompanies=[]}
+    // v14.5.21: Load wash overrides
+    try{allWashOverrides=await getListItems('WashOverrides')}catch(e){allWashOverrides=[];console.warn('[WashOverrides] load failed:',e.message)}
     if(isAll){
       // Show rooms from all properties the user has access to
       const assignedPropIds=new Set(properties.map(p=>String(p.id)));
@@ -600,6 +602,97 @@ function formatDate(d){if(!d)return'';const dt=new Date(d);return String(dt.getD
 function toISODate(d){if(!d)return'';const dt=new Date(d);return dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0')+'-'+String(dt.getDate()).padStart(2,'0')}
 
 function getNextWeekday(date){const d=new Date(date);const day=d.getDay();if(day===0)d.setDate(d.getDate()+1);else if(day===6)d.setDate(d.getDate()+2);return d}
+
+// ============================================================
+// WASH OVERRIDES (v14.5.21) — Iteration 1: data layer (CRUD)
+// SP list: WashOverrides (id 626a9546-60b2-4203-91fe-ca28a1a77e94)
+// Each row: BookingLookupId, Action (Add/Remove/Move), OriginalDate, NewDate,
+//           ChangedBy (Person, optional), ChangedAt (DateTime), Reason, Status (Active/Reverted)
+// ============================================================
+
+// Get all overrides for one booking, sorted by ChangedAt ascending (oldest first).
+// Order matters in iteration 2 because each Move shifts the baseline for following weeks.
+function getWashOverridesForBooking(bookingId){
+  if(!bookingId)return[];
+  const bid=String(bookingId);
+  return allWashOverrides
+    .filter(o=>String(o.BookingLookupId||'')===bid&&(o.Status||'Active')!=='Reverted')
+    .sort((a,b)=>{
+      const ta=a.ChangedAt?new Date(a.ChangedAt).getTime():0;
+      const tb=b.ChangedAt?new Date(b.ChangedAt).getTime():0;
+      return ta-tb;
+    });
+}
+
+// Save a new override to SharePoint.
+// action: 'Add' | 'Remove' | 'Move'
+// originalDate / newDate: Date objects or ISO strings (depending on action — see WashOverrides spec)
+// reason: optional free text
+// Returns the new override item from SP cache (with id), or throws on failure.
+async function saveWashOverride(bookingId,action,originalDate,newDate,reason){
+  if(!bookingId)throw new Error('bookingId required');
+  if(!['Add','Remove','Move'].includes(action))throw new Error('invalid action: '+action);
+  if((action==='Remove'||action==='Move')&&!originalDate)throw new Error(action+' requires originalDate');
+  if((action==='Add'||action==='Move')&&!newDate)throw new Error(action+' requires newDate');
+
+  const fields={
+    BookingLookupId:parseInt(bookingId),
+    Action:action,
+    Status:'Active',
+    ChangedAt:new Date().toISOString()
+  };
+  // Date Only fields — store as YYYY-MM-DD at midnight UTC to avoid timezone drift
+  if(originalDate){
+    const d=originalDate instanceof Date?originalDate:new Date(originalDate);
+    fields.OriginalDate=new Date(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate())).toISOString();
+  }
+  if(newDate){
+    const d=newDate instanceof Date?newDate:new Date(newDate);
+    fields.NewDate=new Date(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate())).toISOString();
+  }
+  if(reason&&String(reason).trim())fields.Reason=String(reason).trim();
+  // ChangedBy is a Person field. Setting it via Graph requires the SP user id (not email),
+  // and ensureUser is awkward through Graph. For iteration 1 we set ChangedBy_Email instead
+  // (custom column) — if you'd rather use the SP Person column, we can refine in iteration 4.
+  if(currentUser&&currentUser.email)fields.ChangedBy_Email=currentUser.email;
+
+  const created=await createListItem('WashOverrides',fields);
+  // Append to local cache so UI updates immediately
+  if(created){
+    const enriched={
+      id:created.id,
+      BookingLookupId:fields.BookingLookupId,
+      Action:fields.Action,
+      Status:fields.Status,
+      OriginalDate:fields.OriginalDate||null,
+      NewDate:fields.NewDate||null,
+      ChangedAt:fields.ChangedAt,
+      Reason:fields.Reason||null,
+      ChangedBy_Email:fields.ChangedBy_Email||null
+    };
+    allWashOverrides.push(enriched);
+    return enriched;
+  }
+  return null;
+}
+
+// Soft-delete by setting Status to Reverted, preserving audit trail.
+async function revertWashOverride(overrideId){
+  if(!overrideId)throw new Error('overrideId required');
+  await updateListItem('WashOverrides',overrideId,{Status:'Reverted'});
+  const local=allWashOverrides.find(o=>String(o.id)===String(overrideId));
+  if(local)local.Status='Reverted';
+  return true;
+}
+
+// Hard delete — admin only, mainly for cleaning up test data.
+async function _hardDeleteWashOverride(overrideId){
+  if(!overrideId)throw new Error('overrideId required');
+  const s=await getSiteId();const lid=await getListId('WashOverrides');
+  await graphDelete('/sites/'+s+'/lists/'+lid+'/items/'+overrideId);
+  allWashOverrides=allWashOverrides.filter(o=>String(o.id)!==String(overrideId));
+  return true;
+}
 
 function calcWashDates(checkInDate,checkOutDate){
   const ci=new Date(checkInDate);ci.setHours(0,0,0,0);
@@ -856,8 +949,8 @@ function datesCell(b){
   const att=bookingNeedsAttention(b);
   if(att){
     const tipText=att.type==='invalid_status'
-      ?'Status er '+(b.Status||'?')+' men Check_Out var '+att.daysSinceCheckOut+' dag'+(att.daysSinceCheckOut===1?'':'er')+' siden'
-      :'Status Upcoming men Check_In var '+att.daysSinceCheckIn+' dager siden';
+      ?'Status is '+(b.Status||'?')+' but Check-out was '+att.daysSinceCheckOut+' day'+(att.daysSinceCheckOut===1?'':'s')+' ago'
+      :'Status Upcoming but Check-in was '+att.daysSinceCheckIn+' days ago';
     overdueBadge+=' <span style="background:rgba(239,159,39,.15);color:#854F0B;padding:1px 6px;border-radius:3px;font-size:10px;font-weight:500" title="'+tipText+'">⚠ '+att.label+'</span>';
   }
   return'<span style="'+s+'">'+ci+'</span> — '+co+overdueBadge;
@@ -1423,8 +1516,8 @@ function showDetail(roomId){
       const naAtt=bookingNeedsAttention(booking);
       if(naAtt){
         const explanation=naAtt.type==='invalid_status'
-          ?'Status er <strong>'+(booking.Status||'?')+'</strong> men Check_Out var <strong>'+naAtt.daysSinceCheckOut+' dag'+(naAtt.daysSinceCheckOut===1?'':'er')+' siden</strong>. Bookingen burde sannsynligvis vært markert som Completed.'
-          :'Status er <strong>Upcoming</strong> men Check_In var <strong>'+naAtt.daysSinceCheckIn+' dager siden</strong>. Bookingen kan ha blitt glemt — sjekk om gjesten faktisk var her.';
+          ?'Status is <strong>'+(booking.Status||'?')+'</strong> but Check-out was <strong>'+naAtt.daysSinceCheckOut+' day'+(naAtt.daysSinceCheckOut===1?'':'s')+' ago</strong>. The booking should probably be marked as Completed.'
+          :'Status is <strong>Upcoming</strong> but Check-in was <strong>'+naAtt.daysSinceCheckIn+' days ago</strong>. This booking may have been forgotten — verify whether the guest actually stayed.';
         overdueBanner+='<div style="background:rgba(239,159,39,.12);border-left:3px solid #EF9F27;padding:10px 14px;margin-bottom:12px;border-radius:6px"><div style="font-size:13px;color:#854F0B"><strong>⚠ '+naAtt.label+':</strong> '+explanation+'</div></div>';
       }
       infoHtml=overdueBanner+'<div class="detail-name">'+booking.Person_Name+'</div>'
@@ -1877,7 +1970,7 @@ function toggleFilter(filter){
   if(activeFilter===filter){clearFilter();return}
   activeFilter=filter;
   document.querySelectorAll('.stat').forEach((el,i)=>{const f=['checkedIn','empty','dirty','doorTag','battery'];el.classList.toggle('active',f[i]===filter)});
-  const labels={checkedIn:'Showing: Checked-in rooms',empty:'Showing: Empty rooms',dirty:'Showing: Rooms needing cleaning',doorTag:'Showing: Door tags needing print',battery:'Showing: Low battery rooms (<30%)',overdueCheckIn:'Showing: Overdue check-in',overdueCheckOut:'Showing: Overdue check-out',needsAttention:'Showing: Bookings som trenger oppmerksomhet'};
+  const labels={checkedIn:'Showing: Checked-in rooms',empty:'Showing: Empty rooms',dirty:'Showing: Rooms needing cleaning',doorTag:'Showing: Door tags needing print',battery:'Showing: Low battery rooms (<30%)',overdueCheckIn:'Showing: Overdue check-in',overdueCheckOut:'Showing: Overdue check-out',needsAttention:'Showing: Bookings needing attention'};
   document.getElementById('filterLabel').textContent=labels[filter]||'';
   document.getElementById('filterBar').classList.add('open');renderFloors();
   // Show action button for door-tag filter
@@ -2286,7 +2379,7 @@ function bookingNeedsAttention(b){
     const co=new Date(b.Check_Out);co.setHours(0,0,0,0);
     if(co.getTime()<today.getTime()){
       const days=Math.round((today-co)/864e5);
-      return{type:'invalid_status',label:'Status burde vært Completed',daysSinceCheckOut:days};
+      return{type:'invalid_status',label:'Should be Completed',daysSinceCheckOut:days};
     }
   }
   // 2. Extreme overdue check-in: Upcoming but Check_In was >30 days ago
@@ -2294,7 +2387,7 @@ function bookingNeedsAttention(b){
     const ci=new Date(b.Check_In);ci.setHours(0,0,0,0);
     const daysSince=Math.round((today-ci)/864e5);
     if(daysSince>30){
-      return{type:'extreme_overdue_in',label:'Aldri sjekket inn',daysSinceCheckIn:daysSince};
+      return{type:'extreme_overdue_in',label:'Never checked in',daysSinceCheckIn:daysSince};
     }
   }
   return null;

@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v14.5.19 — modules.js
+// 2GM Booking v14.5.21 — modules.js
 // Hours, Archive, Import/Export, Admin (checkbox permissions)
 // ============================================================
 
@@ -2265,12 +2265,12 @@ function renderInvoicing(){
   if(naBookings.length){
     const list=naBookings.map(x=>{
       const issueText=x.issue.type==='invalid_status'
-        ?'Status='+(x.booking.Status||'?')+', Check_Out passert for '+x.issue.daysSinceCheckOut+' dag'+(x.issue.daysSinceCheckOut===1?'':'er')+' siden'
-        :'Aldri sjekket inn ('+x.issue.daysSinceCheckIn+' dager siden Check_In)';
-      return '<li style="margin:4px 0"><strong>'+escapeHtml(x.name||'?')+'</strong> · Rom '+escapeHtml(x.room||'?')+' — '+escapeHtml(issueText)+'</li>';
+        ?'Status='+(x.booking.Status||'?')+', Check-out passed '+x.issue.daysSinceCheckOut+' day'+(x.issue.daysSinceCheckOut===1?'':'s')+' ago'
+        :'Never checked in ('+x.issue.daysSinceCheckIn+' days since Check-in)';
+      return '<li style="margin:4px 0"><strong>'+escapeHtml(x.name||'?')+'</strong> · Room '+escapeHtml(x.room||'?')+' — '+escapeHtml(issueText)+'</li>';
     }).join('');
     attentionBanner='<div style="margin-bottom:12px;padding:10px 14px;background:rgba(239,159,39,.12);border-left:3px solid #EF9F27;border-radius:6px;font-size:12px;color:#854F0B">'
-      +'<div style="font-weight:500;margin-bottom:6px">⚠ '+naBookings.length+' booking'+(naBookings.length!==1?'er':'')+' med ugyldig status — inkludert i totalsummene, men bør sjekkes før faktura sendes.</div>'
+      +'<div style="font-weight:500;margin-bottom:6px">⚠ '+naBookings.length+' booking'+(naBookings.length!==1?'s':'')+' need attention — included in totals, but should be verified before sending invoice.</div>'
       +'<ul style="margin:4px 0 0 20px;padding:0">'+list+'</ul>'
       +'</div>';
   }
