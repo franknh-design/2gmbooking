@@ -1,10 +1,20 @@
 // ============================================================
-// 2GM Booking v14.5.13 — app.js (Core)
+// 2GM Booking v14.5.14 — app.js (Core)
 // Auth, Graph API, Data, Rendering, Bookings
 // ============================================================
 
 // --- CONFIG ---
-const msalConfig={auth:{clientId:'f8e2259d-c440-41d3-94e3-3a2dce095817',authority:'https://login.microsoftonline.com/2b495272-f733-47a8-a771-bb744309fa17',redirectUri:'https://franknh-design.github.io/2gmbooking/'},cache:{cacheLocation:'localStorage'}};
+// v14.5.14: redirectUri is computed from window.location so the same code works
+// on both franknh-design.github.io/2gmbooking/ AND booking.2gm.no during migration.
+// Both URIs must be registered in Entra ID under App Registration → Authentication.
+const _redirectUri=(function(){
+  const o=window.location.origin;
+  const p=window.location.pathname;
+  // Strip filename if present (e.g. /index.html), keep trailing slash
+  const cleanPath=p.endsWith('/')?p:p.substring(0,p.lastIndexOf('/')+1);
+  return o+cleanPath;
+})();
+const msalConfig={auth:{clientId:'f8e2259d-c440-41d3-94e3-3a2dce095817',authority:'https://login.microsoftonline.com/2b495272-f733-47a8-a771-bb744309fa17',redirectUri:_redirectUri},cache:{cacheLocation:'localStorage'}};
 const msalInstance=new msal.PublicClientApplication(msalConfig);
 const SITE_HOST='2gmeiendom.sharepoint.com';
 const SITE_PATH='/sites/2GMBooking';
