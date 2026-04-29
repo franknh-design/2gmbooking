@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v14.5.12 — modules.js
+// 2GM Booking v14.5.13 — modules.js
 // Hours, Archive, Import/Export, Admin (checkbox permissions)
 // ============================================================
 
@@ -2297,7 +2297,7 @@ function renderInvoicing(){
       const gBookings=new Set(gNightsItems.map(i=>i.booking.id)).size;
       const feeSuffix=(gFees.length?' · '+gFees.length+' utvask':'')+(gPercent.length?' · % fee':'');
       const exportBtn=(groupBy==='company'&&k!=='(no company)')
-        ?'<button onclick="event.stopPropagation();exportInvoicingCSV(\''+k.replace(/'/g,"\\'")+'\')" style="padding:3px 10px;border:1px solid var(--accent);border-radius:4px;background:var(--bg-success);color:var(--text-success);cursor:pointer;font-size:11px;font-family:inherit;margin-left:10px" title="Export CSV for '+escapeHtml(k)+'">↓ CSV</button>'
+        ?'<button onclick="event.stopPropagation();exportInvoicingCSV(\''+k.replace(/'/g,"\\'")+'\')" style="padding:3px 10px;border:1px solid var(--accent);border-radius:4px;background:var(--bg-success);color:var(--text-success);cursor:pointer;font-size:11px;font-family:inherit;margin-left:10px" title="Export XLSX for '+escapeHtml(k)+'">↓ XLSX</button>'
          +'<button onclick="event.stopPropagation();exportInvoicingPDF(\''+k.replace(/'/g,"\\'")+'\')" style="padding:3px 10px;border:1px solid #1D9E75;border-radius:4px;background:rgba(29,158,117,.1);color:#1D9E75;cursor:pointer;font-size:11px;font-family:inherit;margin-left:4px" title="Export PDF for '+escapeHtml(k)+'">📄 PDF</button>'
         :'';
       html+='<div style="padding:10px 14px;background:var(--bg-secondary);border-bottom:1px solid var(--border-tertiary);display:flex;justify-content:space-between;align-items:center">'
@@ -2421,7 +2421,7 @@ function _renderInvoicingFlat(items){
 function exportInvoicingCSV(companyFilterName){
   // Function name kept for backward compat with onclick handlers — actually outputs XLSX now
   if(typeof XLSX==='undefined'){
-    alert('XLSX-bibliotek er ikke lastet. Last siden på nytt (F5) og prøv igjen.');
+    alert('XLSX-bibliotek (xlsx-js-style) er ikke lastet. Last siden på nytt (F5) og prøv igjen.');
     return;
   }
   const monthVal=document.getElementById('invMonth').value;
@@ -2627,7 +2627,7 @@ function exportInvoicingCSV(companyFilterName){
     :[{wch:10},{wch:24},{wch:18},{wch:12},{wch:12},{wch:8},{wch:10},{wch:12}];
   ws['!cols']=colWidths;
 
-  // Apply formatting: bold header, bold total row, number format for rate/total cols
+  // v14.5.13: Apply formatting using xlsx-js-style (writes styles into the file)
   const lastRow=aoa.length; // 1-based row count incl header
   const numColsRate=showBilling?7:6; // 0-indexed col for Rate
   const numColsTotal=showBilling?8:7; // 0-indexed col for Total
@@ -2635,34 +2635,45 @@ function exportInvoicingCSV(companyFilterName){
   const cellAddr=(r,c)=>XLSX.utils.encode_cell({r:r,c:c});
   const ncols=headers.length;
 
-  // Header row (row 0) — bold
+  // Header row (row 0) — bold, light gray background, bottom border
   for(let c=0;c<ncols;c++){
     const a=cellAddr(0,c);
-    if(ws[a]){
-      ws[a].s={font:{bold:true},alignment:{horizontal:c>=numColsNights?'right':'left'}};
-    }
+    if(!ws[a])ws[a]={t:'s',v:''};
+    ws[a].s={
+      font:{bold:true,sz:11},
+      fill:{patternType:'solid',fgColor:{rgb:'EEEEEE'}},
+      alignment:{horizontal:c>=numColsNights?'right':'left',vertical:'center'},
+      border:{bottom:{style:'thin',color:{rgb:'888888'}}}
+    };
   }
-  // Total row (last row, 0-indexed = lastRow-1) — bold
+  // Total row (last row, 0-indexed = lastRow-1) — bold + top border
   for(let c=0;c<ncols;c++){
     const a=cellAddr(lastRow-1,c);
-    if(ws[a]){
-      ws[a].s={font:{bold:true},border:{top:{style:'thin'}}};
-    }
+    if(!ws[a])ws[a]={t:'s',v:''};
+    ws[a].s={
+      font:{bold:true,sz:11},
+      border:{top:{style:'thin',color:{rgb:'000000'}}},
+      alignment:{horizontal:c>=numColsNights?'right':'left'}
+    };
   }
-  // Number format for Rate and Total columns (data rows + total)
+  // Number format for Rate, Total, Nights columns (data rows + total row)
   for(let r=1;r<lastRow;r++){
     [numColsRate,numColsTotal].forEach(c=>{
       const a=cellAddr(r,c);
       if(ws[a]&&typeof ws[a].v==='number'){
         ws[a].z='#,##0';
         ws[a].t='n';
+        // Preserve any existing style (e.g. on total row) by merging
+        const existingStyle=ws[a].s||{};
+        ws[a].s={...existingStyle,numFmt:'#,##0',alignment:{...existingStyle.alignment,horizontal:'right'}};
       }
     });
-    // Nights as integer
     const an=cellAddr(r,numColsNights);
     if(ws[an]&&typeof ws[an].v==='number'){
       ws[an].z='0';
       ws[an].t='n';
+      const existingStyle=ws[an].s||{};
+      ws[an].s={...existingStyle,numFmt:'0',alignment:{...existingStyle.alignment,horizontal:'right'}};
     }
   }
 
