@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v14.5.11 — app.js (Core)
+// 2GM Booking v14.5.12 — app.js (Core)
 // Auth, Graph API, Data, Rendering, Bookings
 // ============================================================
 
@@ -734,6 +734,27 @@ function calcBookingNights(booking){
   const ci=new Date(booking.Check_In);ci.setHours(0,0,0,0);
   const co=booking.Check_Out?new Date(booking.Check_Out):new Date();co.setHours(0,0,0,0);
   return Math.max(0,Math.round((co-ci)/864e5));
+}
+
+// v14.5.12: Resolve property title for a booking. Used by all rate-calc callsites
+// so they work correctly in "All Properties" mode (where selectedProperty is null).
+// Lookup order:
+//   1. b.Property_Name (snapshot saved on booking)
+//   2. Room → Property lookup via b.RoomLookupId
+//   3. selectedProperty.Title (fallback for current view)
+//   4. '' (last resort — calcBookingCost will return missing rate)
+function getBookingPropertyTitle(b){
+  if(!b)return selectedProperty?selectedProperty.Title:'';
+  if(b.Property_Name&&String(b.Property_Name).trim())return String(b.Property_Name).trim();
+  const rid=String(b.RoomLookupId||'');
+  if(rid){
+    const room=allRooms.find(r=>r.id===rid);
+    if(room&&room.PropertyLookupId){
+      const prop=properties.find(p=>String(p.id)===String(room.PropertyLookupId));
+      if(prop&&prop.Title)return prop.Title;
+    }
+  }
+  return selectedProperty?selectedProperty.Title:'';
 }
 
 function calcBookingCost(booking,propertyTitle){
