@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- 2GM Booking v14.5.12 — Created by Frank Haugan -->
+<!-- 2GM Booking v14.5.13 — Created by Frank Haugan -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -7,7 +7,8 @@
 <title>2GM Eiendom AS – Booking</title>
 <link rel="icon" type="image/x-icon" href="favicon.ico">
 <script src="https://alcdn.msauth.net/browser/2.30.0/js/msal-browser.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<!-- v14.5.13: xlsx-js-style replaces plain xlsx — community SheetJS does NOT write cell styles -->
+<script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
 <style>
 :root{--bg-primary:#fff;--bg-secondary:#f5f4ef;--bg-tertiary:#faf9f5;--bg-warning:#FAEEDA;--bg-danger:#FCEBEB;--bg-success:#E1F5EE;--text-primary:#2C2C2A;--text-secondary:#5F5E5A;--text-tertiary:#888780;--text-warning:#854F0B;--text-danger:#A32D2D;--text-success:#0F6E56;--border-tertiary:rgba(0,0,0,0.12);--border-secondary:rgba(0,0,0,0.2);--radius-md:8px;--radius-lg:12px;--accent:#1D9E75;--accent-hover:#178A66}
 *{box-sizing:border-box}body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;font-size:14px;line-height:1.5;color:var(--text-primary);background:var(--bg-tertiary);margin:0;padding:1.5rem}
@@ -216,7 +217,7 @@ tbody td{padding:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
           <select id="invCompanyFilter" onchange="renderInvoicing()" style="padding:5px 8px;border:1px solid var(--border-tertiary);border-radius:var(--radius-md);font-size:13px;font-family:inherit" title="Filter by company">
             <option value="__ALL__" selected>All companies</option>
           </select>
-          <button onclick="exportInvoicingCSV()" style="padding:5px 12px;border:1px solid var(--border-tertiary);border-radius:var(--radius-md);font-size:13px;font-family:inherit;background:var(--accent);color:#fff;cursor:pointer">↓ CSV all</button>
+          <button onclick="exportInvoicingCSV()" style="padding:5px 12px;border:1px solid var(--border-tertiary);border-radius:var(--radius-md);font-size:13px;font-family:inherit;background:var(--accent);color:#fff;cursor:pointer">↓ XLSX all</button>
           <button onclick="exportInvoicingPDF()" style="padding:5px 12px;border:1px solid var(--border-tertiary);border-radius:var(--radius-md);font-size:13px;font-family:inherit;background:#1D9E75;color:#fff;cursor:pointer" title="Export as PDF via print dialog">📄 PDF</button>
           <button onclick="toggleInvoicing()" title="Lukk" style="padding:5px 14px;border:1px solid var(--border-tertiary);border-radius:var(--radius-md);font-size:14px;font-family:inherit;background:var(--bg-secondary);color:var(--text-primary);cursor:pointer;font-weight:500">✕ Lukk</button>
         </div>
@@ -340,7 +341,7 @@ tbody td{padding:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
       </div>
     </div>
   </div>
-  <div style="text-align:center;padding:12px;font-size:11px;color:var(--text-tertiary);margin-top:1rem">v14.5.12 — Created by Frank Haugan</div>
+  <div style="text-align:center;padding:12px;font-size:11px;color:var(--text-tertiary);margin-top:1rem">v14.5.13 — Created by Frank Haugan</div>
 </div>
 <!-- Modals -->
 <div class="modal-overlay" id="bookingModal"><div class="modal"><div class="modal-header"><h2 id="bookingModalTitle">New booking</h2><button class="modal-close" onclick="closeBookingModal()">&times;</button></div><div class="modal-body"><div class="form-group"><label>Room</label><div style="display:flex;gap:8px"><select id="fRoom" style="flex:1"></select><button type="button" onclick="findAvailableRoom()" style="padding:6px 12px;background:var(--accent);color:#fff;border:none;border-radius:var(--radius-md);cursor:pointer;font-size:12px;white-space:nowrap;font-family:inherit">Find available</button></div><div id="fRoomInfo" style="font-size:11px;margin-top:4px;color:var(--text-tertiary)"></div></div><div class="form-group"><label>Guest name</label><input id="fName" type="text" placeholder="Start typing to find existing person..." list="fNameList" oninput="onPersonNameInput()"><datalist id="fNameList"></datalist><div id="fNameInfo" style="font-size:11px;margin-top:4px;color:var(--text-tertiary)"></div></div><div class="form-group"><label>Company</label><input id="fCompany" type="text" placeholder="Company name" list="fCompanyList" onblur="checkCompanyRegistration(this.value,'fCompanyWarn')"><datalist id="fCompanyList"></datalist><div id="fCompanyWarn" style="font-size:11px;margin-top:4px"></div></div><div class="form-group"><label>Billing company <span style="font-weight:normal;color:var(--text-tertiary);font-size:11px">(if different — rate and invoicing will follow this)</span></label><input id="fBillingCompany" type="text" placeholder="Leave empty to use Company" list="fCompanyList" onblur="checkCompanyRegistration(this.value,'fBillingCompanyWarn')"><div id="fBillingCompanyWarn" style="font-size:11px;margin-top:4px"></div></div><div class="form-row"><div class="form-group"><label>Check-in</label><input id="fCheckIn" type="date"></div><div class="form-group"><label>Check-out</label><input id="fCheckOut" type="date"><div style="font-size:11px;color:var(--text-tertiary);margin-top:2px">Leave empty for open-ended</div></div></div><div class="form-row"><div class="form-group"><label>Status</label><select id="fStatus"><option value="Upcoming">Upcoming</option><option value="Active">Active (checked in)</option></select></div><div class="form-group"><label>Floor</label><input id="fFloor" type="number" min="1" max="9" readonly></div></div><div class="form-group"><label>Notes</label><textarea id="fNotes" placeholder="Optional notes..."></textarea></div><div class="form-group" style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="fIncludeCheckoutFee" checked style="width:auto;margin:0"><label for="fIncludeCheckoutFee" style="margin:0;cursor:pointer;font-weight:normal">Include checkout cleaning fee (utvask)</label></div><div class="form-group" style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="fContinuation" style="width:auto;margin:0"><label for="fContinuation" style="margin:0;cursor:pointer;font-weight:normal" title="Marker dette som fortsettelse av et tidligere opphold der gjesten bytter rom. Utvask hoppes over i Fakturagrunnlag.">🔗 Continuation of previous stay (skip utvask)</label></div><div id="fOverlapWarning" style="display:none;margin-top:8px;padding:8px 10px;background:var(--bg-warning);border:1px solid #EF9F27;border-radius:var(--radius-md);color:var(--text-warning);font-size:12px"></div></div><div class="modal-footer"><button onclick="closeBookingModal()">Cancel</button><button class="primary" id="bookingSaveBtn" onclick="saveBooking()">Create booking</button></div></div></div>
