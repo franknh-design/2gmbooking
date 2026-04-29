@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v14.5.10 — app.js (Core)
+// 2GM Booking v14.5.11 — app.js (Core)
 // Auth, Graph API, Data, Rendering, Bookings
 // ============================================================
 
@@ -35,6 +35,8 @@ const ALL_PERMS=[
 
 // --- STATE ---
 let accessToken=null,siteId=null;
+let _tokenExpiresAt=0; // ms epoch — cached token expiry (v14.5.11)
+const TOKEN_REFRESH_MARGIN_MS=5*60*1000; // refresh if < 5 min until expiry
 let currentUser={email:'',displayName:'',permissions:[]};
 let properties=[],rooms=[],allRooms=[],bookings=[],allBookings=[],allUsers=[],allPersons=[],allRates=[],allCompanies=[];
 let selectedProperty=null,selectedRoom=null,selectedBooking=null;
@@ -45,46 +47,104 @@ let _lastRefreshTime=Date.now();
 let _knownBookingIds=new Set();
 let _knownBookingModifiedMax='';
 let _pollInterval=null;
+let _sessionExpiredShown=false; // v14.5.11: prevent alert-spam from polling
 
-// --- AUTH ---
+// --- AUTH (v14.5.11 — token caching, silent-aware) ---
 async function signIn(){
-  if(!msalReady){alert('Please wait...');return}
+  if(!msalReady){alert('Vent litt...');return}
   try{
-    await msalInstance.loginPopup({scopes:['Sites.ReadWrite.All','Mail.Send']});
-    await getToken();await loadCurrentUser();
+    const r=await msalInstance.loginPopup({scopes:['Sites.ReadWrite.All','Mail.Send']});
+    // Cache the token from login result directly
+    if(r&&r.accessToken){
+      accessToken=r.accessToken;
+      _tokenExpiresAt=r.expiresOn?r.expiresOn.getTime():(Date.now()+50*60*1000);
+    }
+    _sessionExpiredShown=false;
+    await loadCurrentUser();
     showApp();applyPermissions();
     await loadProperties();await loadData();
     checkHoursReminder();
   }catch(e){console.error('Login failed:',e)}
 }
-async function getToken(){
-  const a=msalInstance.getAllAccounts();if(!a.length)return null;
+
+// Get token. interactive=true (default) means: fall back to popup if silent fails.
+// interactive=false (used by background polling) means: never popup, just return null on failure.
+async function getToken(interactive=true){
+  // Reuse cached token if still valid
+  if(accessToken&&_tokenExpiresAt&&Date.now()<(_tokenExpiresAt-TOKEN_REFRESH_MARGIN_MS)){
+    return accessToken;
+  }
+  const a=msalInstance.getAllAccounts();
+  if(!a.length){
+    if(interactive&&!_sessionExpiredShown){
+      _sessionExpiredShown=true;
+      alert('Du er ikke logget inn. Last siden på nytt (F5) og logg inn på nytt.');
+    }
+    return null;
+  }
   try{
     const r=await msalInstance.acquireTokenSilent({scopes:['Sites.ReadWrite.All','Mail.Send'],account:a[0]});
     if(!r||!r.accessToken)throw new Error('Silent returned empty token');
-    accessToken=r.accessToken;return accessToken;
+    accessToken=r.accessToken;
+    _tokenExpiresAt=r.expiresOn?r.expiresOn.getTime():(Date.now()+50*60*1000);
+    _sessionExpiredShown=false;
+    return accessToken;
   }catch(e){
-    console.warn('[Auth] Silent token failed:',e.message,'— trying popup');
+    console.warn('[Auth] Silent token failed:',e.message);
+    if(!interactive){
+      // Background call — fail silently, polling will skip this cycle
+      return null;
+    }
+    // Interactive call — try popup
     try{
       const r=await msalInstance.acquireTokenPopup({scopes:['Sites.ReadWrite.All','Mail.Send']});
       if(!r||!r.accessToken)throw new Error('Popup returned empty token');
-      accessToken=r.accessToken;return accessToken;
+      accessToken=r.accessToken;
+      _tokenExpiresAt=r.expiresOn?r.expiresOn.getTime():(Date.now()+50*60*1000);
+      _sessionExpiredShown=false;
+      return accessToken;
     }catch(popupErr){
       console.error('[Auth] Popup token failed:',popupErr.message);
       accessToken=null;
-      alert('Sesjonen har utløpt. Last siden på nytt (F5) og logg inn på nytt.');
+      _tokenExpiresAt=0;
+      if(!_sessionExpiredShown){
+        _sessionExpiredShown=true;
+        alert('Sesjonen har utløpt. Last siden på nytt (F5) og logg inn på nytt.');
+      }
       throw new Error('Token unavailable');
     }
   }
 }
+
 function signOut(){msalInstance.logoutPopup();document.getElementById('app').style.display='none';document.getElementById('loginScreen').style.display='block'}
 function showApp(){document.getElementById('loginScreen').style.display='none';document.getElementById('app').style.display='block'}
 
-// --- GRAPH API ---
-async function graphGet(ep){await getToken();const r=await fetch('https://graph.microsoft.com/v1.0'+ep,{headers:{Authorization:'Bearer '+accessToken,Accept:'application/json'}});if(!r.ok)throw new Error('Graph error '+r.status+': '+await r.text());return r.json()}
-async function graphPatch(ep,body){await getToken();const r=await fetch('https://graph.microsoft.com/v1.0'+ep,{method:'PATCH',headers:{Authorization:'Bearer '+accessToken,'Content-Type':'application/json'},body:JSON.stringify(body)});if(!r.ok)throw new Error('Graph error '+r.status);return r.json()}
-async function graphPost(ep,body){await getToken();const r=await fetch('https://graph.microsoft.com/v1.0'+ep,{method:'POST',headers:{Authorization:'Bearer '+accessToken,'Content-Type':'application/json'},body:JSON.stringify(body)});if(!r.ok){const t=await r.text();throw new Error('Graph error '+r.status+': '+t)}return r.json()}
-async function graphDelete(ep){await getToken();const r=await fetch('https://graph.microsoft.com/v1.0'+ep,{method:'DELETE',headers:{Authorization:'Bearer '+accessToken}});if(!r.ok)throw new Error('Graph error '+r.status);return true}
+// --- GRAPH API (v14.5.11 — all calls accept silent flag) ---
+async function graphGet(ep,silent=false){
+  const tok=await getToken(!silent);
+  if(!tok){if(silent)return null;throw new Error('Token unavailable')}
+  const r=await fetch('https://graph.microsoft.com/v1.0'+ep,{headers:{Authorization:'Bearer '+tok,Accept:'application/json'}});
+  if(!r.ok){if(silent&&r.status===401)return null;throw new Error('Graph error '+r.status+': '+await r.text())}
+  return r.json();
+}
+async function graphPatch(ep,body){
+  const tok=await getToken();
+  const r=await fetch('https://graph.microsoft.com/v1.0'+ep,{method:'PATCH',headers:{Authorization:'Bearer '+tok,'Content-Type':'application/json'},body:JSON.stringify(body)});
+  if(!r.ok)throw new Error('Graph error '+r.status);
+  return r.json();
+}
+async function graphPost(ep,body){
+  const tok=await getToken();
+  const r=await fetch('https://graph.microsoft.com/v1.0'+ep,{method:'POST',headers:{Authorization:'Bearer '+tok,'Content-Type':'application/json'},body:JSON.stringify(body)});
+  if(!r.ok){const t=await r.text();throw new Error('Graph error '+r.status+': '+t)}
+  return r.json();
+}
+async function graphDelete(ep){
+  const tok=await getToken();
+  const r=await fetch('https://graph.microsoft.com/v1.0'+ep,{method:'DELETE',headers:{Authorization:'Bearer '+tok}});
+  if(!r.ok)throw new Error('Graph error '+r.status);
+  return true;
+}
 
 async function getSiteId(){if(siteId)return siteId;const r=await graphGet('/sites/'+SITE_HOST+':'+SITE_PATH);siteId=r.id;return siteId}
 // Cache for dynamically resolved list IDs (lists not in LIST_IDS hardcoded map)
@@ -1858,12 +1918,26 @@ async function checkHoursReminder(){
 
 function dismissReminder(){document.getElementById('hoursReminder').style.display='none'}
 
-// --- INIT ---
+// --- INIT (v14.5.11 — handleRedirectPromise to consume any leftover auth code in URL) ---
 let msalReady=false;
-msalInstance.initialize().then(()=>{
+msalInstance.initialize().then(async()=>{
+  // Consume any redirect response sitting in URL (#code=...) — MSAL otherwise leaves it
+  // hanging which causes silent token failures later
+  try{
+    const resp=await msalInstance.handleRedirectPromise();
+    if(resp&&resp.accessToken){
+      accessToken=resp.accessToken;
+      _tokenExpiresAt=resp.expiresOn?resp.expiresOn.getTime():(Date.now()+50*60*1000);
+    }
+  }catch(e){console.warn('[Auth] handleRedirectPromise:',e.message)}
   msalReady=true;initResize();
   const a=msalInstance.getAllAccounts();
-  if(a.length>0){getToken().then(async()=>{if(accessToken){await loadCurrentUser();showApp();applyPermissions();await loadProperties();await loadData();checkHoursReminder()}})}
+  if(a.length>0){
+    try{
+      const tok=await getToken(false); // non-interactive on startup — don't blast popup
+      if(tok){await loadCurrentUser();showApp();applyPermissions();await loadProperties();await loadData();checkHoursReminder()}
+    }catch(e){console.warn('[Init] startup token failed:',e.message)}
+  }
 });
 
 // ============================================================
@@ -1875,10 +1949,14 @@ async function _checkBookingChanges(){
   // Skip if any modal is open (don't disturb the user)
   if(document.querySelector('.modal-overlay.open'))return;
   try{
+    // v14.5.11: silent mode — never trigger popup from background polling
+    const tok=await getToken(false);
+    if(!tok)return; // no token, skip this cycle quietly
     const s=await getSiteId();
     const lid=await getListId('Bookings');
     // Minimal fields to detect changes — get only id + Modified
-    const r=await graphGet('/sites/'+s+'/lists/'+lid+'/items?$expand=fields($select=Modified,Status)&$top=500&$orderby=fields/Modified desc');
+    const r=await graphGet('/sites/'+s+'/lists/'+lid+'/items?$expand=fields($select=Modified,Status)&$top=500&$orderby=fields/Modified desc',true);
+    if(!r)return; // silent fail
     const currentIds=new Set(r.value.map(i=>i.id));
     let maxModified='';
     r.value.forEach(i=>{if(i.fields.Modified>maxModified)maxModified=i.fields.Modified});
