@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v14.5.15 — app.js (Core)
+// 2GM Booking v14.5.16 — app.js (Core)
 // Auth, Graph API, Data, Rendering, Bookings
 // ============================================================
 
@@ -60,8 +60,31 @@ let _pollInterval=null;
 let _sessionExpiredShown=false; // v14.5.11: prevent alert-spam from polling
 
 // --- AUTH (v14.5.11 — token caching, silent-aware) ---
+// v14.5.16: clear stale "interaction_in_progress" flag before signIn — common
+// MSAL issue when previous login was aborted (e.g. by AADSTS50011 redirect URI mismatch).
+function _clearStaleMsalInteraction(){
+  try{
+    // MSAL stores the in-progress flag with various key shapes depending on version.
+    // Safest is to remove any localStorage/sessionStorage key containing 'interaction.status'.
+    const keys=[];
+    for(let i=0;i<localStorage.length;i++){
+      const k=localStorage.key(i);
+      if(k&&k.indexOf('interaction.status')>=0)keys.push(k);
+    }
+    keys.forEach(k=>{console.log('[Auth] Clearing stale MSAL key:',k);localStorage.removeItem(k)});
+    const skeys=[];
+    for(let i=0;i<sessionStorage.length;i++){
+      const k=sessionStorage.key(i);
+      if(k&&k.indexOf('interaction.status')>=0)skeys.push(k);
+    }
+    skeys.forEach(k=>{console.log('[Auth] Clearing stale MSAL session key:',k);sessionStorage.removeItem(k)});
+  }catch(e){console.warn('[Auth] Could not clear stale interaction flag:',e.message)}
+}
+
 async function signIn(){
   if(!msalReady){alert('Vent litt...');return}
+  // v14.5.16: proactively clear any stuck interaction flag from a previous failed login
+  _clearStaleMsalInteraction();
   try{
     const r=await msalInstance.loginPopup({scopes:['Sites.ReadWrite.All','Mail.Send']});
     // Cache the token from login result directly
@@ -74,7 +97,14 @@ async function signIn(){
     showApp();applyPermissions();
     await loadProperties();await loadData();
     checkHoursReminder();
-  }catch(e){console.error('Login failed:',e)}
+  }catch(e){
+    console.error('Login failed:',e);
+    // If interaction_in_progress somehow surfaces despite our cleanup, surface a helpful message
+    if(String(e.message||'').indexOf('interaction_in_progress')>=0){
+      _clearStaleMsalInteraction();
+      alert('Innloggingen ble avbrutt forrige gang. Trykk logg inn igjen.');
+    }
+  }
 }
 
 // Get token. interactive=true (default) means: fall back to popup if silent fails.
