@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v14.5.24 — app.js (Core)
+// 2GM Booking v14.5.25 — app.js (Core)
 // Auth, Graph API, Data, Rendering, Bookings
 // ============================================================
 
@@ -476,7 +476,7 @@ function applyPermissions(){
   show('btnArchive',can('archive')||can('view_bookings'));
   show('btnUpcoming',can('view_bookings'));
   show('btnHours',can('view_hours')||can('edit_hours'));
-  // v14.5.24: Cleaning calendar — admin or cleaning permission
+  // v14.5.25: Cleaning calendar — admin or cleaning permission
   show('btnCleaningCalendar',can('admin')||can('cleaning'));
   show('efficiencyBtn',can('view_efficiency'));
   showBlock('adminBar',can('admin')||can('manage_rates'));
@@ -606,6 +606,103 @@ function toISODate(d){if(!d)return'';const dt=new Date(d);return dt.getFullYear(
 function getNextWeekday(date){const d=new Date(date);const day=d.getDay();if(day===0)d.setDate(d.getDate()+1);else if(day===6)d.setDate(d.getDate()+2);return d}
 
 // ============================================================
+// NORWEGIAN PUBLIC HOLIDAYS (v14.5.25) — calculated, no API needed
+// Easter is calculated via Gauss' algorithm (valid for years 1583-4099).
+// All movable holidays are derived from Easter Sunday.
+// ============================================================
+
+// Cache holiday-dates per year so we don't recompute on every call
+const _holidayCache={};
+
+// Gauss' Easter algorithm — returns Date object for Easter Sunday in given year
+function _calculateEaster(year){
+  const a=year%19;
+  const b=Math.floor(year/100);
+  const c=year%100;
+  const d=Math.floor(b/4);
+  const e=b%4;
+  const f=Math.floor((b+8)/25);
+  const g=Math.floor((b-f+1)/3);
+  const h=(19*a+b-d-g+15)%30;
+  const i=Math.floor(c/4);
+  const k=c%4;
+  const L=(32+2*e+2*i-h-k)%7;
+  const m=Math.floor((a+11*h+22*L)/451);
+  const month=Math.floor((h+L-7*m+114)/31);
+  const day=((h+L-7*m+114)%31)+1;
+  const date=new Date(year,month-1,day);date.setHours(0,0,0,0);
+  return date;
+}
+
+function _addDays(date,days){
+  const d=new Date(date);d.setDate(d.getDate()+days);d.setHours(0,0,0,0);return d;
+}
+
+// Returns object: { 'YYYY-MM-DD': 'Holiday name', ... } for all Norwegian public holidays in given year
+function getNorwegianHolidays(year){
+  if(_holidayCache[year])return _holidayCache[year];
+  const map={};
+  // Movable holidays first, then fixed — fixed overwrites if collision
+  // (e.g. in 2027, 17. mai falls on 2. pinsedag — Grunnlovsdag should win as the more specific name)
+  const easter=_calculateEaster(year);
+  const movable=[
+    [-3,'Skjærtorsdag'],
+    [-2,'Langfredag'],
+    [0,'1. påskedag'],
+    [1,'2. påskedag'],
+    [39,'Kristi himmelfartsdag'],
+    [49,'1. pinsedag'],
+    [50,'2. pinsedag']
+  ];
+  movable.forEach(([offset,name])=>{
+    const dt=_addDays(easter,offset);
+    map[toISODate(dt)]=name;
+  });
+  const fixedHolidays=[
+    [0,1,'Nyttårsdag'],
+    [4,1,'Arbeidernes dag'],
+    [4,17,'Grunnlovsdag'],
+    [11,25,'1. juledag'],
+    [11,26,'2. juledag']
+  ];
+  fixedHolidays.forEach(([m,d,name])=>{
+    const dt=new Date(year,m,d);dt.setHours(0,0,0,0);
+    map[toISODate(dt)]=name;
+  });
+  _holidayCache[year]=map;
+  return map;
+}
+
+// Returns holiday name string if date is a Norwegian public holiday, else null.
+// Accepts Date object or ISO string.
+function getHolidayName(dateOrIso){
+  const d=dateOrIso instanceof Date?dateOrIso:new Date(dateOrIso);
+  d.setHours(0,0,0,0);
+  const year=d.getFullYear();
+  const holidays=getNorwegianHolidays(year);
+  return holidays[toISODate(d)]||null;
+}
+
+// True if date is Saturday, Sunday, or a Norwegian public holiday
+function isNonWorkingDay(date){
+  const d=date instanceof Date?date:new Date(date);
+  const day=d.getDay();
+  if(day===0||day===6)return true;
+  return getHolidayName(d)!==null;
+}
+
+// v14.5.25: Returns next non-weekend, non-holiday day at or after given date.
+// Replaces previous getNextWeekday for wash scheduling so we never schedule on holidays.
+function getNextWorkingDay(date){
+  const d=new Date(date);d.setHours(0,0,0,0);
+  let safety=14; // max 14 days lookahead (Easter has 4 consecutive holidays max)
+  while(isNonWorkingDay(d)&&safety-->0){
+    d.setDate(d.getDate()+1);
+  }
+  return d;
+}
+
+// ============================================================
 // WASH OVERRIDES (v14.5.21) — Iteration 1: data layer (CRUD)
 // SP list: WashOverrides (id 626a9546-60b2-4203-91fe-ca28a1a77e94)
 // Each row: BookingLookupId, Action (Add/Remove/Move), OriginalDate, NewDate,
@@ -726,7 +823,7 @@ function calcWashDates(checkInDate,checkOutDate,bookingId){
     let w=weekOffset;
     while(w<=52){
       const raw=new Date(anchorDate);raw.setDate(raw.getDate()+(w-weekOffset)*7);
-      const d=getNextWeekday(raw);
+      const d=getNextWorkingDay(raw);
       if(co&&d>=co)break;
       const type=((w-1+parityStart)%2===0)?'Towels':'Towels + Beddings';
       out.push({date:d,type,week:w});
@@ -738,7 +835,7 @@ function calcWashDates(checkInDate,checkOutDate,bookingId){
   // 1. Baseline: anchor = Check_In + 7 days, weeks 1..N
   // parityStart=0 means w=1 → 'Towels', w=2 → 'Towels + Beddings' (matches legacy logic)
   const firstAnchor=new Date(ci);firstAnchor.setDate(firstAnchor.getDate()+7);
-  let washes=generateFrom(getNextWeekday(firstAnchor),1,0);
+  let washes=generateFrom(getNextWorkingDay(firstAnchor),1,0);
 
   // 2. Apply overrides in chronological order
   const overrides=bookingId?getWashOverridesForBooking(bookingId):[];
@@ -792,7 +889,7 @@ function getWashScheduleHtml(booking){
   const washes=calcWashDates(booking.Check_In,booking.Check_Out,booking.id);
   const show=washes.filter(w=>!w.isPast).slice(0,6);if(!show.length)return'';
   const days=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-  // v14.5.24: Manage button for cleaners/admin
+  // v14.5.25: Manage button for cleaners/admin
   const manageBtn=canManageWashSchedule()
     ?' <button onclick="openWashScheduleModal(\''+booking.id+'\')" style="margin-left:8px;padding:2px 8px;border:1px solid var(--accent);border-radius:4px;background:rgba(29,158,117,.1);color:var(--accent);cursor:pointer;font-size:10px;font-family:inherit">Manage</button>'
     :'';
@@ -817,7 +914,7 @@ function getNextWashDate(booking){
 }
 
 // ============================================================
-// WASH SCHEDULE MODAL (v14.5.24) — Iteration 3: UI for cleaners/admin
+// WASH SCHEDULE MODAL (v14.5.25) — Iteration 3: UI for cleaners/admin
 // Allows Move / Remove / Add operations on wash dates with audit trail.
 // ============================================================
 let _washScheduleBookingId=null;
@@ -947,7 +1044,7 @@ async function washAdd(){
 }
 
 // ============================================================
-// CLEANING CALENDAR (v14.5.24) — Visualize cleaning load over the next 4 weeks
+// CLEANING CALENDAR (v14.5.25) — Visualize cleaning load over the next 4 weeks
 // Helps spot clustering days (30-40 rooms on one day) before they happen.
 // ============================================================
 
@@ -1018,9 +1115,10 @@ function renderCleaningCalendar(){
     +'Showing cleaning load (towel/bedding washes + checkouts) for the next '+weeks+' weeks. '
     +'Colors are relative to busiest day. Click a day to see rooms.</div>';
 
-  html+='<div style="display:flex;gap:16px;margin-bottom:12px;font-size:11px"><span><span style="display:inline-block;width:10px;height:10px;background:#D4F4E2;border:1px solid #1D9E75;border-radius:2px"></span> Light (≤'+greenThreshold+')</span> '
+  html+='<div style="display:flex;gap:16px;margin-bottom:12px;font-size:11px;flex-wrap:wrap"><span><span style="display:inline-block;width:10px;height:10px;background:#D4F4E2;border:1px solid #1D9E75;border-radius:2px"></span> Light (≤'+greenThreshold+')</span> '
     +'<span><span style="display:inline-block;width:10px;height:10px;background:#FCE4B6;border:1px solid #EF9F27;border-radius:2px"></span> Medium</span> '
     +'<span><span style="display:inline-block;width:10px;height:10px;background:#F7CACA;border:1px solid #D14343;border-radius:2px"></span> Heavy ('+yellowThreshold+'+)</span> '
+    +'<span><span style="display:inline-block;width:10px;height:10px;background:#E8DCF5;border:1px solid #7B5FBF;border-radius:2px"></span> Holiday</span> '
     +'<span style="color:var(--text-tertiary)">Max: '+maxCount+' rooms</span></div>';
 
   // Calendar grid: 4 weeks × 7 days
@@ -1038,10 +1136,13 @@ function renderCleaningCalendar(){
       const key=toISODate(cellDate);
       const items=loadMap[key]||[];
       const count=items.length;
+      // v14.5.25: Norwegian holidays — distinct visual signal
+      const holidayName=getHolidayName(cellDate);
 
       // Color
       let bg='#fff',border='var(--border-tertiary)',textColor='var(--text-primary)';
       if(isPast){bg='#f5f5f5';textColor='var(--text-tertiary)'}
+      else if(holidayName){bg='#E8DCF5';border='#7B5FBF';textColor='#4A2D8C'}
       else if(isWeekend){bg='#fafafa';textColor='var(--text-tertiary)'}
       else if(count>=yellowThreshold){bg='#F7CACA';border='#D14343'}
       else if(count>=greenThreshold){bg='#FCE4B6';border='#EF9F27'}
@@ -1051,11 +1152,20 @@ function renderCleaningCalendar(){
       const cursor=(count>0&&!isPast)?'cursor:pointer;':'';
       const onclick=(count>0&&!isPast)?'onclick="openCleaningDayModal(\''+key+'\')"':'';
       const dateStr=cellDate.getDate()+'. '+months[cellDate.getMonth()];
+      const titleAttr=holidayName?' title="'+holidayName+'"':'';
 
-      html+='<td style="background:'+bg+';border:1px solid '+border+';border-radius:6px;padding:8px 4px;text-align:center;height:70px;'+todayRing+cursor+'" '+onclick+'>'
-        +'<div style="font-size:11px;color:'+textColor+';font-weight:500">'+dateStr+'</div>'
-        +'<div style="font-size:18px;color:'+textColor+';font-weight:600;margin-top:4px">'+(count||(isPast||isWeekend?'':'·'))+'</div>'
-        +'</td>';
+      let cellContent='<div style="font-size:11px;color:'+textColor+';font-weight:500">'+dateStr+'</div>';
+      if(holidayName){
+        // Show holiday name and any wash count (should normally be 0 since calcWashDates avoids holidays)
+        cellContent+='<div style="font-size:9px;color:'+textColor+';margin-top:2px;line-height:1.2">🎌 '+holidayName+'</div>';
+        if(count>0){
+          cellContent+='<div style="font-size:14px;color:#A32D2D;font-weight:600;margin-top:2px">⚠ '+count+'</div>';
+        }
+      }else{
+        cellContent+='<div style="font-size:18px;color:'+textColor+';font-weight:600;margin-top:4px">'+(count||(isPast||isWeekend?'':'·'))+'</div>';
+      }
+
+      html+='<td style="background:'+bg+';border:1px solid '+border+';border-radius:6px;padding:8px 4px;text-align:center;height:70px;'+todayRing+cursor+'"'+titleAttr+' '+onclick+'>'+cellContent+'</td>';
     }
     html+='</tr>';
   }
