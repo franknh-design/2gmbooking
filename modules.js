@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v13.20 — modules.js
+// 2GM Booking v14.5.19 — modules.js
 // Hours, Archive, Import/Export, Admin (checkbox permissions)
 // ============================================================
 
@@ -19,6 +19,9 @@ function toggleIncoming(){
   document.getElementById('archivePanel').classList.remove('open');
   const pp=document.getElementById('personsPanel');if(pp)pp.classList.remove('open');
   const ip=document.getElementById('invoicingPanel');if(ip)ip.classList.remove('open');
+  const cp=document.getElementById('companiesPanel');if(cp)cp.classList.remove('open');
+  const pr=document.getElementById('pricingPanel');if(pr)pr.classList.remove('open');
+  const ap=document.getElementById('adminPanel');if(ap)ap.classList.remove('open');
   const panel=document.getElementById('incomingPanel');
   panel.classList.toggle('open');
   const isOpen=panel.classList.contains('open');
@@ -29,19 +32,20 @@ function toggleIncoming(){
 function renderIncoming(){
   const today=new Date();today.setHours(0,0,0,0);
   const in30=new Date(today);in30.setDate(in30.getDate()+30);
-  const tomorrow=new Date(today);tomorrow.setDate(tomorrow.getDate()+1);
   const roomIds=new Set(rooms.map(r=>r.id));
   const upcoming=allBookings.filter(b=>{
     if(b.Status!=='Upcoming')return false;
     const rid=String(b.RoomLookupId||'');if(!roomIds.has(rid))return false;
     const ci=new Date(b.Check_In);ci.setHours(0,0,0,0);
-    return ci>=tomorrow&&ci<=in30;
+    // v14.5.10: include today (was: ci>=tomorrow)
+    return ci>=today&&ci<=in30;
   }).sort((a,b)=>new Date(a.Check_In)-new Date(b.Check_In));
   const body=document.getElementById('incomingBody');
   if(!upcoming.length){body.innerHTML='<tr><td colspan="7" class="loading">No upcoming bookings</td></tr>';return}
   body.innerHTML=upcoming.map(b=>{
     const room=rooms.find(r=>r.id===String(b.RoomLookupId));const roomTitle=room?room.Title:'?';
-    const daysUntil=Math.round((new Date(b.Check_In)-today)/864e5);let badge='';
+    const ciDate=new Date(b.Check_In);ciDate.setHours(0,0,0,0);
+    const daysUntil=Math.round((ciDate-today)/864e5);let badge='';
     if(daysUntil<=3)badge='<span class="pill danger">'+daysUntil+'d</span>';
     else if(daysUntil<=7)badge='<span class="pill warning">'+daysUntil+'d</span>';
     return'<tr onclick="showDetail(\''+(room?room.id:'')+'\')">'
@@ -59,6 +63,9 @@ function toggleArchive(){
   document.getElementById('incomingPanel').classList.remove('open');
   const pp=document.getElementById('personsPanel');if(pp)pp.classList.remove('open');
   const ip=document.getElementById('invoicingPanel');if(ip)ip.classList.remove('open');
+  const cp=document.getElementById('companiesPanel');if(cp)cp.classList.remove('open');
+  const pr=document.getElementById('pricingPanel');if(pr)pr.classList.remove('open');
+  const ap=document.getElementById('adminPanel');if(ap)ap.classList.remove('open');
   const panel=document.getElementById('archivePanel');
   panel.classList.toggle('open');
   const isOpen=panel.classList.contains('open');
@@ -500,8 +507,28 @@ function downloadCSV(filename,headers,rows){
 }
 
 // --- ADMIN ---
-function openAdminPanel(){if(!can('admin'))return;renderAdminUsers();document.getElementById('adminModal').classList.add('open')}
-function closeAdminPanel(){document.getElementById('adminModal').classList.remove('open')}
+function openAdminPanel(){
+  if(!can('admin'))return;
+  ensureMainView();
+  document.getElementById('incomingPanel').classList.remove('open');
+  document.getElementById('archivePanel').classList.remove('open');
+  const pp=document.getElementById('personsPanel');if(pp)pp.classList.remove('open');
+  const ip=document.getElementById('invoicingPanel');if(ip)ip.classList.remove('open');
+  const cp=document.getElementById('companiesPanel');if(cp)cp.classList.remove('open');
+  const pr=document.getElementById('pricingPanel');if(pr)pr.classList.remove('open');
+  const ap=document.getElementById('adminPanel');if(ap)ap.classList.remove('open');
+  document.getElementById('mainView').classList.add('panel-mode');
+  document.getElementById('adminPanel').classList.add('open');
+  renderAdminUsers();
+}
+function closeAdminPanel(){
+  document.getElementById('adminPanel').classList.remove('open');
+  document.getElementById('mainView').classList.remove('panel-mode');
+}
+function toggleAdminPanel(){
+  const p=document.getElementById('adminPanel');
+  if(p.classList.contains('open'))closeAdminPanel();else openAdminPanel();
+}
 
 function renderAdminUsers(){
   const list=document.getElementById('adminUserList');
@@ -772,8 +799,27 @@ function exportOccupancyReport(){
 // --- RATES MANAGEMENT ---
 function openRatesPanel(){
   if(!can('manage_rates')&&!can('admin')){alert('Access denied');return}
+  ensureMainView();
+  document.getElementById('incomingPanel').classList.remove('open');
+  document.getElementById('archivePanel').classList.remove('open');
+  const pp=document.getElementById('personsPanel');if(pp)pp.classList.remove('open');
+  const ip=document.getElementById('invoicingPanel');if(ip)ip.classList.remove('open');
+  const cp=document.getElementById('companiesPanel');if(cp)cp.classList.remove('open');
+  const pr=document.getElementById('pricingPanel');if(pr)pr.classList.remove('open');
+  const ap=document.getElementById('adminPanel');if(ap)ap.classList.remove('open');
+  document.getElementById('mainView').classList.add('panel-mode');
+  document.getElementById('pricingPanel').classList.add('open');
   renderRatesPanel();
-  document.getElementById('ratesModal').classList.add('open');
+}
+
+function togglePricingPanel(){
+  const p=document.getElementById('pricingPanel');
+  if(p.classList.contains('open')){
+    p.classList.remove('open');
+    document.getElementById('mainView').classList.remove('panel-mode');
+  }else{
+    openRatesPanel();
+  }
 }
 
 function renderRatesPanel(){
@@ -943,7 +989,7 @@ async function deleteRate(id){
 }
 
 // ============================================================
-// PERSONS / CUSTOMERS (v13.20)
+// PERSONS / CUSTOMERS (v14.5.10)
 // ============================================================
 let editingPersonId=null;
 
@@ -952,6 +998,9 @@ function togglePersons(){
   document.getElementById('incomingPanel').classList.remove('open');
   document.getElementById('archivePanel').classList.remove('open');
   const ip=document.getElementById('invoicingPanel');if(ip)ip.classList.remove('open');
+  const cp=document.getElementById('companiesPanel');if(cp)cp.classList.remove('open');
+  const pr=document.getElementById('pricingPanel');if(pr)pr.classList.remove('open');
+  const ap=document.getElementById('adminPanel');if(ap)ap.classList.remove('open');
   const panel=document.getElementById('personsPanel');
   panel.classList.toggle('open');
   const isOpen=panel.classList.contains('open');
@@ -1240,7 +1289,7 @@ function onPersonNameInput(){
 }
 
 // ============================================================
-// CHARTS (v13.20) — pure SVG, no dependencies
+// CHARTS (v14.5.10) — pure SVG, no dependencies
 // ============================================================
 
 // Reusable bar chart: data = [{label, value, subtitle?}]
@@ -1549,7 +1598,7 @@ function renderHoursCharts(filtered){
 }
 
 // ============================================================
-// CLEANING EFFICIENCY ANALYSIS (v13.20)
+// CLEANING EFFICIENCY ANALYSIS (v14.5.10)
 // ============================================================
 // Compares cleaner hours against guest-nights per property, per week/month.
 // USE WITH CAUTION: Hours include breaks, transport, repairs — not just cleaning.
@@ -1902,7 +1951,7 @@ function _dateFromIsoWeek(year,week){
 }
 
 // ============================================================
-// MORE MENU (v13.20)
+// MORE MENU (v14.5.10)
 // ============================================================
 function toggleMoreMenu(e){
   if(e){e.stopPropagation();e.preventDefault()}
@@ -1929,7 +1978,7 @@ function closeMoreMenu(){
 }
 
 // ============================================================
-// FAKTURAGRUNNLAG / INVOICING (v13.20)
+// FAKTURAGRUNNLAG / INVOICING (v14.5.10)
 // ============================================================
 let invoicingInitialized=false;
 
@@ -1939,6 +1988,9 @@ function toggleInvoicing(){
   document.getElementById('incomingPanel').classList.remove('open');
   document.getElementById('archivePanel').classList.remove('open');
   const pp=document.getElementById('personsPanel');if(pp)pp.classList.remove('open');
+  const cp=document.getElementById('companiesPanel');if(cp)cp.classList.remove('open');
+  const pr=document.getElementById('pricingPanel');if(pr)pr.classList.remove('open');
+  const ap=document.getElementById('adminPanel');if(ap)ap.classList.remove('open');
   const panel=document.getElementById('invoicingPanel');
   panel.classList.toggle('open');
   const isOpen=panel.classList.contains('open');
@@ -2052,7 +2104,7 @@ function renderInvoicing(){
       return;
     }
     const nights=_nightsInPeriod(b,fromDate,toDate);
-    const cost=calcBookingCost(b,selectedProperty?selectedProperty.Title:'');
+    const cost=calcBookingCost(b,getBookingPropertyTitle(b));
     const room=allRooms.find(r=>r.id===rid);
     const effectiveCo=getEffectiveCompany(b);
     const origCo=(b.Company||'').trim();
@@ -2078,11 +2130,12 @@ function renderInvoicing(){
     // Skip if this company has a Percent-based fee (handled per-company below)
     // Skip if Continuation=true (mid-stay room change — only one utvask per logical stay)
     const isContinuation=(b.Continuation===true||b.Continuation==='true'||b.Continuation===1);
-    if(b.Status==='Completed'&&b.Check_Out&&!isContinuation&&!hasPercentFee(effectiveCo,selectedProperty?selectedProperty.Title:'')){
+    const propTitleForB=getBookingPropertyTitle(b); // v14.5.12: per-booking
+    if(b.Status==='Completed'&&b.Check_Out&&!isContinuation&&!hasPercentFee(effectiveCo,propTitleForB)){
       const checkoutDate=new Date(b.Check_Out);checkoutDate.setHours(0,0,0,0);
       const feeEnabled=(b.Include_Checkout_Fee===undefined||b.Include_Checkout_Fee===null||b.Include_Checkout_Fee===true||b.Include_Checkout_Fee==='true'||b.Include_Checkout_Fee===1);
       if(feeEnabled&&checkoutDate>=fromDate&&checkoutDate<=toDate){
-        const fee=getCheckoutFee(effectiveCo,selectedProperty?selectedProperty.Title:'');
+        const fee=getCheckoutFee(effectiveCo,propTitleForB);
         if(fee>0){
           items.push({
             booking:b,
@@ -2127,23 +2180,29 @@ function renderInvoicing(){
     });
   });
 
-  // LONG-TERM CONTRACTS (per-room): one line per room with active contract
+  // LONG-TERM CONTRACTS (per-room): segmented by guests/gaps (v14.5.10)
   Object.keys(longTermByRoomId).forEach(rid=>{
-    const lt=longTermByRoomId[rid];
-    items.push({
-      booking:{id:''},
-      room:lt.room.Title||'',
-      name:lt.company+' — '+(lt.room.Title||''),
-      company:lt.company,
-      guestCompany:'',
-      hasBillingOverride:false,
-      nights:lt.days,
-      rate:lt.price,
-      total:lt.total,
-      source:lt.detailLabel,
-      nearMiss:null,
-      lineType:'longterm',
-      checkoutDate:null
+    const room=allRooms.find(r=>r.id===rid);
+    if(!room)return;
+    const seg=segmentLongTermRoom(room,fromDate,toDate);
+    if(!seg)return;
+    seg.segments.forEach(s=>{
+      const dateRange=formatDate(s.fromDate)+' → '+formatDate(s.toDate);
+      items.push({
+        booking:{id:s.bookingId||''},
+        room:room.Title||'',
+        name:s.isEmpty?s.name:(s.name+' ('+(room.Title||'')+')'),
+        company:seg.company,
+        guestCompany:'',
+        hasBillingOverride:false,
+        nights:s.days,
+        rate:Math.round(s.dailyRate*100)/100,
+        total:s.total,
+        source:dateRange+' · '+s.days+' dager'+(s.isEmpty?' · tomt':''),
+        nearMiss:null,
+        lineType:s.isEmpty?'longterm_empty':'longterm',
+        checkoutDate:null
+      });
     });
   });
 
@@ -2194,16 +2253,38 @@ function renderInvoicing(){
   const missingRate=finalItems.filter(i=>!i.rate&&i.lineType==='nights');
   const warnings=missingRate.length?'<div style="margin-bottom:12px;padding:8px 12px;background:var(--bg-warning);border:1px solid #EF9F27;border-radius:6px;font-size:12px;color:var(--text-warning)">⚠ '+missingRate.length+' booking'+(missingRate.length!==1?'s':'')+' without rates — these are not included in totals. Check rate configuration.</div>':'';
 
+  // v14.5.18: Needs-attention banner — bookings with logically inconsistent state
+  // (Status=Upcoming/Active but Check_Out passed, OR Upcoming with Check_In >30d ago)
+  // These ARE included in totals — banner just warns the user to verify before sending invoice.
+  const naItems=finalItems.filter(i=>i.booking&&bookingNeedsAttention(i.booking)!==null);
+  // Get unique bookings (one booking can produce multiple line items: nights + utvask)
+  const naBookingsMap={};
+  naItems.forEach(i=>{if(i.booking&&!naBookingsMap[i.booking.id])naBookingsMap[i.booking.id]={booking:i.booking,room:i.room,name:i.name,issue:bookingNeedsAttention(i.booking)}});
+  const naBookings=Object.values(naBookingsMap);
+  let attentionBanner='';
+  if(naBookings.length){
+    const list=naBookings.map(x=>{
+      const issueText=x.issue.type==='invalid_status'
+        ?'Status='+(x.booking.Status||'?')+', Check_Out passert for '+x.issue.daysSinceCheckOut+' dag'+(x.issue.daysSinceCheckOut===1?'':'er')+' siden'
+        :'Aldri sjekket inn ('+x.issue.daysSinceCheckIn+' dager siden Check_In)';
+      return '<li style="margin:4px 0"><strong>'+escapeHtml(x.name||'?')+'</strong> · Rom '+escapeHtml(x.room||'?')+' — '+escapeHtml(issueText)+'</li>';
+    }).join('');
+    attentionBanner='<div style="margin-bottom:12px;padding:10px 14px;background:rgba(239,159,39,.12);border-left:3px solid #EF9F27;border-radius:6px;font-size:12px;color:#854F0B">'
+      +'<div style="font-weight:500;margin-bottom:6px">⚠ '+naBookings.length+' booking'+(naBookings.length!==1?'er':'')+' med ugyldig status — inkludert i totalsummene, men bør sjekkes før faktura sendes.</div>'
+      +'<ul style="margin:4px 0 0 20px;padding:0">'+list+'</ul>'
+      +'</div>';
+  }
+
   if(!finalItems.length){
     body.innerHTML='<div style="text-align:center;padding:40px;color:var(--text-secondary)">No bookings in this period'+(cfSel.value!=='__ALL__'?' for '+escapeHtml(cfSel.value):'')+' on '+(selectedProperty?selectedProperty.Title:'selected property')+'.</div>';
     return;
   }
 
-  let html=warnings;
+  let html=attentionBanner+warnings;
 
   // Grand totals — separate nights from checkout/percent fees and full-tenant leases
   const nightItems=finalItems.filter(i=>i.lineType==='nights');
-  const feeItems=finalItems.filter(i=>i.lineType==='checkout'||i.lineType==='percent'||i.lineType==='fulltenant'||i.lineType==='longterm');
+  const feeItems=finalItems.filter(i=>i.lineType==='checkout'||i.lineType==='percent'||i.lineType==='fulltenant'||i.lineType==='longterm'||i.lineType==='longterm_empty');
   const totalNights=nightItems.reduce((a,i)=>a+i.nights,0);
   const nightRevenue=nightItems.reduce((a,i)=>a+i.total,0);
   const feeRevenue=feeItems.reduce((a,i)=>a+i.total,0);
@@ -2238,7 +2319,7 @@ function renderInvoicing(){
       const gBookings=new Set(gNightsItems.map(i=>i.booking.id)).size;
       const feeSuffix=(gFees.length?' · '+gFees.length+' utvask':'')+(gPercent.length?' · % fee':'');
       const exportBtn=(groupBy==='company'&&k!=='(no company)')
-        ?'<button onclick="event.stopPropagation();exportInvoicingCSV(\''+k.replace(/'/g,"\\'")+'\')" style="padding:3px 10px;border:1px solid var(--accent);border-radius:4px;background:var(--bg-success);color:var(--text-success);cursor:pointer;font-size:11px;font-family:inherit;margin-left:10px" title="Export CSV for '+escapeHtml(k)+'">↓ CSV</button>'
+        ?'<button onclick="event.stopPropagation();exportInvoicingCSV(\''+k.replace(/'/g,"\\'")+'\')" style="padding:3px 10px;border:1px solid var(--accent);border-radius:4px;background:var(--bg-success);color:var(--text-success);cursor:pointer;font-size:11px;font-family:inherit;margin-left:10px" title="Export XLSX for '+escapeHtml(k)+'">↓ XLSX</button>'
          +'<button onclick="event.stopPropagation();exportInvoicingPDF(\''+k.replace(/'/g,"\\'")+'\')" style="padding:3px 10px;border:1px solid #1D9E75;border-radius:4px;background:rgba(29,158,117,.1);color:#1D9E75;cursor:pointer;font-size:11px;font-family:inherit;margin-left:4px" title="Export PDF for '+escapeHtml(k)+'">📄 PDF</button>'
         :'';
       html+='<div style="padding:10px 14px;background:var(--bg-secondary);border-bottom:1px solid var(--border-tertiary);display:flex;justify-content:space-between;align-items:center">'
@@ -2251,36 +2332,39 @@ function renderInvoicing(){
         const isPercent=i.lineType==='percent';
         const isFullTenant=i.lineType==='fulltenant';
         const isLongTerm=i.lineType==='longterm';
+        const isLongTermEmpty=i.lineType==='longterm_empty';
         const ci=i.booking.Check_In?formatDate(i.booking.Check_In):'';
         const co=i.booking.Check_Out?formatDate(i.booking.Check_Out):'Open';
         let period;
         if(isFullTenant)period='🔒 Full-tenant lease';
-        else if(isLongTerm)period='🔑 Långtidsleie';
+        else if(isLongTerm||isLongTermEmpty)period='🔑 '+(i.source||'').split(' · ')[0];
         else if(isPercent)period='📊 Monthly percent fee';
         else if(isCheckout)period='🧹 Checkout '+formatDate(i.checkoutDate);
         else period=ci+' → '+co;
-        const nightsCell=(isCheckout||isPercent)?'—':((isFullTenant||isLongTerm)?i.nights+' days':i.nights);
+        const nightsCell=(isCheckout||isPercent)?'—':((isFullTenant||isLongTerm||isLongTermEmpty)?i.nights+' days':i.nights);
         let rateCell;
         if(isFullTenant)rateCell='<em style="color:var(--text-tertiary)">Full-tenant</em>';
-        else if(isLongTerm)rateCell='<em style="color:var(--text-tertiary)">Långtid</em>';
+        else if(isLongTerm||isLongTermEmpty)rateCell=i.rate?i.rate.toLocaleString('nb-NO',{maximumFractionDigits:2})+' kr/dag':'<em style="color:var(--text-tertiary)">Långtid</em>';
         else if(isPercent)rateCell='<em style="color:var(--text-tertiary)">%-basert</em>';
         else if(isCheckout)rateCell='<em style="color:var(--text-tertiary)">Utvask</em>';
         else rateCell=(i.rate?i.rate.toLocaleString('nb-NO')+' kr':'<span style="color:var(--text-danger)">— missing</span>');
         const totalCell=i.total?i.total.toLocaleString('nb-NO')+' kr':'—';
         let sourceCell;
         if(isFullTenant)sourceCell='<span style="color:#1D9E75">🔒 '+escapeHtml(i.source)+'</span>';
-        else if(isLongTerm)sourceCell='<span style="color:#0EA5A5">🔑 '+escapeHtml(i.source)+'</span>';
+        else if(isLongTerm)sourceCell='<span style="color:#0EA5A5">'+escapeHtml(i.source)+'</span>';
+        else if(isLongTermEmpty)sourceCell='<span style="color:#a76800;font-style:italic">'+escapeHtml(i.source)+'</span>';
         else if(isPercent)sourceCell='<span style="color:#EF9F27">📊 '+escapeHtml(i.source)+'</span>';
         else if(isCheckout)sourceCell='<span style="color:#7B61FF">🧹 Checkout fee</span>';
         else sourceCell=(i.nearMiss?'<span title="'+escapeHtml(i.nearMiss)+'" style="color:var(--text-warning)">⚠ '+escapeHtml(i.source)+'</span>':escapeHtml(i.source));
         let rowStyle;
         if(isFullTenant)rowStyle='border-top:.5px solid var(--border-tertiary);cursor:default;background:rgba(29,158,117,.08)';
         else if(isLongTerm)rowStyle='border-top:.5px solid var(--border-tertiary);cursor:default;background:rgba(14,165,165,.07)';
+        else if(isLongTermEmpty)rowStyle='border-top:.5px solid var(--border-tertiary);cursor:default;background:rgba(239,159,39,.05);font-style:italic';
         else if(isPercent)rowStyle='border-top:.5px solid var(--border-tertiary);cursor:default;background:rgba(239,159,39,.06)';
         else if(isCheckout)rowStyle='border-top:.5px solid var(--border-tertiary);cursor:pointer;background:rgba(123,97,255,.04)';
         else rowStyle='border-top:.5px solid var(--border-tertiary);cursor:pointer';
-        const hoverBg=isFullTenant?'rgba(29,158,117,.16)':(isLongTerm?'rgba(14,165,165,.14)':(isPercent?'rgba(239,159,39,.12)':(isCheckout?'rgba(123,97,255,.12)':'var(--bg-secondary)')));
-        const restBg=isFullTenant?'rgba(29,158,117,.08)':(isLongTerm?'rgba(14,165,165,.07)':(isPercent?'rgba(239,159,39,.06)':(isCheckout?'rgba(123,97,255,.04)':'')));
+        const hoverBg=isFullTenant?'rgba(29,158,117,.16)':(isLongTerm?'rgba(14,165,165,.14)':(isLongTermEmpty?'rgba(239,159,39,.10)':(isPercent?'rgba(239,159,39,.12)':(isCheckout?'rgba(123,97,255,.12)':'var(--bg-secondary)'))));
+        const restBg=isFullTenant?'rgba(29,158,117,.08)':(isLongTerm?'rgba(14,165,165,.07)':(isLongTermEmpty?'rgba(239,159,39,.05)':(isPercent?'rgba(239,159,39,.06)':(isCheckout?'rgba(123,97,255,.04)':''))));
         // Flag company mismatch when grouping by company: if company field differs from group key, highlight
         const groupKey=k;
         const actualCompany=i.company||'(no company)';
@@ -2296,11 +2380,12 @@ function renderInvoicing(){
         let nameCell;
         if(isFullTenant)nameCell='<span style="color:#1D9E75;font-weight:500">'+escapeHtml(i.name)+'</span>';
         else if(isLongTerm)nameCell='<span style="color:#0EA5A5;font-weight:500">🔑 '+escapeHtml(i.name)+'</span>';
+        else if(isLongTermEmpty)nameCell='<span style="color:#a76800;font-style:italic">'+escapeHtml(i.name)+'</span>';
         else if(isPercent)nameCell='<span style="color:var(--text-warning);font-weight:500">'+escapeHtml(i.name)+'</span>';
         else if(isCheckout)nameCell='<span style="color:var(--text-tertiary)">↳ '+guestMarkedName(i.name)+'</span>';
         else nameCell=guestMarkedName(i.name);
         // Full-tenant, long-term and percent rows are not clickable
-        const clickAttr=(isPercent||isFullTenant||isLongTerm)?'':'onclick="openEditBooking(\''+i.booking.id+'\')"';
+        const clickAttr=(isPercent||isFullTenant||isLongTermEmpty)?'':(isLongTerm&&i.booking.id?'onclick="openEditBooking(\''+i.booking.id+'\')"':(isLongTerm?'':'onclick="openEditBooking(\''+i.booking.id+'\')"'));
         html+='<tr '+clickAttr+' style="'+rowStyle+'" onmouseover="this.style.background=\''+hoverBg+'\'" onmouseout="this.style.background=\''+restBg+'\'">'
           +'<td style="padding:6px 10px">'+nameCell+'</td>'
           +'<td style="padding:6px 10px">'+companyCell+'</td>'
@@ -2351,7 +2436,16 @@ function _renderInvoicingFlat(items){
   return html;
 }
 
+// v14.5.11: Replaced CSV export with XLSX (SheetJS) — proper Excel formatting,
+// new column order: Room, Guest, Company, [Billing], Check-in, Check-out, Nights, Rate, Total
+// 'Rate source' column removed entirely. 'Billing company' kept but column hidden if all rows are empty.
+// Total row is bold. Rate and Total columns get number formatting.
 function exportInvoicingCSV(companyFilterName){
+  // Function name kept for backward compat with onclick handlers — actually outputs XLSX now
+  if(typeof XLSX==='undefined'){
+    alert('XLSX-bibliotek (xlsx-js-style) er ikke lastet. Last siden på nytt (F5) og prøv igjen.');
+    return;
+  }
   const monthVal=document.getElementById('invMonth').value;
   const yearVal=document.getElementById('invYear').value;
   const fromVal=document.getElementById('invFrom').value;
@@ -2374,6 +2468,7 @@ function exportInvoicingCSV(companyFilterName){
     companyFilterName=cf&&cf.value!=='__ALL__'?cf.value:null;
   }
   const currentRoomIds=new Set(rooms.map(r=>r.id));
+  // Each row: {room, guest, company, billing, checkIn, checkOut, nights, rate, total}
   const rows=[];
   const companyNightSum={};
   const propTitleForPercent=selectedProperty?selectedProperty.Title:'';
@@ -2412,46 +2507,44 @@ function exportInvoicingCSV(companyFilterName){
     const co=b.Check_Out?new Date(b.Check_Out):new Date();co.setHours(0,0,0,0);
     if(co<fromDate||ci>toDate)return;
     const nights=_nightsInPeriod(b,fromDate,toDate);
-    const cost=calcBookingCost(b,selectedProperty?selectedProperty.Title:'');
+    const cost=calcBookingCost(b,getBookingPropertyTitle(b));
     const room=allRooms.find(r=>r.id===rid);
     const origCo=(b.Company||'').trim();
     const billingCo=effectiveCo!==origCo?effectiveCo:'';
     if(nights>0){
-      rows.push([
-        b.Person_Name||'',
-        origCo,
-        billingCo,
-        room?room.Title:'',
-        formatDate(b.Check_In),
-        b.Check_Out?formatDate(b.Check_Out):'Open',
-        nights,
-        cost.rate||0,
-        nights*(cost.rate||0),
-        cost.source||''
-      ]);
-      // Track for percent calculation by effective company
+      rows.push({
+        room:room?room.Title:'',
+        guest:b.Person_Name||'',
+        company:origCo,
+        billing:billingCo,
+        checkIn:formatDate(b.Check_In),
+        checkOut:b.Check_Out?formatDate(b.Check_Out):'Open',
+        nights:nights,
+        rate:cost.rate||0,
+        total:nights*(cost.rate||0)
+      });
       if(effectiveCo){companyNightSum[effectiveCo]=(companyNightSum[effectiveCo]||0)+nights*(cost.rate||0)}
     }
     // Checkout fee line (skip if company has Percent fee, skip if Continuation)
     const isContinuationExp=(b.Continuation===true||b.Continuation==='true'||b.Continuation===1);
-    if(b.Status==='Completed'&&b.Check_Out&&!isContinuationExp&&!hasPercentFee(effectiveCo,propTitleForPercent)){
+    const propTitleForB=getBookingPropertyTitle(b); // v14.5.12: per-booking
+    if(b.Status==='Completed'&&b.Check_Out&&!isContinuationExp&&!hasPercentFee(effectiveCo,propTitleForB)){
       const checkoutDate=new Date(b.Check_Out);checkoutDate.setHours(0,0,0,0);
       const feeEnabled=(b.Include_Checkout_Fee===undefined||b.Include_Checkout_Fee===null||b.Include_Checkout_Fee===true||b.Include_Checkout_Fee==='true'||b.Include_Checkout_Fee===1);
       if(feeEnabled&&checkoutDate>=fromDate&&checkoutDate<=toDate){
-        const fee=getCheckoutFee(effectiveCo,propTitleForPercent);
+        const fee=getCheckoutFee(effectiveCo,propTitleForB);
         if(fee>0){
-          rows.push([
-            b.Person_Name||'',
-            origCo,
-            billingCo,
-            room?room.Title:'',
-            'Checkout '+formatDate(b.Check_Out),
-            '',
-            0,
-            fee,
-            fee,
-            'Utvask'
-          ]);
+          rows.push({
+            room:room?room.Title:'',
+            guest:'Utvask: '+(b.Person_Name||''),
+            company:origCo,
+            billing:billingCo,
+            checkIn:'Checkout '+formatDate(b.Check_Out),
+            checkOut:'',
+            nights:0,
+            rate:fee,
+            total:fee
+          });
         }
       }
     }
@@ -2459,74 +2552,164 @@ function exportInvoicingCSV(companyFilterName){
   // Full-tenant lease lines
   Object.keys(fullTenantByPropId).forEach(pid=>{
     const ft=fullTenantByPropId[pid];
-    // Apply company filter if set
     if(companyFilterName&&ft.company!==companyFilterName)return;
     const prop=properties.find(p=>String(p.id)===String(pid));
-    rows.push([
-      ft.company+' (full-tenant lease)',
-      '',                           // guest company
-      ft.company,                   // billing company
-      prop?prop.Title:'',           // room column = property
-      '',                           // check-in
-      '',                           // check-out
-      ft.days,                      // days in period
-      ft.rate,                      // rate (per day or per month — see source label)
-      ft.total,                     // total
-      ft.detailLabel
-    ]);
+    rows.push({
+      room:prop?prop.Title:'',
+      guest:ft.company+' (full-tenant lease)',
+      company:'',
+      billing:ft.company,
+      checkIn:ft.detailLabel||'',
+      checkOut:'',
+      nights:ft.days,
+      rate:ft.rate,
+      total:ft.total
+    });
   });
-
   // Long-term per-room contracts
   Object.keys(longTermByRoomIdCsv).forEach(rid=>{
     const lt=longTermByRoomIdCsv[rid];
     if(companyFilterName&&lt.company!==companyFilterName)return;
-    rows.push([
-      lt.company+' — '+(lt.room.Title||''),
-      '',
-      lt.company,
-      lt.room.Title||'',
-      '',
-      '',
-      lt.days,
-      lt.price,
-      lt.total,
-      'Långtid: '+lt.detailLabel
-    ]);
+    const room=allRooms.find(r=>r.id===rid);
+    if(!room)return;
+    const seg=segmentLongTermRoom(room,fromDate,toDate);
+    if(!seg)return;
+    seg.segments.forEach(s=>{
+      rows.push({
+        room:room.Title||'',
+        guest:s.isEmpty?s.name:s.name,
+        company:'',
+        billing:seg.company,
+        checkIn:formatDate(s.fromDate),
+        checkOut:formatDate(s.toDate),
+        nights:s.days,
+        rate:Math.round(s.dailyRate*100)/100,
+        total:s.total
+      });
+    });
   });
-
-  // Percent-based fee lines (by effective/billing company)
+  // Percent-based fee lines
   Object.keys(companyNightSum).forEach(c=>{
     const pct=getPercentFeeRate(c,propTitleForPercent);
     if(pct>0){
       const feeAmount=Math.round(companyNightSum[c]*pct);
-      rows.push([
-        c+' (monthly fee)',
-        '',            // guest company
-        c,             // billing company
-        '',            // room
-        periodStr,
-        '',
-        0,
-        feeAmount,
-        feeAmount,
-        (pct*100)+'% of '+companyNightSum[c]+' kr'
-      ]);
+      rows.push({
+        room:'',
+        guest:c+' ('+(pct*100)+'% månedsgebyr)',
+        company:'',
+        billing:c,
+        checkIn:periodStr,
+        checkOut:'',
+        nights:0,
+        rate:feeAmount,
+        total:feeAmount
+      });
     }
   });
-  // Sort by billing company, then guest name
-  rows.sort((a,b)=>((a[2]||a[1])+'').localeCompare(((b[2]||b[1])+''),'nb')||(a[0]+'').localeCompare((b[0]+''),'nb'));
-  // Totals (nights col moved from [5] to [6], total col from [7] to [8])
-  const totalN=rows.reduce((s,r)=>s+(typeof r[6]==='number'?r[6]:0),0);
-  const totalT=rows.reduce((s,r)=>s+(typeof r[8]==='number'?r[8]:0),0);
-  rows.push(['','','','','','Total',totalN,'',totalT,'']);
-  const headers=['Guest','Company (guest)','Billing company','Room','Check-in','Check-out','Nights','Rate','Total','Rate source'];
-  const propName=(selectedProperty?selectedProperty.Title:'').replace(/\s+/g,'_');
+  // Sort: room, then billing/company, then guest
+  rows.sort((a,b)=>(a.room||'').localeCompare(b.room||'','nb',{numeric:true})
+    ||((a.billing||a.company)+'').localeCompare(((b.billing||b.company)+''),'nb')
+    ||(a.guest+'').localeCompare((b.guest+''),'nb'));
+
+  if(!rows.length){
+    alert('Ingen data å eksportere for denne perioden.');
+    return;
+  }
+
+  // Determine if Billing column should be shown (any non-empty value)
+  const showBilling=rows.some(r=>r.billing&&r.billing.trim()!=='');
+
+  // Build header + AOA (array of arrays) for SheetJS
+  const headers=showBilling
+    ?['Room','Guest','Company','Billing','Check-in','Check-out','Nights','Rate','Total']
+    :['Room','Guest','Company','Check-in','Check-out','Nights','Rate','Total'];
+  const aoa=[headers];
+  rows.forEach(r=>{
+    if(showBilling){
+      aoa.push([r.room,r.guest,r.company,r.billing,r.checkIn,r.checkOut,r.nights,r.rate,r.total]);
+    }else{
+      aoa.push([r.room,r.guest,r.company,r.checkIn,r.checkOut,r.nights,r.rate,r.total]);
+    }
+  });
+  // Total row
+  const totalN=rows.reduce((s,r)=>s+(typeof r.nights==='number'?r.nights:0),0);
+  const totalT=rows.reduce((s,r)=>s+(typeof r.total==='number'?r.total:0),0);
+  if(showBilling){
+    aoa.push(['','','','','','Total',totalN,'',totalT]);
+  }else{
+    aoa.push(['','','','','Total',totalN,'',totalT]);
+  }
+
+  // Build worksheet
+  const ws=XLSX.utils.aoa_to_sheet(aoa);
+
+  // Column widths
+  const colWidths=showBilling
+    ?[{wch:10},{wch:24},{wch:18},{wch:18},{wch:12},{wch:12},{wch:8},{wch:10},{wch:12}]
+    :[{wch:10},{wch:24},{wch:18},{wch:12},{wch:12},{wch:8},{wch:10},{wch:12}];
+  ws['!cols']=colWidths;
+
+  // v14.5.13: Apply formatting using xlsx-js-style (writes styles into the file)
+  const lastRow=aoa.length; // 1-based row count incl header
+  const numColsRate=showBilling?7:6; // 0-indexed col for Rate
+  const numColsTotal=showBilling?8:7; // 0-indexed col for Total
+  const numColsNights=showBilling?6:5;
+  const cellAddr=(r,c)=>XLSX.utils.encode_cell({r:r,c:c});
+  const ncols=headers.length;
+
+  // Header row (row 0) — bold, light gray background, bottom border
+  for(let c=0;c<ncols;c++){
+    const a=cellAddr(0,c);
+    if(!ws[a])ws[a]={t:'s',v:''};
+    ws[a].s={
+      font:{bold:true,sz:11},
+      fill:{patternType:'solid',fgColor:{rgb:'EEEEEE'}},
+      alignment:{horizontal:c>=numColsNights?'right':'left',vertical:'center'},
+      border:{bottom:{style:'thin',color:{rgb:'888888'}}}
+    };
+  }
+  // Total row (last row, 0-indexed = lastRow-1) — bold + top border
+  for(let c=0;c<ncols;c++){
+    const a=cellAddr(lastRow-1,c);
+    if(!ws[a])ws[a]={t:'s',v:''};
+    ws[a].s={
+      font:{bold:true,sz:11},
+      border:{top:{style:'thin',color:{rgb:'000000'}}},
+      alignment:{horizontal:c>=numColsNights?'right':'left'}
+    };
+  }
+  // Number format for Rate, Total, Nights columns (data rows + total row)
+  for(let r=1;r<lastRow;r++){
+    [numColsRate,numColsTotal].forEach(c=>{
+      const a=cellAddr(r,c);
+      if(ws[a]&&typeof ws[a].v==='number'){
+        ws[a].z='#,##0';
+        ws[a].t='n';
+        // Preserve any existing style (e.g. on total row) by merging
+        const existingStyle=ws[a].s||{};
+        ws[a].s={...existingStyle,numFmt:'#,##0',alignment:{...existingStyle.alignment,horizontal:'right'}};
+      }
+    });
+    const an=cellAddr(r,numColsNights);
+    if(ws[an]&&typeof ws[an].v==='number'){
+      ws[an].z='0';
+      ws[an].t='n';
+      const existingStyle=ws[an].s||{};
+      ws[an].s={...existingStyle,numFmt:'0',alignment:{...existingStyle.alignment,horizontal:'right'}};
+    }
+  }
+
+  // Build workbook + filename
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,'Fakturagrunnlag');
+  const propName=(selectedProperty?selectedProperty.Title:'Alle').replace(/\s+/g,'_');
   const companyPart=companyFilterName?'_'+companyFilterName.replace(/\s+/g,'_'):'';
-  downloadCSV('Fakturagrunnlag_'+propName+companyPart+'_'+periodStr,headers,rows);
+  const filename='Fakturagrunnlag_'+propName+companyPart+'_'+periodStr+'.xlsx';
+  XLSX.writeFile(wb,filename);
 }
 
 // ============================================================
-// ADD GUEST FROM BOOKING (v13.20)
+// ADD GUEST FROM BOOKING (v14.5.10)
 // ============================================================
 function addBookingToGuests(bookingId){
   if(!can('edit_bookings')){alert('You do not have permission to add guests.');return}
@@ -2551,7 +2734,7 @@ function addBookingToGuests(bookingId){
 }
 
 // ============================================================
-// GUEST BOOKINGS HISTORY (v13.20)
+// GUEST BOOKINGS HISTORY (v14.5.10)
 // ============================================================
 function showGuestBookings(name){
   if(!name)return;
@@ -2623,7 +2806,7 @@ function showGuestBookings(name){
 }
 
 // ============================================================
-// HOURS IMPORT (v13.20)
+// HOURS IMPORT (v14.5.10)
 // ============================================================
 let importHoursData=[];
 
@@ -2773,7 +2956,7 @@ async function runImportHours(){
 }
 
 // ============================================================
-// CLEANING DIAGNOSTICS (v13.20)
+// CLEANING DIAGNOSTICS (v14.5.10)
 // ============================================================
 function showCleaningDiagnostics(){
   const today=new Date();today.setHours(0,0,0,0);
@@ -2885,7 +3068,7 @@ function showCleaningDiagnostics(){
 }
 
 // ============================================================
-// BATTERY REFRESH (v13.20)
+// BATTERY REFRESH (v14.5.10)
 // ============================================================
 const BATTERY_FILE_PATH='Batteristatus/RoomBattery.csv';
 
@@ -2941,8 +3124,10 @@ async function refreshBatteryStatus(){
       // Skip if value hasn't changed
       if(Number(room.Door_Battery_Level)===e.bat){unchanged++;continue}
       try{
-        await updateListItem('Rooms',room.id,{Door_Battery_Level:e.bat});
+        const nowIso=new Date().toISOString();
+        await updateListItem('Rooms',room.id,{Door_Battery_Level:e.bat,Door_Battery_Updated:nowIso});
         room.Door_Battery_Level=e.bat;
+        room.Door_Battery_Updated=nowIso;
         updated++;
       }catch(err){console.error('Failed to update room '+e.roomTitle+':',err);skipped++}
       // Throttle every 10 to avoid rate limiting
@@ -2955,6 +3140,8 @@ async function refreshBatteryStatus(){
     if(notFound.length)summary+='\n\nRooms not found in system: '+notFound.slice(0,20).join(', ')+(notFound.length>20?' (and '+(notFound.length-20)+' more)':'');
     alert(summary);
     if(typeof renderFloors==='function')renderFloors();
+    // Show low-battery alert (v14.5.10) — locks under 30%
+    showLowBatteryAlert();
     if(typeof updateStats==='function')updateStats();
   }catch(e){
     alert('Battery refresh failed:\n\n'+e.message+'\n\nExpected file location: Default document library > '+BATTERY_FILE_PATH);
@@ -2964,15 +3151,33 @@ async function refreshBatteryStatus(){
 }
 
 // ============================================================
-// COMPANIES MANAGEMENT (v13.20)
+// COMPANIES MANAGEMENT (v14.5.10)
 // ============================================================
 let editingCompanyId=null;
 
 function openCompaniesPanel(){
   if(!can('manage_companies')&&!can('admin')){alert('Access denied');return}
   document.getElementById('coSearch').value='';
+  // Close other panels (single-panel mode)
+  document.getElementById('incomingPanel').classList.remove('open');
+  document.getElementById('archivePanel').classList.remove('open');
+  const pp=document.getElementById('personsPanel');if(pp)pp.classList.remove('open');
+  document.getElementById('invoicingPanel').classList.remove('open');
+  const pr=document.getElementById('pricingPanel');if(pr)pr.classList.remove('open');
+  const ap=document.getElementById('adminPanel');if(ap)ap.classList.remove('open');
+  document.getElementById('mainView').classList.add('panel-mode');
+  document.getElementById('companiesPanel').classList.add('open');
   renderCompaniesList();
-  document.getElementById('companiesModal').classList.add('open');
+}
+
+function toggleCompaniesPanel(){
+  const p=document.getElementById('companiesPanel');
+  if(p.classList.contains('open')){
+    p.classList.remove('open');
+    document.getElementById('mainView').classList.remove('panel-mode');
+  }else{
+    openCompaniesPanel();
+  }
 }
 
 function renderCompaniesList(){
@@ -3174,7 +3379,7 @@ async function quickAddCompany(name){
 }
 
 // ============================================================
-// BRREG LOOKUP (v13.20)
+// BRREG LOOKUP (v14.5.10)
 // ============================================================
 // Fetches company information from Brønnøysundregistrene open API.
 // https://data.brreg.no/enhetsregisteret/api/enheter/{orgnr}
@@ -3242,7 +3447,7 @@ async function lookupBrreg(){
 }
 
 // ============================================================
-// PDF EXPORT VIA PRINT (v13.20)
+// PDF EXPORT VIA PRINT (v14.5.10)
 // ============================================================
 // Opens a print-friendly window containing the same data as exportInvoicingCSV.
 // Browser's print dialog allows "Save as PDF" as the destination.
@@ -3308,7 +3513,7 @@ function exportInvoicingPDF(companyFilterName){
     const co=b.Check_Out?new Date(b.Check_Out):new Date();co.setHours(0,0,0,0);
     if(co<fromDate||ci>toDate)return;
     const nights=_nightsInPeriod(b,fromDate,toDate);
-    const cost=calcBookingCost(b,propTitleForPercent);
+    const cost=calcBookingCost(b,getBookingPropertyTitle(b));
     const room=allRooms.find(r=>r.id===rid);
     const origCo=(b.Company||'').trim();
     const key=effectiveCo||'(uten firma)';
@@ -3322,11 +3527,12 @@ function exportInvoicingPDF(companyFilterName){
       if(effectiveCo){companyNightSum[effectiveCo]=(companyNightSum[effectiveCo]||0)+nights*(cost.rate||0)}
     }
     const isContinuation=(b.Continuation===true||b.Continuation==='true'||b.Continuation===1);
-    if(b.Status==='Completed'&&b.Check_Out&&!isContinuation&&!hasPercentFee(effectiveCo,propTitleForPercent)){
+    const propTitleForB=getBookingPropertyTitle(b); // v14.5.12: per-booking lookup
+    if(b.Status==='Completed'&&b.Check_Out&&!isContinuation&&!hasPercentFee(effectiveCo,propTitleForB)){
       const checkoutDate=new Date(b.Check_Out);checkoutDate.setHours(0,0,0,0);
       const feeEnabled=(b.Include_Checkout_Fee===undefined||b.Include_Checkout_Fee===null||b.Include_Checkout_Fee===true||b.Include_Checkout_Fee==='true'||b.Include_Checkout_Fee===1);
       if(feeEnabled&&checkoutDate>=fromDate&&checkoutDate<=toDate){
-        const fee=getCheckoutFee(effectiveCo,propTitleForPercent);
+        const fee=getCheckoutFee(effectiveCo,propTitleForB);
         if(fee>0){
           groups[key].fees.push({
             name:b.Person_Name||'',room:room?room.Title:'?',
@@ -3337,6 +3543,10 @@ function exportInvoicingPDF(companyFilterName){
     }
   });
   // Percent fees
+  // NOTE (v14.5.12): In "All Properties" mode propTitleForPercent is '', so
+  // property-specific percent rules won't match. Acceptable limitation for now —
+  // percent fees are rare and usually configured per-company, not per-property.
+  // Run faktura per property for accurate percent-fee calculation.
   Object.keys(companyNightSum).forEach(c=>{
     if(companyFilterName&&c!==companyFilterName)return;
     const pct=getPercentFeeRate(c,propTitleForPercent);
@@ -3355,19 +3565,30 @@ function exportInvoicingPDF(companyFilterName){
     if(!groups[key])groups[key]={nights:[],fees:[],percent:null,fullTenant:null,longTerm:[]};
     groups[key].fullTenant={property:prop?prop.Title:'',rooms:ft.rooms,days:ft.days,rate:ft.rate,total:ft.total,detailLabel:ft.detailLabel};
   });
-  // Long-term per-room contracts
+  // Long-term per-room contracts (v14.5.10 segmented)
   Object.keys(longTermByRoomIdPdf).forEach(rid=>{
     const lt=longTermByRoomIdPdf[rid];
     if(companyFilterName&&lt.company!==companyFilterName)return;
     const key=lt.company;
     if(!groups[key])groups[key]={nights:[],fees:[],percent:null,fullTenant:null,longTerm:[]};
     if(!groups[key].longTerm)groups[key].longTerm=[];
-    groups[key].longTerm.push({
-      roomTitle:lt.room.Title||'',
-      price:lt.price,
-      total:lt.total,
-      detailLabel:lt.detailLabel,
-      isMonthly:lt.isMonthly
+    const room=allRooms.find(r=>r.id===rid);
+    if(!room)return;
+    const seg=segmentLongTermRoom(room,fromDate,toDate);
+    if(!seg)return;
+    seg.segments.forEach(s=>{
+      groups[key].longTerm.push({
+        roomTitle:room.Title||'',
+        guestName:s.name,
+        isEmpty:s.isEmpty,
+        price:s.dailyRate,
+        days:s.days,
+        total:s.total,
+        fromDate:s.fromDate,
+        toDate:s.toDate,
+        detailLabel:formatDate(s.fromDate)+' → '+formatDate(s.toDate)+' · '+s.days+' dager',
+        isMonthly:lt.isMonthly
+      });
     });
   });
 
@@ -3394,51 +3615,58 @@ function exportInvoicingPDF(companyFilterName){
     if(g.fullTenant){
       const ft=g.fullTenant;
       groupTotal+=ft.total;
-      tableRows+='<tr class="ft-row"><td colspan="4"><strong>🔒 Full-tenant lease — '+escapeHtml(ft.property)+'</strong><br><small>'+escapeHtml(ft.detailLabel||'')+'</small></td><td class="num"><strong>'+fmtKr(ft.total)+'</strong></td></tr>';
+      tableRows+='<tr class="ft-row"><td colspan="5"><strong>🔒 Full-tenant lease — '+escapeHtml(ft.property)+'</strong><br><small>'+escapeHtml(ft.detailLabel||'')+'</small></td><td class="num"><strong>'+fmtKr(ft.total)+'</strong></td></tr>';
     }
 
-    // Long-term per-room contracts: summary + collapsible detail rows
+    // Long-term per-room contracts (v14.5.10 segmented): summary + collapsible detail rows
     if(g.longTerm&&g.longTerm.length){
       const ltTotal=g.longTerm.reduce((s,lt)=>s+lt.total,0);
       groupTotal+=ltTotal;
+      // Count unique rooms
+      const uniqueRooms=new Set(g.longTerm.map(s=>s.roomTitle)).size;
       const sectionId='lt-'+escapeHtml(key).replace(/[^a-zA-Z0-9]/g,'_');
       // Summary row — clickable for screen, always shows on print
       tableRows+='<tr class="lt-row lt-summary" onclick="document.querySelectorAll(\'.'+sectionId+'\').forEach(el=>el.classList.toggle(\'lt-hidden\'))">'
-        +'<td colspan="4"><strong>🔑 Långtidsleie ('+g.longTerm.length+' rom)</strong> <span class="muted no-print">▼ klikk for detaljer</span></td>'
+        +'<td colspan="5"><strong>🔑 Långtidsleie ('+uniqueRooms+' rom · '+g.longTerm.length+' segmenter)</strong> <span class="muted no-print">▼ klikk for detaljer</span></td>'
         +'<td class="num"><strong>'+fmtKr(ltTotal)+'</strong></td>'
         +'</tr>';
       // Detail rows — hidden by default on screen, always shown on print
-      g.longTerm.forEach(lt=>{
-        tableRows+='<tr class="lt-row lt-detail '+sectionId+' lt-hidden">'
-          +'<td style="padding-left:24px"><small>↳ '+escapeHtml(lt.roomTitle)+'</small></td>'
-          +'<td><small>'+escapeHtml(lt.roomTitle)+'</small></td>'
-          +'<td><small>'+escapeHtml(lt.detailLabel||'')+'</small></td>'
-          +'<td class="num"><small>'+fmtKr(lt.price)+(lt.isMonthly?'/mnd':'/dag')+'</small></td>'
-          +'<td class="num"><small>'+fmtKr(lt.total)+'</small></td>'
+      // Column order: Rom, Gjest, Periode, Netter, Sats, Sum
+      g.longTerm.forEach(s=>{
+        const styleExtra=s.isEmpty?';color:#a76800;font-style:italic':'';
+        tableRows+='<tr class="lt-row lt-detail '+sectionId+' lt-hidden" style="background:'+(s.isEmpty?'rgba(239,159,39,.05)':'rgba(14,165,165,.05)')+'">'
+          +'<td><small>'+escapeHtml(s.roomTitle)+'</small></td>'
+          +'<td style="padding-left:24px'+styleExtra+'"><small>'+(s.isEmpty?'':'↳ ')+escapeHtml(s.guestName)+'</small></td>'
+          +'<td><small>'+escapeHtml(s.detailLabel||'')+'</small></td>'
+          +'<td class="num"><small>'+s.days+'</small></td>'
+          +'<td class="num"><small>'+fmtKr(Math.round(s.price*100)/100)+'/dag</small></td>'
+          +'<td class="num"><small>'+fmtKr(s.total)+'</small></td>'
           +'</tr>';
       });
     }
 
-    // Night bookings
+    // Night bookings — column order: Rom, Gjest, Periode, Netter, Sats, Sum
     g.nights.forEach(n=>{
       groupTotal+=n.total;
       const billingInfo=n.guestCompany&&n.guestCompany!==n.effectiveCo?'<br><small class="muted">Gjest jobber for: '+escapeHtml(n.guestCompany)+'</small>':'';
       tableRows+='<tr>'
-        +'<td>'+escapeHtml(n.name)+billingInfo+'</td>'
         +'<td>'+escapeHtml(n.room)+'</td>'
+        +'<td>'+escapeHtml(n.name)+billingInfo+'</td>'
         +'<td>'+formatDate(n.checkIn)+' → '+(n.checkOut?formatDate(n.checkOut):'Åpen')+'</td>'
-        +'<td class="num">'+n.nightsCount+' × '+fmtKr(n.rate)+'</td>'
+        +'<td class="num">'+n.nightsCount+'</td>'
+        +'<td class="num">'+fmtKr(n.rate)+'</td>'
         +'<td class="num">'+fmtKr(n.total)+'</td>'
         +'</tr>';
     });
 
-    // Checkout fees
+    // Checkout fees — column order: Rom, Gjest, Periode, Netter, Sats, Sum
     g.fees.forEach(f=>{
       groupTotal+=f.fee;
       tableRows+='<tr class="fee-row">'
-        +'<td>↳ Utvask: '+escapeHtml(f.name)+'</td>'
         +'<td>'+escapeHtml(f.room)+'</td>'
+        +'<td>↳ Utvask: '+escapeHtml(f.name)+'</td>'
         +'<td>'+formatDate(f.checkoutDate)+'</td>'
+        +'<td class="num">—</td>'
         +'<td class="num">—</td>'
         +'<td class="num">'+fmtKr(f.fee)+'</td>'
         +'</tr>';
@@ -3447,7 +3675,7 @@ function exportInvoicingPDF(companyFilterName){
     // Percent fee
     if(g.percent){
       groupTotal+=g.percent.amount;
-      tableRows+='<tr class="pct-row"><td colspan="4">📊 Månedsgebyr ('+(g.percent.rate*100)+'% av '+fmtKr(g.percent.base)+')</td><td class="num"><strong>'+fmtKr(g.percent.amount)+'</strong></td></tr>';
+      tableRows+='<tr class="pct-row"><td colspan="5">📊 Månedsgebyr ('+(g.percent.rate*100)+'% av '+fmtKr(g.percent.base)+')</td><td class="num"><strong>'+fmtKr(g.percent.amount)+'</strong></td></tr>';
     }
 
     grandTotal+=groupTotal;
@@ -3455,9 +3683,9 @@ function exportInvoicingPDF(companyFilterName){
     bodyHtml+='<section class="company-section">'
       +'<h2>'+escapeHtml(key)+'</h2>'
       +'<table>'
-      +'<thead><tr><th>Gjest</th><th>Rom</th><th>Periode</th><th class="num">Netter × sats</th><th class="num">Sum</th></tr></thead>'
+      +'<thead><tr><th>Rom</th><th>Gjest</th><th>Periode</th><th class="num">Netter</th><th class="num">Sats</th><th class="num">Sum</th></tr></thead>'
       +'<tbody>'+tableRows+'</tbody>'
-      +'<tfoot><tr><td colspan="4" class="num"><strong>Sum '+escapeHtml(key)+'</strong></td><td class="num"><strong>'+fmtKr(groupTotal)+'</strong></td></tr></tfoot>'
+      +'<tfoot><tr><td colspan="5" class="num"><strong>Sum '+escapeHtml(key)+'</strong></td><td class="num"><strong>'+fmtKr(groupTotal)+'</strong></td></tr></tfoot>'
       +'</table>'
       +'</section>';
   });
@@ -3517,4 +3745,1145 @@ function exportInvoicingPDF(companyFilterName){
   w.document.close();
   // Auto-trigger print dialog after render
   setTimeout(()=>{try{w.focus();w.print()}catch(e){console.error(e)}},500);
+}
+
+// ============================================================
+// PRICING TABS — Full-tenant + Long-term editors (v14.5.10)
+// ============================================================
+function switchPricingTab(tab){
+  document.querySelectorAll('.pricing-tab').forEach(b=>{
+    if(b.dataset.tab===tab){
+      b.classList.add('pricing-tab-active');
+      b.style.borderBottom='2px solid var(--accent)';
+      b.style.color='';
+      b.style.fontWeight='500';
+    }else{
+      b.classList.remove('pricing-tab-active');
+      b.style.borderBottom='2px solid transparent';
+      b.style.color='var(--text-secondary)';
+      b.style.fontWeight='';
+    }
+  });
+  document.querySelectorAll('.pricing-tab-content').forEach(d=>d.style.display='none');
+  document.getElementById('tab-'+tab).style.display='';
+  if(tab==='fulltenant')renderFullTenantList();
+  else if(tab==='longterm'){populateLongTermPropertyFilter();renderLongTermList()}
+}
+
+// --- FULL-TENANT TAB ---
+function renderFullTenantList(){
+  const list=document.getElementById('fullTenantList');
+  if(!properties.length){list.innerHTML='<div class="muted" style="padding:20px;text-align:center">No properties found.</div>';return}
+  const fmtKr=n=>(n||0).toLocaleString('nb-NO');
+  list.innerHTML='<table style="width:100%;font-size:13px"><thead><tr style="background:var(--bg-secondary)"><th style="padding:8px;text-align:left">Property</th><th style="padding:8px;text-align:left">Company</th><th style="padding:8px;text-align:right">Price/room</th><th style="padding:8px;text-align:left">Unit</th><th style="padding:8px;text-align:left">Start</th><th style="padding:8px;text-align:left">End</th><th style="padding:8px;text-align:left">Status</th><th style="padding:8px;width:60px"></th></tr></thead><tbody>'
+    +properties.map(p=>{
+      const company=(p.FullTenant_Company||'').trim();
+      const rate=Number(p.FullTenant_RatePerRoom)||0;
+      const unit=p.FullTenant_RateUnit||'Per day';
+      const start=p.FullTenant_StartDate?formatDate(p.FullTenant_StartDate):'';
+      const end=p.FullTenant_EndDate?formatDate(p.FullTenant_EndDate):'';
+      const today=new Date();
+      const startD=p.FullTenant_StartDate?new Date(p.FullTenant_StartDate):null;
+      const endD=p.FullTenant_EndDate?new Date(p.FullTenant_EndDate):null;
+      let status,statusClr;
+      if(!company){status='—';statusClr='var(--text-tertiary)'}
+      else if(startD&&today<startD){status='Upcoming';statusClr='var(--accent)'}
+      else if(endD&&today>endD){status='Expired';statusClr='var(--text-tertiary)'}
+      else{status='Active';statusClr='var(--text-success)'}
+      return '<tr style="border-top:.5px solid var(--border-tertiary);cursor:pointer" onclick="openFullTenantEdit(\''+p.id+'\')" onmouseover="this.style.background=\'var(--bg-secondary)\'" onmouseout="this.style.background=\'\'">'
+        +'<td style="padding:8px;font-weight:500">'+escapeHtml(p.Title||'')+'</td>'
+        +'<td style="padding:8px">'+(company?escapeHtml(company):'<span class="muted">—</span>')+'</td>'
+        +'<td style="padding:8px;text-align:right">'+(rate?fmtKr(rate)+' kr':'<span class="muted">empty</span>')+'</td>'
+        +'<td style="padding:8px"><small>'+escapeHtml(unit)+'</small></td>'
+        +'<td style="padding:8px">'+(start||'<span class="muted">—</span>')+'</td>'
+        +'<td style="padding:8px">'+(end||'<span class="muted">—</span>')+'</td>'
+        +'<td style="padding:8px"><span style="color:'+statusClr+';font-weight:500">'+status+'</span></td>'
+        +'<td style="padding:8px"><button onclick="event.stopPropagation();openFullTenantEdit(\''+p.id+'\')" style="padding:3px 10px;border:1px solid var(--border-tertiary);border-radius:4px;background:var(--bg-primary);cursor:pointer;font-size:11px">Edit</button></td>'
+        +'</tr>';
+    }).join('')+'</tbody></table>';
+}
+
+let editingFullTenantPropId=null;
+function openFullTenantEdit(propId){
+  editingFullTenantPropId=propId;
+  const p=properties.find(x=>String(x.id)===String(propId));
+  if(!p)return;
+  document.getElementById('ftEditPropertyLabel').textContent=p.Title;
+  document.getElementById('ftEditCompany').value=p.FullTenant_Company||'';
+  document.getElementById('ftEditRate').value=p.FullTenant_RatePerRoom||'';
+  document.getElementById('ftEditRateUnit').value=p.FullTenant_RateUnit||'Per day';
+  document.getElementById('ftEditStartDate').value=p.FullTenant_StartDate?p.FullTenant_StartDate.substring(0,10):'';
+  document.getElementById('ftEditEndDate').value=p.FullTenant_EndDate?p.FullTenant_EndDate.substring(0,10):'';
+  document.getElementById('fullTenantEditModal').classList.add('open');
+}
+
+async function saveFullTenantAgreement(){
+  if(!editingFullTenantPropId)return;
+  const company=document.getElementById('ftEditCompany').value.trim();
+  const rate=parseFloat(document.getElementById('ftEditRate').value)||null;
+  const rateUnit=document.getElementById('ftEditRateUnit').value;
+  const startDate=document.getElementById('ftEditStartDate').value;
+  const endDate=document.getElementById('ftEditEndDate').value;
+  const fields={
+    FullTenant_Company:company||null,
+    FullTenant_RatePerRoom:rate,
+    FullTenant_RateUnit:rateUnit,
+    FullTenant_StartDate:startDate||null,
+    FullTenant_EndDate:endDate||null
+  };
+  try{
+    await updateListItem('Properties',editingFullTenantPropId,fields);
+    const p=properties.find(x=>String(x.id)===String(editingFullTenantPropId));
+    if(p)Object.assign(p,fields);
+    document.getElementById('fullTenantEditModal').classList.remove('open');
+    renderFullTenantList();
+  }catch(e){alert('Save failed: '+e.message)}
+}
+
+// --- LONG-TERM TAB ---
+function populateLongTermPropertyFilter(){
+  const sel=document.getElementById('ltFilterProperty');
+  const current=sel.value;
+  sel.innerHTML='<option value="__ALL__">All properties</option>'+properties.map(p=>'<option value="'+p.id+'">'+escapeHtml(p.Title)+'</option>').join('');
+  if(current)sel.value=current;
+}
+
+function renderLongTermList(){
+  const list=document.getElementById('longTermList');
+  const filter=document.getElementById('ltFilterProperty').value;
+  let rooms=allRooms;
+  if(filter&&filter!=='__ALL__')rooms=rooms.filter(r=>String(r.PropertyLookupId)===String(filter));
+  // Sort by property then room title
+  rooms=[...rooms].sort((a,b)=>{
+    const pa=String(a.PropertyLookupId||'');
+    const pb=String(b.PropertyLookupId||'');
+    if(pa!==pb)return pa.localeCompare(pb);
+    return (a.Title||'').localeCompare(b.Title||'',undefined,{numeric:true});
+  });
+  if(!rooms.length){list.innerHTML='<div class="muted" style="padding:20px;text-align:center">No rooms in this property.</div>';return}
+  const fmtKr=n=>(n||0).toLocaleString('nb-NO');
+  let html='<table style="width:100%;font-size:13px"><thead><tr style="background:var(--bg-secondary)"><th style="padding:8px;text-align:left">Property</th><th style="padding:8px;text-align:left">Room</th><th style="padding:8px;text-align:left">Company</th><th style="padding:8px;text-align:right">Price</th><th style="padding:8px;text-align:left">Unit</th><th style="padding:8px;text-align:left">Period</th><th style="padding:8px;text-align:left">Status</th><th style="padding:8px;width:60px"></th></tr></thead><tbody>';
+  rooms.forEach(r=>{
+    const prop=properties.find(p=>String(p.id)===String(r.PropertyLookupId));
+    const propName=prop?prop.Title:'';
+    const company=(r.LongTerm_Company||'').trim();
+    const price=Number(r.LongTerm_Price)||0;
+    const unit=r.LongTerm_RateUnit||'Per day';
+    const start=r.LongTerm_StartDate?formatDate(r.LongTerm_StartDate):'';
+    const end=r.LongTerm_EndDate?formatDate(r.LongTerm_EndDate):'(open)';
+    const today=new Date();
+    const startD=r.LongTerm_StartDate?new Date(r.LongTerm_StartDate):null;
+    const endD=r.LongTerm_EndDate?new Date(r.LongTerm_EndDate):null;
+    let status,statusClr;
+    if(!company){status='—';statusClr='var(--text-tertiary)'}
+    else if(!price){status='⚠ No price';statusClr='var(--text-warning)'}
+    else if(startD&&today<startD){status='Upcoming';statusClr='var(--accent)'}
+    else if(endD&&today>endD){status='Expired';statusClr='var(--text-tertiary)'}
+    else{status='Active';statusClr='var(--text-success)'}
+    const periodText=company?(start+' → '+end):'<span class="muted">—</span>';
+    html+='<tr style="border-top:.5px solid var(--border-tertiary);cursor:pointer'+(company?'':';opacity:.7')+'" onclick="openLongTermEdit(\''+r.id+'\')" onmouseover="this.style.background=\'var(--bg-secondary)\'" onmouseout="this.style.background=\'\'">'
+      +'<td style="padding:8px"><small>'+escapeHtml(propName)+'</small></td>'
+      +'<td style="padding:8px;font-weight:500">'+escapeHtml(r.Title||'')+'</td>'
+      +'<td style="padding:8px">'+(company?escapeHtml(company):'<span class="muted">—</span>')+'</td>'
+      +'<td style="padding:8px;text-align:right">'+(price?fmtKr(price)+' kr':'<span class="muted">—</span>')+'</td>'
+      +'<td style="padding:8px"><small>'+escapeHtml(unit)+'</small></td>'
+      +'<td style="padding:8px"><small>'+periodText+'</small></td>'
+      +'<td style="padding:8px"><span style="color:'+statusClr+';font-weight:500">'+status+'</span></td>'
+      +'<td style="padding:8px"><button onclick="event.stopPropagation();openLongTermEdit(\''+r.id+'\')" style="padding:3px 10px;border:1px solid var(--border-tertiary);border-radius:4px;background:var(--bg-primary);cursor:pointer;font-size:11px">Edit</button></td>'
+      +'</tr>';
+  });
+  html+='</tbody></table>';
+  // Summary footer
+  const activeRooms=rooms.filter(r=>(r.LongTerm_Company||'').trim()&&Number(r.LongTerm_Price)>0);
+  const totalSum=activeRooms.reduce((s,r)=>s+(Number(r.LongTerm_Price)||0),0);
+  if(activeRooms.length){
+    html+='<div style="padding:10px 8px;margin-top:10px;background:rgba(14,165,165,.07);border-radius:6px;font-size:12px"><strong>'+activeRooms.length+' active contracts</strong> · Total: <strong>'+fmtKr(totalSum)+' kr</strong> <span class="muted">(per unit shown — does not factor pro-rata)</span></div>';
+  }
+  list.innerHTML=html;
+}
+
+let editingLongTermRoomId=null;
+function openLongTermEdit(roomId){
+  editingLongTermRoomId=roomId;
+  const r=allRooms.find(x=>x.id===roomId);
+  if(!r)return;
+  const prop=properties.find(p=>String(p.id)===String(r.PropertyLookupId));
+  document.getElementById('ltEditTitle').textContent='Long-term contract — '+(r.Title||'');
+  document.getElementById('ltEditRoomLabel').textContent=(prop?prop.Title:'?')+' · '+(r.Title||'');
+  document.getElementById('ltEditCompany').value=r.LongTerm_Company||'';
+  document.getElementById('ltEditPrice').value=r.LongTerm_Price||'';
+  document.getElementById('ltEditRateUnit').value=r.LongTerm_RateUnit||'Per month';
+  document.getElementById('ltEditStartDate').value=r.LongTerm_StartDate?r.LongTerm_StartDate.substring(0,10):'';
+  document.getElementById('ltEditEndDate').value=r.LongTerm_EndDate?r.LongTerm_EndDate.substring(0,10):'';
+  document.getElementById('ltEditClearBtn').style.display=(r.LongTerm_Company||'').trim()?'':'none';
+  document.getElementById('longTermEditModal').classList.add('open');
+}
+
+async function saveLongTermContract(){
+  if(!editingLongTermRoomId)return;
+  const company=document.getElementById('ltEditCompany').value.trim();
+  const price=parseFloat(document.getElementById('ltEditPrice').value)||null;
+  const rateUnit=document.getElementById('ltEditRateUnit').value;
+  const startDate=document.getElementById('ltEditStartDate').value;
+  const endDate=document.getElementById('ltEditEndDate').value;
+  if(company){
+    if(!price){alert('Price is required');return}
+    if(!startDate){alert('Start date is required');return}
+  }
+  const fields={
+    LongTerm_Company:company||null,
+    LongTerm_Price:price,
+    LongTerm_RateUnit:rateUnit,
+    LongTerm_StartDate:startDate||null,
+    LongTerm_EndDate:endDate||null
+  };
+  try{
+    await updateListItem('Rooms',editingLongTermRoomId,fields);
+    const r=allRooms.find(x=>x.id===editingLongTermRoomId);
+    if(r)Object.assign(r,fields);
+    document.getElementById('longTermEditModal').classList.remove('open');
+    renderLongTermList();
+  }catch(e){alert('Save failed: '+e.message)}
+}
+
+async function clearLongTermContract(){
+  if(!editingLongTermRoomId)return;
+  if(!confirm('Clear long-term contract for this room? This will make it a regular bookable room again.'))return;
+  const fields={LongTerm_Company:null,LongTerm_Price:null,LongTerm_RateUnit:null,LongTerm_StartDate:null,LongTerm_EndDate:null};
+  try{
+    await updateListItem('Rooms',editingLongTermRoomId,fields);
+    const r=allRooms.find(x=>x.id===editingLongTermRoomId);
+    if(r)Object.assign(r,fields);
+    document.getElementById('longTermEditModal').classList.remove('open');
+    renderLongTermList();
+  }catch(e){alert('Clear failed: '+e.message)}
+}
+
+function openLongTermBulkAdd(){
+  const propSel=document.getElementById('ltBulkProperty');
+  propSel.innerHTML=properties.map(p=>'<option value="'+p.id+'">'+escapeHtml(p.Title)+'</option>').join('');
+  document.getElementById('ltBulkCompany').value='';
+  document.getElementById('ltBulkStartDate').value='';
+  document.getElementById('ltBulkRateUnit').value='Per month';
+  renderLongTermBulkRoomList();
+  document.getElementById('longTermBulkModal').classList.add('open');
+}
+
+function renderLongTermBulkRoomList(){
+  const propId=document.getElementById('ltBulkProperty').value;
+  const list=document.getElementById('ltBulkRoomList');
+  const rooms=allRooms.filter(r=>String(r.PropertyLookupId)===String(propId)).sort((a,b)=>(a.Title||'').localeCompare(b.Title||'',undefined,{numeric:true}));
+  if(!rooms.length){list.innerHTML='<div class="muted">No rooms.</div>';return}
+  list.innerHTML='<div style="margin-bottom:6px"><label style="font-size:11px"><input type="checkbox" onchange="document.querySelectorAll(\'.ltBulkRoom\').forEach(cb=>cb.checked=this.checked)"> Select all</label></div>'+rooms.map(r=>{
+    const has=(r.LongTerm_Company||'').trim();
+    return '<label style="display:block;font-size:12px;padding:3px 0"><input type="checkbox" class="ltBulkRoom" value="'+r.id+'"'+(has?' disabled title="Already has contract"':'')+'> '+escapeHtml(r.Title||'')+(has?' <span class="muted" style="font-size:10px">(already: '+escapeHtml(has)+')</span>':'')+'</label>';
+  }).join('');
+}
+
+async function bulkApplyLongTermContract(){
+  const company=document.getElementById('ltBulkCompany').value.trim();
+  const rateUnit=document.getElementById('ltBulkRateUnit').value;
+  const startDate=document.getElementById('ltBulkStartDate').value;
+  if(!company||!startDate){alert('Company and start date are required');return}
+  const ids=[...document.querySelectorAll('.ltBulkRoom:checked')].map(cb=>cb.value);
+  if(!ids.length){alert('Select at least one room');return}
+  if(!confirm('Apply contract "'+company+'" to '+ids.length+' rooms? You will need to set price per room afterwards.'))return;
+  let success=0,failed=0;
+  for(let i=0;i<ids.length;i++){
+    try{
+      await updateListItem('Rooms',ids[i],{LongTerm_Company:company,LongTerm_RateUnit:rateUnit,LongTerm_StartDate:startDate});
+      const r=allRooms.find(x=>x.id===ids[i]);
+      if(r){r.LongTerm_Company=company;r.LongTerm_RateUnit=rateUnit;r.LongTerm_StartDate=startDate}
+      success++;
+    }catch(e){console.error(e);failed++}
+    if(i%10===9)await new Promise(res=>setTimeout(res,300));
+  }
+  alert('Applied to '+success+' rooms'+(failed?', '+failed+' failed':'')+'. Now set the individual prices in the Long-term tab.');
+  document.getElementById('longTermBulkModal').classList.remove('open');
+  renderLongTermList();
+}
+
+// ============================================================
+// BACKUP & RESTORE (v14.5.10)
+// ============================================================
+const BACKUP_LISTS=['Properties','Rooms','Bookings','Persons','Cleaning_Log','Hours','Users','Rates','Companies'];
+
+async function exportBackup(){
+  if(!can('admin')){alert('Admin permission required');return}
+  const btn=document.querySelector('[data-backup-btn]');
+  if(btn){btn.disabled=true;btn.textContent='⏳ Backing up...'}
+  try{
+    const data={
+      meta:{
+        appVersion:'v14.5.10',
+        timestamp:new Date().toISOString(),
+        exportedBy:currentUser.email||'unknown',
+        siteId:siteId
+      },
+      lists:{}
+    };
+    for(let i=0;i<BACKUP_LISTS.length;i++){
+      const name=BACKUP_LISTS[i];
+      if(btn)btn.textContent='⏳ '+name+' ('+(i+1)+'/'+BACKUP_LISTS.length+')...';
+      try{
+        const items=await getListItems(name);
+        data.lists[name]={count:items.length,items};
+      }catch(e){
+        data.lists[name]={count:0,items:[],error:e.message};
+        console.warn('Skipping '+name+':',e.message);
+      }
+    }
+    // Build summary
+    const summary=Object.keys(data.lists).map(k=>k+': '+data.lists[k].count).join(', ');
+    data.meta.summary=summary;
+    // Download as JSON
+    const json=JSON.stringify(data,null,2);
+    const blob=new Blob([json],{type:'application/json'});
+    const dateStr=new Date().toISOString().substring(0,10);
+    const filename='2gmbooking_backup_'+dateStr+'.json';
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    a.href=url;a.download=filename;
+    document.body.appendChild(a);a.click();
+    setTimeout(()=>{document.body.removeChild(a);URL.revokeObjectURL(url)},100);
+    alert('✓ Backup ready: '+filename+'\n\n'+summary);
+  }catch(e){
+    alert('Backup failed: '+e.message);
+  }finally{
+    if(btn){btn.disabled=false;btn.textContent='💾 Backup data'}
+  }
+}
+
+// --- RESTORE: inspect only ---
+let _backupInspectData=null;
+
+function openRestoreInspect(){
+  if(!can('admin')){alert('Admin permission required');return}
+  document.getElementById('restoreFileInput').click();
+}
+
+function onRestoreFileSelected(event){
+  const file=event.target.files[0];
+  if(!file)return;
+  const reader=new FileReader();
+  reader.onload=e=>{
+    try{
+      const data=JSON.parse(e.target.result);
+      if(!data.meta||!data.lists){throw new Error('Not a valid 2GM Booking backup file')}
+      _backupInspectData=data;
+      renderRestoreInspect();
+      document.getElementById('restoreInspectModal').classList.add('open');
+    }catch(err){
+      alert('Could not read file: '+err.message);
+    }
+  };
+  reader.readAsText(file);
+  // Reset input so same file can be selected again
+  event.target.value='';
+}
+
+function renderRestoreInspect(){
+  const data=_backupInspectData;
+  if(!data)return;
+  const meta=data.meta;
+  const exportedDate=new Date(meta.timestamp);
+  const ageDays=Math.floor((new Date()-exportedDate)/86400000);
+  let html='<div style="background:var(--bg-secondary);padding:10px;border-radius:6px;margin-bottom:12px;font-size:12px">'
+    +'<strong>Backup info</strong><br>'
+    +'Exported: '+formatDate(meta.timestamp)+' ('+ageDays+' days ago) by '+escapeHtml(meta.exportedBy||'?')+'<br>'
+    +'App version: '+escapeHtml(meta.appVersion||'?')+'<br>'
+    +'Summary: '+escapeHtml(meta.summary||'')
+    +'</div>';
+  // List selector
+  html+='<div style="margin-bottom:8px"><label style="font-size:12px">Pick a list: </label>'
+    +'<select id="restoreListPicker" onchange="renderRestoreItems()" style="padding:5px 8px;border:1px solid var(--border-tertiary);border-radius:var(--radius-md);font-size:13px;font-family:inherit">'
+    +'<option value="">— choose —</option>'
+    +Object.keys(data.lists).map(k=>'<option value="'+k+'">'+k+' ('+data.lists[k].count+')</option>').join('')
+    +'</select>'
+    +' <input id="restoreSearch" type="text" placeholder="Search..." oninput="renderRestoreItems()" style="margin-left:8px;padding:5px 8px;border:1px solid var(--border-tertiary);border-radius:var(--radius-md);font-size:13px;font-family:inherit;width:240px">'
+    +'</div>';
+  html+='<div id="restoreItemsContainer" style="border:1px solid var(--border-tertiary);border-radius:6px;padding:8px;min-height:200px;max-height:400px;overflow:auto;font-size:12px"><div class="muted" style="text-align:center;padding:30px">Pick a list to inspect items</div></div>';
+  document.getElementById('restoreInspectBody').innerHTML=html;
+}
+
+function renderRestoreItems(){
+  const data=_backupInspectData;
+  if(!data)return;
+  const listName=document.getElementById('restoreListPicker').value;
+  const search=(document.getElementById('restoreSearch').value||'').toLowerCase().trim();
+  const container=document.getElementById('restoreItemsContainer');
+  if(!listName){container.innerHTML='<div class="muted" style="text-align:center;padding:30px">Pick a list to inspect items</div>';return}
+  const list=data.lists[listName];
+  if(!list||!list.items||!list.items.length){
+    container.innerHTML='<div class="muted" style="text-align:center;padding:30px">No items in this list.</div>';
+    return;
+  }
+  // Filter by search
+  let items=list.items;
+  if(search){
+    items=items.filter(item=>{
+      const blob=JSON.stringify(item).toLowerCase();
+      return blob.indexOf(search)>=0;
+    });
+  }
+  if(!items.length){container.innerHTML='<div class="muted" style="text-align:center;padding:30px">No items match search.</div>';return}
+  // Show as expandable rows
+  let html='<div class="muted" style="font-size:11px;margin-bottom:6px">Showing '+items.length+(search?' / '+list.items.length:'')+' items. Click to expand.</div>';
+  items.slice(0,200).forEach((item,idx)=>{
+    const titleField=item.Title||item.Person_Name||item.Name||item.Email||('item #'+(item.id||idx));
+    const itemJson=JSON.stringify(item,null,2);
+    const elId='restore-item-'+listName+'-'+idx;
+    html+='<div style="border-bottom:.5px solid var(--border-tertiary);padding:4px 0">'
+      +'<div style="display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="document.getElementById(\''+elId+'\').classList.toggle(\'restore-collapsed\')">'
+      +'<span style="font-weight:500">'+escapeHtml(String(titleField))+'</span>'
+      +'<span><button onclick="event.stopPropagation();restoreSingleItem(\''+listName+'\','+idx+')" style="padding:2px 8px;background:#1D9E75;color:#fff;border:0;border-radius:4px;font-size:11px;cursor:pointer">↻ Restore</button></span>'
+      +'</div>'
+      +'<pre id="'+elId+'" class="restore-collapsed" style="font-family:Consolas,monospace;font-size:11px;background:var(--bg-secondary);padding:6px;border-radius:4px;margin:4px 0 0 0;white-space:pre-wrap;max-height:200px;overflow:auto">'+escapeHtml(itemJson)+'</pre>'
+      +'</div>';
+  });
+  if(items.length>200)html+='<div class="muted" style="text-align:center;padding:8px;font-size:11px">Showing first 200. Use search to narrow.</div>';
+  container.innerHTML=html;
+  // Make CSS work
+  if(!document.getElementById('restoreCSS')){
+    const css=document.createElement('style');
+    css.id='restoreCSS';
+    css.textContent='.restore-collapsed{display:none}';
+    document.head.appendChild(css);
+  }
+}
+
+async function restoreSingleItem(listName,idx){
+  if(!can('admin')){alert('Admin permission required');return}
+  const data=_backupInspectData;
+  if(!data)return;
+  const item=data.lists[listName].items[idx];
+  if(!item){alert('Item not found in backup');return}
+  // Build a clean fields object — strip system fields
+  const skipFields={id:1,_id:1,'@odata.etag':1,Created:1,Modified:1,Author:1,Editor:1,AuthorLookupId:1,EditorLookupId:1,ContentType:1,_UIVersionString:1,_ColorTag:1,Attachments:1,LinkTitle:1,LinkTitleNoMenu:1,ItemChildCount:1,FolderChildCount:1,_ComplianceFlags:1,_ComplianceTag:1,_ComplianceTagWrittenTime:1,_ComplianceTagUserId:1,AppAuthor:1,AppEditor:1};
+  const fields={};
+  Object.keys(item).forEach(k=>{if(!skipFields[k]&&!k.startsWith('OData_'))fields[k]=item[k]});
+  // Confirm
+  const titleField=item.Title||item.Person_Name||item.Name||'item';
+  const summary='Restore "'+titleField+'" to '+listName+'?\n\n'
+    +'A NEW item will be created with this data. The original ID ('+item.id+') will not be reused — SharePoint assigns a new one.\n\n'
+    +'Note: Lookup-references (e.g. RoomLookupId, PropertyLookupId) will be copied as-is. If the referenced room/property no longer exists, the item may not display correctly.\n\n'
+    +'Proceed?';
+  if(!confirm(summary))return;
+  try{
+    const result=await createListItem(listName,fields);
+    alert('✓ Restored as new item with id '+result.id+' in '+listName);
+    // Reload data so it shows up
+    await loadData();
+  }catch(e){
+    alert('Restore failed: '+e.message);
+  }
+}
+
+// ============================================================
+// COMPANY MERGE (v14.5.10)
+// ============================================================
+function openMergeCompanies(){
+  if(!can('manage_companies')&&!can('admin')){alert('Permission required');return}
+  // Populate datalist with all known company names
+  const allCos=new Set();
+  allCompanies.forEach(c=>{if(c.Title)allCos.add(c.Title)});
+  allBookings.forEach(b=>{if(b.Company)allCos.add(b.Company);if(b.Billing_Company)allCos.add(b.Billing_Company)});
+  allPersons.forEach(p=>{if(p.Company)allCos.add(p.Company)});
+  document.getElementById('mergeCanonicalList').innerHTML=[...allCos].sort().map(c=>'<option value="'+escapeHtml(c)+'">').join('');
+  document.getElementById('mergeCanonical').value='';
+  document.getElementById('mergeAliases').value='';
+  document.getElementById('mergePreview').innerHTML='<span class="muted">Skriv inn kanonisk navn og minst ett alias for å se forhåndsvisning</span>';
+  document.getElementById('mergeConfirmBtn').disabled=true;
+  document.getElementById('mergeCompaniesModal').classList.add('open');
+}
+
+function _parseAliases(text){
+  return text.split(/[\n,]/).map(s=>s.trim()).filter(s=>s.length>0);
+}
+
+function _findItemsForCompany(name){
+  const lc=name.toLowerCase();
+  // Bookings (Company)
+  const bookingsCompany=allBookings.filter(b=>(b.Company||'').toLowerCase()===lc);
+  // Bookings (Billing_Company)
+  const bookingsBilling=allBookings.filter(b=>(b.Billing_Company||'').toLowerCase()===lc);
+  // Persons
+  const persons=allPersons.filter(p=>(p.Company||'').toLowerCase()===lc);
+  // Rates
+  const rates=allRates.filter(r=>(r.Company||'').toLowerCase()===lc);
+  // Properties (FullTenant_Company)
+  const propsFT=properties.filter(p=>(p.FullTenant_Company||'').toLowerCase()===lc);
+  // Rooms (LongTerm_Company)
+  const roomsLT=allRooms.filter(r=>(r.LongTerm_Company||'').toLowerCase()===lc);
+  // Companies-list itself
+  const cosEntries=allCompanies.filter(c=>(c.Title||'').toLowerCase()===lc);
+  return {bookingsCompany,bookingsBilling,persons,rates,propsFT,roomsLT,cosEntries};
+}
+
+function renderMergePreview(){
+  const canonical=document.getElementById('mergeCanonical').value.trim();
+  const aliasText=document.getElementById('mergeAliases').value;
+  const aliases=_parseAliases(aliasText);
+  const preview=document.getElementById('mergePreview');
+  const btn=document.getElementById('mergeConfirmBtn');
+  if(!canonical||!aliases.length){
+    preview.innerHTML='<span class="muted">Skriv inn kanonisk navn og minst ett alias for å se forhåndsvisning</span>';
+    btn.disabled=true;
+    return;
+  }
+  // Filter out aliases that match canonical (case-insensitive)
+  const realAliases=aliases.filter(a=>a.toLowerCase()!==canonical.toLowerCase());
+  if(!realAliases.length){
+    preview.innerHTML='<span style="color:var(--text-warning)">⚠ Alle alias er like det kanoniske navnet — ingenting å slå sammen</span>';
+    btn.disabled=true;
+    return;
+  }
+  // Compute totals
+  let totals={bookings:0,billing:0,persons:0,rates:0,propsFT:0,roomsLT:0,cosEntries:0};
+  const perAlias=[];
+  realAliases.forEach(a=>{
+    const found=_findItemsForCompany(a);
+    perAlias.push({alias:a,counts:{
+      bookings:found.bookingsCompany.length,
+      billing:found.bookingsBilling.length,
+      persons:found.persons.length,
+      rates:found.rates.length,
+      propsFT:found.propsFT.length,
+      roomsLT:found.roomsLT.length,
+      cosEntries:found.cosEntries.length
+    }});
+    totals.bookings+=found.bookingsCompany.length;
+    totals.billing+=found.bookingsBilling.length;
+    totals.persons+=found.persons.length;
+    totals.rates+=found.rates.length;
+    totals.propsFT+=found.propsFT.length;
+    totals.roomsLT+=found.roomsLT.length;
+    totals.cosEntries+=found.cosEntries.length;
+  });
+  const totalChanges=totals.bookings+totals.billing+totals.persons+totals.rates+totals.propsFT+totals.roomsLT+totals.cosEntries;
+  let html='<div style="margin-bottom:8px"><strong>Vil endres til "'+escapeHtml(canonical)+'":</strong></div>';
+  html+='<table style="width:100%;font-size:12px;border-collapse:collapse">'
+    +'<thead><tr style="background:rgba(239,159,39,.08)"><th style="padding:6px 8px;text-align:left">Alias</th><th style="padding:6px 8px;text-align:right">Bookings</th><th style="padding:6px 8px;text-align:right">Billing</th><th style="padding:6px 8px;text-align:right">Persons</th><th style="padding:6px 8px;text-align:right">Rates</th><th style="padding:6px 8px;text-align:right">Properties</th><th style="padding:6px 8px;text-align:right">Rooms</th><th style="padding:6px 8px;text-align:right">Co list</th></tr></thead><tbody>';
+  perAlias.forEach(a=>{
+    const c=a.counts;
+    const total=c.bookings+c.billing+c.persons+c.rates+c.propsFT+c.roomsLT+c.cosEntries;
+    const styleSuffix=total===0?';color:var(--text-tertiary)':'';
+    html+='<tr style="border-top:.5px solid var(--border-tertiary)'+styleSuffix+'">'
+      +'<td style="padding:6px 8px"><strong>'+escapeHtml(a.alias)+'</strong>'+(total===0?' <small class="muted">(ikke funnet)</small>':'')+'</td>'
+      +'<td style="padding:6px 8px;text-align:right">'+c.bookings+'</td>'
+      +'<td style="padding:6px 8px;text-align:right">'+c.billing+'</td>'
+      +'<td style="padding:6px 8px;text-align:right">'+c.persons+'</td>'
+      +'<td style="padding:6px 8px;text-align:right">'+c.rates+'</td>'
+      +'<td style="padding:6px 8px;text-align:right">'+c.propsFT+'</td>'
+      +'<td style="padding:6px 8px;text-align:right">'+c.roomsLT+'</td>'
+      +'<td style="padding:6px 8px;text-align:right">'+c.cosEntries+'</td>'
+      +'</tr>';
+  });
+  html+='<tr style="border-top:1.5px solid var(--border-secondary);font-weight:600;background:rgba(239,159,39,.04)">'
+    +'<td style="padding:6px 8px">Totalt</td>'
+    +'<td style="padding:6px 8px;text-align:right">'+totals.bookings+'</td>'
+    +'<td style="padding:6px 8px;text-align:right">'+totals.billing+'</td>'
+    +'<td style="padding:6px 8px;text-align:right">'+totals.persons+'</td>'
+    +'<td style="padding:6px 8px;text-align:right">'+totals.rates+'</td>'
+    +'<td style="padding:6px 8px;text-align:right">'+totals.propsFT+'</td>'
+    +'<td style="padding:6px 8px;text-align:right">'+totals.roomsLT+'</td>'
+    +'<td style="padding:6px 8px;text-align:right">'+totals.cosEntries+'</td>'
+    +'</tr></tbody></table>';
+  if(totalChanges===0){
+    html+='<div style="color:var(--text-warning);margin-top:8px;font-size:11px">⚠ Ingen items vil endres — sjekk skrivemåten på alias-navnene</div>';
+    btn.disabled=true;
+  }else{
+    html+='<div style="margin-top:10px;padding:8px;background:rgba(123,97,255,.06);border-radius:4px;font-size:11px;color:#5949c4"><strong>'+totalChanges+' items vil oppdateres + '+totals.cosEntries+' Companies-rader vil slettes.</strong> Operasjonen er ikke reversibel — ta backup først (More → 💾 Backup data).</div>';
+    btn.disabled=false;
+  }
+  preview.innerHTML=html;
+}
+
+async function confirmMergeCompanies(){
+  if(!can('manage_companies')&&!can('admin')){alert('Permission required');return}
+  const canonical=document.getElementById('mergeCanonical').value.trim();
+  const aliases=_parseAliases(document.getElementById('mergeAliases').value).filter(a=>a.toLowerCase()!==canonical.toLowerCase());
+  if(!canonical||!aliases.length)return;
+  if(!confirm('Slå sammen '+aliases.length+' alias til "'+canonical+'"?\n\nDette kan ikke angres. Husk backup først (More → 💾 Backup data).\n\nTrykk OK for å fortsette.'))return;
+  const btn=document.getElementById('mergeConfirmBtn');
+  btn.disabled=true;btn.textContent='⏳ Slår sammen...';
+  let success=0,failed=0;
+  const errors=[];
+  // Helper: bulk-update one list with throttling
+  async function updateMany(listName,items,fields){
+    for(let i=0;i<items.length;i++){
+      try{
+        await updateListItem(listName,items[i].id,fields);
+        // Also update local cache so UI re-renders correctly
+        Object.assign(items[i],fields);
+        success++;
+      }catch(e){
+        console.error('Failed update '+listName+' #'+items[i].id,e);
+        errors.push(listName+' #'+items[i].id+': '+e.message);
+        failed++;
+      }
+      if(i%10===9)await new Promise(r=>setTimeout(r,300));
+    }
+  }
+  for(let aIdx=0;aIdx<aliases.length;aIdx++){
+    const a=aliases[aIdx];
+    btn.textContent='⏳ Behandler "'+a+'" ('+(aIdx+1)+'/'+aliases.length+')...';
+    const found=_findItemsForCompany(a);
+    // Bookings: Company field
+    await updateMany('Bookings',found.bookingsCompany,{Company:canonical});
+    // Bookings: Billing_Company field
+    await updateMany('Bookings',found.bookingsBilling,{Billing_Company:canonical});
+    // Persons
+    await updateMany('Persons',found.persons,{Company:canonical});
+    // Rates
+    await updateMany('Rates',found.rates,{Company:canonical});
+    // Properties (FullTenant_Company)
+    await updateMany('Properties',found.propsFT,{FullTenant_Company:canonical});
+    // Rooms (LongTerm_Company)
+    await updateMany('Rooms',found.roomsLT,{LongTerm_Company:canonical});
+    // Companies-list: delete alias entries (only after confirming canonical exists in Companies list)
+    const canonicalExists=allCompanies.some(c=>(c.Title||'').toLowerCase()===canonical.toLowerCase());
+    if(canonicalExists){
+      for(let i=0;i<found.cosEntries.length;i++){
+        try{
+          await deleteListItem('Companies',found.cosEntries[i].id);
+          // Remove from local cache
+          const idx=allCompanies.indexOf(found.cosEntries[i]);
+          if(idx>=0)allCompanies.splice(idx,1);
+          success++;
+        }catch(e){console.error('Delete Company '+found.cosEntries[i].id,e);errors.push('Companies #'+found.cosEntries[i].id+': '+e.message);failed++}
+        if(i%5===4)await new Promise(r=>setTimeout(r,300));
+      }
+    }else{
+      // Canonical not in Companies list yet — rename first alias to canonical instead of deleting
+      if(found.cosEntries.length){
+        try{
+          await updateListItem('Companies',found.cosEntries[0].id,{Title:canonical});
+          found.cosEntries[0].Title=canonical;
+          success++;
+          // Delete the rest
+          for(let i=1;i<found.cosEntries.length;i++){
+            try{
+              await deleteListItem('Companies',found.cosEntries[i].id);
+              const idx=allCompanies.indexOf(found.cosEntries[i]);
+              if(idx>=0)allCompanies.splice(idx,1);
+              success++;
+            }catch(e){failed++;errors.push('Companies #'+found.cosEntries[i].id+': '+e.message)}
+          }
+        }catch(e){failed++;errors.push('Companies rename: '+e.message)}
+      }
+    }
+  }
+  btn.disabled=false;btn.textContent='🔀 Slå sammen';
+  let msg='✓ Merge ferdig.\n\n'+success+' items oppdatert/slettet.';
+  if(failed)msg+='\n\n⚠ '+failed+' feil:\n'+errors.slice(0,5).join('\n')+(errors.length>5?'\n...':'');
+  alert(msg);
+  document.getElementById('mergeCompaniesModal').classList.remove('open');
+  // Re-render
+  if(typeof renderCompaniesList==='function')renderCompaniesList();
+  refreshLocal();
+}
+
+// Helper: deleteListItem
+async function deleteListItem(listName,itemId){
+  const s=await getSiteId();const lid=await getListId(listName);
+  return graphDelete('/sites/'+s+'/lists/'+lid+'/items/'+itemId);
+}
+
+// ============================================================
+// MESSAGING — SMS & E-post (v14.5.10)
+// ============================================================
+const DEFAULT_SMS_TEMPLATE=`Hello {first_name},
+Welcome to {property}.
+Room: {room}, door code: {room_door_code}
+WiFi: {wifi_ssid} / {wifi_password}
+{floor_info}
+{welcome_message}
+Best regards, Frank — 2GM`;
+
+const DEFAULT_EMAIL_TEMPLATE=`Dear {first_name},
+
+Welcome to {property}.
+
+Room: {room}
+Door code: {room_door_code}
+WiFi: {wifi_ssid}
+WiFi password: {wifi_password}
+Check-in date: {check_in_date}
+
+{floor_info}
+
+{welcome_message}
+
+We hope you enjoy your stay.
+
+Best regards,
+{my_name}
+{my_phone}
+{my_email}`;
+
+const DEFAULT_EMAIL_SUBJECT='Welcome to {property} — room {room}';
+
+function _renderTemplate(template,vars){
+  let out=template||'';
+  Object.keys(vars).forEach(k=>{
+    const re=new RegExp('\\{'+k+'\\}','g');
+    out=out.replace(re,vars[k]||'');
+  });
+  return out;
+}
+
+function _buildMessageVars(booking){
+  const room=allRooms.find(r=>r.id===String(booking.RoomLookupId));
+  const property=room?properties.find(p=>String(p.id)===String(room.PropertyLookupId)):null;
+  const fullName=booking.Person_Name||'';
+  const firstName=fullName.split(/\s+/)[0]||fullName;
+  const checkIn=booking.Check_In?formatDate(booking.Check_In):'';
+  // Find person record to get phone/email
+  const person=allPersons.find(p=>(p.Name||p.Title||'').toLowerCase()===fullName.toLowerCase());
+  // Floor-specific info (v14.5.10): pick Floor1_Info or Floor2_Info based on room.Floor
+  let floorInfo='';
+  if(property&&room){
+    const floor=String(room.Floor||'').trim();
+    if(floor==='1')floorInfo=property.Floor1_Info||'';
+    else if(floor==='2')floorInfo=property.Floor2_Info||'';
+  }
+  return{
+    guest_name:fullName,
+    first_name:firstName,
+    property:property?property.Title:'',
+    room:room?room.Title:'',
+    room_door_code:room?room.Door_Code||'(not set)':'',
+    wifi_ssid:property?property.WiFi_SSID||'(not set)':'',
+    wifi_password:property?property.WiFi_Password||'(not set)':'',
+    welcome_message:property?property.Welcome_Message||'':'',
+    floor_info:floorInfo,
+    check_in_date:checkIn,
+    my_name:'Frank Haugan',
+    my_phone:'+47 99 10 10 41',
+    my_email:'frank@2gm.no',
+    _person_phone:person?person.Mobile||booking.Mobile||'':booking.Mobile||'',
+    _person_email:person?person.Email||booking.Email||'':booking.Email||''
+  };
+}
+
+function _getTemplate(booking,kind){
+  const room=allRooms.find(r=>r.id===String(booking.RoomLookupId));
+  const property=room?properties.find(p=>String(p.id)===String(room.PropertyLookupId)):null;
+  if(kind==='sms')return (property&&property.SMS_Template)||DEFAULT_SMS_TEMPLATE;
+  if(kind==='email')return (property&&property.Email_Template)||DEFAULT_EMAIL_TEMPLATE;
+  if(kind==='subject')return (property&&property.Email_Subject_Template)||DEFAULT_EMAIL_SUBJECT;
+  return '';
+}
+
+function _toast(msg){
+  const t=document.createElement('div');
+  t.textContent=msg;
+  t.style.cssText='position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#1D9E75;color:#fff;padding:10px 20px;border-radius:6px;font-size:14px;z-index:10000;box-shadow:0 4px 12px rgba(0,0,0,.2)';
+  document.body.appendChild(t);
+  setTimeout(()=>{t.style.transition='opacity .4s';t.style.opacity='0';setTimeout(()=>document.body.removeChild(t),400)},1800);
+}
+
+async function _copyToClipboard(text){
+  try{
+    await navigator.clipboard.writeText(text);
+    _toast('✓ Kopiert! Lim inn i Mobil-app eller e-post');
+    return true;
+  }catch(e){
+    // Fallback
+    const ta=document.createElement('textarea');
+    ta.value=text;document.body.appendChild(ta);ta.select();
+    try{document.execCommand('copy');_toast('✓ Kopiert!');document.body.removeChild(ta);return true}
+    catch(e2){document.body.removeChild(ta);alert('Kunne ikke kopiere. Tekst:\n\n'+text);return false}
+  }
+}
+
+function copyBookingSMS(bookingId){
+  const b=allBookings.find(x=>x.id===bookingId);if(!b)return;
+  const vars=_buildMessageVars(b);
+  const text=_renderTemplate(_getTemplate(b,'sms'),vars);
+  _copyToClipboard(text);
+}
+
+function copyBookingEmail(bookingId){
+  const b=allBookings.find(x=>x.id===bookingId);if(!b)return;
+  const vars=_buildMessageVars(b);
+  const subject=_renderTemplate(_getTemplate(b,'subject'),vars);
+  const body=_renderTemplate(_getTemplate(b,'email'),vars);
+  _copyToClipboard('Emne: '+subject+'\n\n'+body);
+}
+
+function openBookingSMS(bookingId){
+  const b=allBookings.find(x=>x.id===bookingId);if(!b)return;
+  const vars=_buildMessageVars(b);
+  const text=_renderTemplate(_getTemplate(b,'sms'),vars);
+  const phone=vars._person_phone||'';
+  const url='sms:'+encodeURIComponent(phone)+'?body='+encodeURIComponent(text);
+  window.location.href=url;
+  setTimeout(()=>_toast('Hvis SMS-app ikke åpnet seg, bruk Kopier-knappen i stedet'),1500);
+}
+
+function openBookingEmail(bookingId){
+  const b=allBookings.find(x=>x.id===bookingId);if(!b)return;
+  const vars=_buildMessageVars(b);
+  const subject=_renderTemplate(_getTemplate(b,'subject'),vars);
+  const body=_renderTemplate(_getTemplate(b,'email'),vars);
+  const email=vars._person_email||'';
+  const url='mailto:'+encodeURIComponent(email)+'?subject='+encodeURIComponent(subject)+'&body='+encodeURIComponent(body);
+  window.location.href=url;
+}
+
+// --- MASS MESSAGING ---
+function openMassMessage(kind){
+  const m=document.getElementById('massMessageModal');
+  document.getElementById('massMsgKind').value=kind;
+  document.getElementById('massMsgTitle').textContent=kind==='sms'?'📱 Mass SMS':'📧 Mass e-post';
+  // Populate property and company filters
+  const propSel=document.getElementById('massPropFilter');
+  propSel.innerHTML='<option value="__ALL__">Alle eiendommer</option>'+properties.map(p=>'<option value="'+p.id+'">'+escapeHtml(p.Title)+'</option>').join('');
+  // Get all unique companies from active/upcoming bookings
+  const today=new Date();today.setHours(0,0,0,0);
+  const activeBookings=allBookings.filter(b=>{
+    if(b.Status==='Cancelled'||b.Status==='Completed')return false;
+    if(!b.Check_In)return false;
+    return true;
+  });
+  const cos=[...new Set(activeBookings.map(b=>b.Company||'').filter(Boolean))].sort();
+  const coSel=document.getElementById('massCoFilter');
+  coSel.innerHTML='<option value="__ALL__">Alle firma</option>'+cos.map(c=>'<option value="'+escapeHtml(c)+'">'+escapeHtml(c)+'</option>').join('');
+  renderMassMessageList();
+  m.classList.add('open');
+}
+
+function renderMassMessageList(){
+  const propFilter=document.getElementById('massPropFilter').value;
+  const coFilter=document.getElementById('massCoFilter').value;
+  const today=new Date();today.setHours(0,0,0,0);
+  const items=allBookings.filter(b=>{
+    if(b.Status==='Cancelled'||b.Status==='Completed')return false;
+    if(!b.Check_In)return false;
+    if(propFilter!=='__ALL__'){
+      const room=allRooms.find(r=>r.id===String(b.RoomLookupId));
+      if(!room||String(room.PropertyLookupId)!==String(propFilter))return false;
+    }
+    if(coFilter!=='__ALL__'&&b.Company!==coFilter)return false;
+    return true;
+  }).sort((a,b)=>{
+    const ca=(a.Company||'').localeCompare(b.Company||'');
+    if(ca!==0)return ca;
+    return (a.Person_Name||'').localeCompare(b.Person_Name||'');
+  });
+  const list=document.getElementById('massMsgList');
+  if(!items.length){list.innerHTML='<div class="muted" style="text-align:center;padding:20px">Ingen aktive bookinger matcher filtrene.</div>';return}
+  let html='<div style="margin-bottom:6px"><label style="font-size:11px"><input type="checkbox" onchange="document.querySelectorAll(\'.massMsgRow\').forEach(cb=>cb.checked=this.checked)"> Velg alle</label></div>';
+  items.forEach(b=>{
+    const room=allRooms.find(r=>r.id===String(b.RoomLookupId));
+    const prop=room?properties.find(p=>String(p.id)===String(room.PropertyLookupId)):null;
+    const kind=document.getElementById('massMsgKind').value;
+    const contact=kind==='sms'?(b.Mobile||''):(b.Email||'');
+    const hasContact=contact.trim().length>0;
+    const checkInStr=b.Check_In?formatDate(b.Check_In):'';
+    html+='<label style="display:flex;align-items:center;gap:8px;padding:6px 4px;border-bottom:.5px solid var(--border-tertiary);font-size:12px;'+(hasContact?'':'opacity:.5')+'">'
+      +'<input type="checkbox" class="massMsgRow" value="'+b.id+'"'+(hasContact?' checked':' disabled')+'>'
+      +'<div style="flex:1"><strong>'+escapeHtml(b.Person_Name||'')+'</strong> · '+escapeHtml(b.Company||'(uten firma)')+'</div>'
+      +'<div style="color:var(--text-tertiary);font-size:11px">'+escapeHtml(prop?prop.Title:'')+' / '+escapeHtml(room?room.Title:'')+'</div>'
+      +'<div style="color:var(--text-tertiary);font-size:11px;min-width:90px">'+checkInStr+'</div>'
+      +'<div style="color:'+(hasContact?'var(--text-success)':'var(--text-warning)')+';font-size:11px;min-width:130px">'+(hasContact?escapeHtml(contact):'⚠ mangler')+'</div>'
+      +'</label>';
+  });
+  list.innerHTML=html;
+}
+
+async function executeMassMessage(){
+  const kind=document.getElementById('massMsgKind').value;
+  const ids=[...document.querySelectorAll('.massMsgRow:checked')].map(cb=>cb.value);
+  if(!ids.length){alert('Velg minst én gjest');return}
+  const action=document.querySelector('input[name="massAction"]:checked').value;
+  const bookings=ids.map(id=>allBookings.find(b=>b.id===id)).filter(Boolean);
+  if(action==='copy_all'){
+    // Build one big text with all messages, separated by lines
+    const parts=bookings.map(b=>{
+      const vars=_buildMessageVars(b);
+      const txt=_renderTemplate(_getTemplate(b,kind==='sms'?'sms':'email'),vars);
+      const contact=kind==='sms'?vars._person_phone:vars._person_email;
+      return '═══ '+vars.guest_name+' ('+(contact||'mangler kontakt')+') ═══\n'+txt;
+    });
+    await _copyToClipboard(parts.join('\n\n'));
+    alert('Kopiert '+bookings.length+' meldinger til utklippstavle. Hver melding er separert med ═══');
+  }else if(action==='open_each'){
+    if(!confirm('Dette åpner '+kind.toUpperCase()+'-app for hver av '+bookings.length+' gjester. Du må sende hver manuelt. Fortsett?'))return;
+    for(let i=0;i<bookings.length;i++){
+      if(kind==='sms')openBookingSMS(bookings[i].id);
+      else openBookingEmail(bookings[i].id);
+      if(i<bookings.length-1)await new Promise(r=>setTimeout(r,2000));
+    }
+  }
+  document.getElementById('massMessageModal').classList.remove('open');
+}
+
+// --- TEMPLATES EDITOR (per property) ---
+function openTemplatesEditor(){
+  if(!can('admin')&&!can('manage_properties')){alert('Permission required');return}
+  const m=document.getElementById('templatesModal');
+  const sel=document.getElementById('tmplPropSel');
+  sel.innerHTML=properties.map(p=>'<option value="'+p.id+'">'+escapeHtml(p.Title)+'</option>').join('');
+  loadTemplateForProperty();
+  m.classList.add('open');
+}
+
+function loadTemplateForProperty(){
+  const propId=document.getElementById('tmplPropSel').value;
+  const p=properties.find(x=>String(x.id)===String(propId));
+  if(!p)return;
+  document.getElementById('tmplWifiSsid').value=p.WiFi_SSID||'';
+  document.getElementById('tmplWifiPwd').value=p.WiFi_Password||'';
+  document.getElementById('tmplWelcome').value=p.Welcome_Message||'';
+  const f1=document.getElementById('tmplFloor1');if(f1)f1.value=p.Floor1_Info||'';
+  const f2=document.getElementById('tmplFloor2');if(f2)f2.value=p.Floor2_Info||'';
+  document.getElementById('tmplSms').value=p.SMS_Template||DEFAULT_SMS_TEMPLATE;
+  document.getElementById('tmplEmailSubj').value=p.Email_Subject_Template||DEFAULT_EMAIL_SUBJECT;
+  document.getElementById('tmplEmail').value=p.Email_Template||DEFAULT_EMAIL_TEMPLATE;
+}
+
+// v14.5.10: Reset-knapper for hver mal
+function resetTemplateField(field){
+  if(field==='sms'){
+    if(!confirm('Reset SMS template to default for this property?\n\n(Click "Lagre for valgt eiendom" after to save.)'))return;
+    document.getElementById('tmplSms').value=DEFAULT_SMS_TEMPLATE;
+  }else if(field==='subject'){
+    if(!confirm('Reset Email subject to default for this property?\n\n(Click "Lagre for valgt eiendom" after to save.)'))return;
+    document.getElementById('tmplEmailSubj').value=DEFAULT_EMAIL_SUBJECT;
+  }else if(field==='email'){
+    if(!confirm('Reset Email template to default for this property?\n\n(Click "Lagre for valgt eiendom" after to save.)'))return;
+    document.getElementById('tmplEmail').value=DEFAULT_EMAIL_TEMPLATE;
+  }
+}
+
+async function saveTemplateForProperty(){
+  const propId=document.getElementById('tmplPropSel').value;
+  const p=properties.find(x=>String(x.id)===String(propId));
+  if(!p)return;
+  const f1=document.getElementById('tmplFloor1');
+  const f2=document.getElementById('tmplFloor2');
+  const fields={
+    WiFi_SSID:document.getElementById('tmplWifiSsid').value.trim()||null,
+    WiFi_Password:document.getElementById('tmplWifiPwd').value.trim()||null,
+    Welcome_Message:document.getElementById('tmplWelcome').value||null,
+    Floor1_Info:f1?(f1.value||null):null,
+    Floor2_Info:f2?(f2.value||null):null,
+    SMS_Template:document.getElementById('tmplSms').value||null,
+    Email_Subject_Template:document.getElementById('tmplEmailSubj').value.trim()||null,
+    Email_Template:document.getElementById('tmplEmail').value||null
+  };
+  try{
+    await updateListItem('Properties',p.id,fields);
+    Object.assign(p,fields);
+    _toast('✓ Template saved for '+p.Title);
+  }catch(e){alert('Save failed: '+e.message)}
+}
+
+function previewTemplate(kind){
+  const propId=document.getElementById('tmplPropSel').value;
+  const p=properties.find(x=>String(x.id)===String(propId));
+  if(!p){alert('Velg eiendom først');return}
+  // Find a sample booking from this property
+  const propRooms=allRooms.filter(r=>String(r.PropertyLookupId)===String(p.id));
+  const propRoomIds=new Set(propRooms.map(r=>r.id));
+  const sample=allBookings.find(b=>propRoomIds.has(String(b.RoomLookupId))&&b.Person_Name);
+  if(!sample){alert('Ingen booking funnet på '+p.Title+' for forhåndsvisning. Bruk en gjest som er booket der.');return}
+  const vars=_buildMessageVars(sample);
+  let out;
+  if(kind==='sms'){
+    const tmpl=document.getElementById('tmplSms').value;
+    out='SMS-forhåndsvisning (basert på '+vars.guest_name+'):\n\n'+_renderTemplate(tmpl,vars);
+  }else{
+    const subj=_renderTemplate(document.getElementById('tmplEmailSubj').value,vars);
+    const body=_renderTemplate(document.getElementById('tmplEmail').value,vars);
+    out='E-post-forhåndsvisning (basert på '+vars.guest_name+'):\n\nEmne: '+subj+'\n\n'+body;
+  }
+  alert(out);
+}
+
+// ============================================================
+// DOOR CODE GENERATOR — Phase 1 (v14.5.10)
+// Generates 6-digit codes per room, stored in Rooms.Door_Code.
+// Tuya integration is Phase 2 (later).
+// ============================================================
+
+function _generate6DigitCode(){
+  // Generate a 6-digit code, ensuring it's not too "weak" (no 000000, 111111, 123456, etc.)
+  const weakPatterns=['000000','111111','222222','333333','444444','555555','666666','777777','888888','999999','123456','654321','012345','543210'];
+  let code;
+  let attempts=0;
+  do{
+    code=String(Math.floor(Math.random()*1000000)).padStart(6,'0');
+    attempts++;
+  }while(weakPatterns.includes(code)&&attempts<10);
+  return code;
+}
+
+async function generateRoomDoorCode(bookingId){
+  const b=allBookings.find(x=>x.id===bookingId);
+  if(!b){alert('Booking ikke funnet');return}
+  const room=allRooms.find(r=>r.id===String(b.RoomLookupId));
+  if(!room){alert('Rom ikke funnet');return}
+  // Generate new code, ensure different from current
+  let newCode=_generate6DigitCode();
+  let attempts=0;
+  while(newCode===room.Door_Code&&attempts<5){
+    newCode=_generate6DigitCode();
+    attempts++;
+  }
+  // Confirm with user
+  const oldCode=room.Door_Code||'(ingen)';
+  if(!confirm('Generer ny dørkode for '+(room.Title||'rom')+'?\n\nGammel kode: '+oldCode+'\nNy kode: '+newCode+'\n\nObs: Du må også oppdatere koden i Tuya-appen manuelt.'))return;
+  try{
+    await updateListItem('Rooms',room.id,{Door_Code:newCode});
+    room.Door_Code=newCode;
+    _toast('✓ Ny dørkode lagret: '+newCode);
+    // Refresh detail panel if open
+    if(typeof showBookingDetail==='function'&&typeof currentBookingDetailId!=='undefined'&&currentBookingDetailId===bookingId){
+      showBookingDetail(bookingId);
+    }
+    // Show large display modal with code so it's easy to read into Tuya app
+    showDoorCodeDisplay(room,newCode);
+  }catch(e){
+    alert('Lagring feilet: '+e.message);
+  }
+}
+
+function showRoomDoorCode(bookingId){
+  const b=allBookings.find(x=>x.id===bookingId);
+  if(!b){alert('Booking ikke funnet');return}
+  const room=allRooms.find(r=>r.id===String(b.RoomLookupId));
+  if(!room){alert('Rom ikke funnet');return}
+  if(!room.Door_Code){
+    if(confirm('Ingen kode satt for '+(room.Title||'rom')+'.\n\nGenerer ny nå?')){
+      generateRoomDoorCode(bookingId);
+    }
+    return;
+  }
+  showDoorCodeDisplay(room,room.Door_Code);
+}
+
+function showDoorCodeDisplay(room,code){
+  // Build large display
+  let modal=document.getElementById('doorCodeDisplayModal');
+  if(!modal){
+    modal=document.createElement('div');
+    modal.id='doorCodeDisplayModal';
+    modal.className='modal-overlay';
+    modal.innerHTML='<div class="modal" style="max-width:480px"><div class="modal-header"><h2>🔑 Dørkode</h2><button onclick="document.getElementById(\'doorCodeDisplayModal\').classList.remove(\'open\')" style="padding:5px 14px;border:1px solid var(--border-tertiary);border-radius:var(--radius-md);font-size:14px;font-family:inherit;background:var(--bg-secondary);cursor:pointer;font-weight:500">✕ Lukk</button></div><div class="modal-body"><div id="doorCodeDisplayBody"></div></div></div>';
+    document.body.appendChild(modal);
+  }
+  const body=document.getElementById('doorCodeDisplayBody');
+  body.innerHTML=
+    '<div style="text-align:center;padding:20px 0">'
+    +'<div style="font-size:14px;color:var(--text-tertiary);margin-bottom:8px">Rom: '+escapeHtml(room.Title||'')+'</div>'
+    +'<div id="doorCodeBig" style="font-size:64px;font-weight:700;letter-spacing:8px;color:var(--text-primary);margin:20px 0;font-family:Consolas,monospace;background:var(--bg-secondary);padding:24px;border-radius:8px;user-select:all;cursor:text">'+code+'</div>'
+    +'<div style="display:flex;gap:8px;justify-content:center;margin-top:14px">'
+    +'<button onclick="navigator.clipboard.writeText(\''+code+'\').then(()=>_toast(\'✓ Kode kopiert\'))" style="padding:8px 16px;background:var(--accent);color:#fff;border:none;border-radius:var(--radius-md);cursor:pointer;font-size:14px">📋 Kopier kode</button>'
+    +'<button onclick="generateRoomDoorCode(\''+(window._currentDoorCodeBookingId||'')+'\');document.getElementById(\'doorCodeDisplayModal\').classList.remove(\'open\')" style="padding:8px 16px;background:#EF9F27;color:#fff;border:none;border-radius:var(--radius-md);cursor:pointer;font-size:14px">🔄 Generer ny</button>'
+    +'</div>'
+    +'<div style="margin-top:20px;padding:12px;background:rgba(239,159,39,.08);border-left:3px solid #EF9F27;border-radius:6px;text-align:left;font-size:12px">'
+    +'<strong>⚠ Husk:</strong> Du må også oppdatere koden i Tuya-appen manuelt. Tuya-integrasjon kommer i fase 2.'
+    +'</div>'
+    +'</div>';
+  modal.classList.add('open');
+}
+
+// ============================================================
+// BATTERY DISPLAY (v14.5.10)
+// ============================================================
+function _formatRelativeTime(iso){
+  if(!iso)return '(ukjent)';
+  const d=new Date(iso);
+  if(isNaN(d.getTime()))return '(ukjent)';
+  const now=new Date();
+  const diffMs=now-d;
+  const diffMin=Math.floor(diffMs/60000);
+  const diffHr=Math.floor(diffMs/3600000);
+  const diffDay=Math.floor(diffMs/86400000);
+  if(diffMs<0)return formatDate(d);// future, just show date
+  if(diffMin<1)return 'akkurat nå';
+  if(diffMin<60)return 'for '+diffMin+' min siden';
+  if(diffHr<24)return 'for '+diffHr+' time'+(diffHr===1?'':'r')+' siden';
+  if(diffDay<7)return 'for '+diffDay+' dag'+(diffDay===1?'':'er')+' siden';
+  return formatDate(d);
+}
+
+function _formatExactDateTime(iso){
+  if(!iso)return '';
+  const d=new Date(iso);
+  if(isNaN(d.getTime()))return '';
+  const dd=String(d.getDate()).padStart(2,'0');
+  const mm=String(d.getMonth()+1).padStart(2,'0');
+  const yyyy=d.getFullYear();
+  const hh=String(d.getHours()).padStart(2,'0');
+  const mi=String(d.getMinutes()).padStart(2,'0');
+  return dd+'.'+mm+'.'+yyyy+' '+hh+':'+mi;
+}
+
+function renderBatteryStatusHtml(room){
+  if(!room)return '';
+  const bat=room.Door_Battery_Level;
+  if(bat==null)return '<div style="font-size:12px;color:var(--text-tertiary);margin-top:6px">🔋 Batteri: <em>ikke registrert</em></div>';
+  const updated=room.Door_Battery_Updated;
+  // Color coding
+  let color,bg;
+  if(bat>=50){color='#1D9E75';bg='rgba(29,158,117,.08)'}
+  else if(bat>=30){color='#EF9F27';bg='rgba(239,159,39,.10)'}
+  else{color='#D14343';bg='rgba(209,67,67,.10)'}
+  const icon=bat>=80?'🔋':bat>=30?'🔋':'🪫';
+  const relTime=updated?_formatRelativeTime(updated):'';
+  const exactTime=updated?_formatExactDateTime(updated):'';
+  const timeHtml=updated
+    ?'<span style="color:var(--text-tertiary);font-size:11px" title="'+exactTime+'"> · sist oppdatert '+relTime+'</span>'
+    :'<span style="color:var(--text-tertiary);font-size:11px"> · timestamp mangler</span>';
+  return '<div style="display:inline-block;padding:4px 10px;border-radius:6px;background:'+bg+';color:'+color+';font-size:12px;margin-top:6px;font-weight:500">'
+    +icon+' '+bat+'%'+timeHtml
+    +'</div>';
+}
+
+function showLowBatteryAlert(){
+  const lowRooms=allRooms.filter(r=>r.Door_Battery_Level!=null&&Number(r.Door_Battery_Level)<30);
+  if(!lowRooms.length)return;
+  // Build modal once, reuse
+  let modal=document.getElementById('lowBatteryModal');
+  if(!modal){
+    modal=document.createElement('div');
+    modal.id='lowBatteryModal';
+    modal.className='modal-overlay';
+    modal.innerHTML='<div class="modal" style="max-width:600px"><div class="modal-header"><h2>🪫 Lavt batteri</h2><button onclick="document.getElementById(\'lowBatteryModal\').classList.remove(\'open\')" style="padding:5px 14px;border:1px solid var(--border-tertiary);border-radius:var(--radius-md);font-size:14px;font-family:inherit;background:var(--bg-secondary);cursor:pointer;font-weight:500">✕ Lukk</button></div><div class="modal-body"><div id="lowBatteryBody"></div></div></div>';
+    document.body.appendChild(modal);
+  }
+  // Sort by battery ascending (lowest first)
+  lowRooms.sort((a,b)=>Number(a.Door_Battery_Level)-Number(b.Door_Battery_Level));
+  let html='<div style="background:rgba(209,67,67,.08);border-left:3px solid #D14343;padding:10px 14px;margin-bottom:14px;font-size:13px;border-radius:6px">'
+    +'<strong>'+lowRooms.length+' lås'+(lowRooms.length===1?'':'er')+' har batteri under 30%</strong> — bytt batteri snart for å unngå at gjester blir låst ute.'
+    +'</div>';
+  html+='<div style="max-height:400px;overflow-y:auto">';
+  lowRooms.forEach(r=>{
+    const prop=properties.find(p=>String(p.id)===String(r.PropertyLookupId));
+    const bat=Number(r.Door_Battery_Level);
+    const color=bat<15?'#D14343':'#EF9F27';
+    const icon=bat<15?'🪫':'🔋';
+    html+='<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;border-bottom:.5px solid var(--border-tertiary)">'
+      +'<div><strong>'+escapeHtml(r.Title||'')+'</strong> <span style="color:var(--text-tertiary);font-size:11px">'+escapeHtml(prop?prop.Title:'')+'</span></div>'
+      +'<div style="color:'+color+';font-weight:600;font-size:14px">'+icon+' '+bat+'%</div>'
+      +'</div>';
+  });
+  html+='</div>';
+  document.getElementById('lowBatteryBody').innerHTML=html;
+  modal.classList.add('open');
+}
+
+// Manual trigger from menu
+function showLowBatteryStatus(){
+  const lowRooms=allRooms.filter(r=>r.Door_Battery_Level!=null&&Number(r.Door_Battery_Level)<30);
+  if(!lowRooms.length){
+    _toast('✓ Ingen låser med lavt batteri');
+    return;
+  }
+  showLowBatteryAlert();
 }

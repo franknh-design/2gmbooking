@@ -1,10 +1,20 @@
 // ============================================================
-// 2GM Booking v13.20 — app.js (Core)
+// 2GM Booking v14.5.19 — app.js (Core)
 // Auth, Graph API, Data, Rendering, Bookings
 // ============================================================
 
 // --- CONFIG ---
-const msalConfig={auth:{clientId:'f8e2259d-c440-41d3-94e3-3a2dce095817',authority:'https://login.microsoftonline.com/2b495272-f733-47a8-a771-bb744309fa17',redirectUri:'https://franknh-design.github.io/2gmbooking/'},cache:{cacheLocation:'localStorage'}};
+// v14.5.14: redirectUri is computed from window.location so the same code works
+// on both franknh-design.github.io/2gmbooking/ AND booking.2gm.no during migration.
+// Both URIs must be registered in Entra ID under App Registration → Authentication.
+const _redirectUri=(function(){
+  const o=window.location.origin;
+  const p=window.location.pathname;
+  // Strip filename if present (e.g. /index.html), keep trailing slash
+  const cleanPath=p.endsWith('/')?p:p.substring(0,p.lastIndexOf('/')+1);
+  return o+cleanPath;
+})();
+const msalConfig={auth:{clientId:'f8e2259d-c440-41d3-94e3-3a2dce095817',authority:'https://login.microsoftonline.com/2b495272-f733-47a8-a771-bb744309fa17',redirectUri:_redirectUri},cache:{cacheLocation:'localStorage'}};
 const msalInstance=new msal.PublicClientApplication(msalConfig);
 const SITE_HOST='2gmeiendom.sharepoint.com';
 const SITE_PATH='/sites/2GMBooking';
@@ -35,6 +45,8 @@ const ALL_PERMS=[
 
 // --- STATE ---
 let accessToken=null,siteId=null;
+let _tokenExpiresAt=0; // ms epoch — cached token expiry (v14.5.11)
+const TOKEN_REFRESH_MARGIN_MS=5*60*1000; // refresh if < 5 min until expiry
 let currentUser={email:'',displayName:'',permissions:[]};
 let properties=[],rooms=[],allRooms=[],bookings=[],allBookings=[],allUsers=[],allPersons=[],allRates=[],allCompanies=[];
 let selectedProperty=null,selectedRoom=null,selectedBooking=null;
@@ -45,31 +57,134 @@ let _lastRefreshTime=Date.now();
 let _knownBookingIds=new Set();
 let _knownBookingModifiedMax='';
 let _pollInterval=null;
+let _sessionExpiredShown=false; // v14.5.11: prevent alert-spam from polling
 
-// --- AUTH ---
-async function signIn(){
-  if(!msalReady){alert('Please wait...');return}
+// --- AUTH (v14.5.11 — token caching, silent-aware) ---
+// v14.5.16: clear stale "interaction_in_progress" flag before signIn — common
+// MSAL issue when previous login was aborted (e.g. by AADSTS50011 redirect URI mismatch).
+function _clearStaleMsalInteraction(){
   try{
-    await msalInstance.loginPopup({scopes:['Sites.ReadWrite.All','Mail.Send']});
-    await getToken();await loadCurrentUser();
+    // MSAL stores the in-progress flag with various key shapes depending on version.
+    // Safest is to remove any localStorage/sessionStorage key containing 'interaction.status'.
+    const keys=[];
+    for(let i=0;i<localStorage.length;i++){
+      const k=localStorage.key(i);
+      if(k&&k.indexOf('interaction.status')>=0)keys.push(k);
+    }
+    keys.forEach(k=>{console.log('[Auth] Clearing stale MSAL key:',k);localStorage.removeItem(k)});
+    const skeys=[];
+    for(let i=0;i<sessionStorage.length;i++){
+      const k=sessionStorage.key(i);
+      if(k&&k.indexOf('interaction.status')>=0)skeys.push(k);
+    }
+    skeys.forEach(k=>{console.log('[Auth] Clearing stale MSAL session key:',k);sessionStorage.removeItem(k)});
+  }catch(e){console.warn('[Auth] Could not clear stale interaction flag:',e.message)}
+}
+
+async function signIn(){
+  if(!msalReady){alert('Vent litt...');return}
+  // v14.5.16: proactively clear any stuck interaction flag from a previous failed login
+  _clearStaleMsalInteraction();
+  try{
+    const r=await msalInstance.loginPopup({scopes:['Sites.ReadWrite.All','Mail.Send']});
+    // Cache the token from login result directly
+    if(r&&r.accessToken){
+      accessToken=r.accessToken;
+      _tokenExpiresAt=r.expiresOn?r.expiresOn.getTime():(Date.now()+50*60*1000);
+    }
+    _sessionExpiredShown=false;
+    await loadCurrentUser();
     showApp();applyPermissions();
     await loadProperties();await loadData();
     checkHoursReminder();
-  }catch(e){console.error('Login failed:',e)}
+  }catch(e){
+    console.error('Login failed:',e);
+    // If interaction_in_progress somehow surfaces despite our cleanup, surface a helpful message
+    if(String(e.message||'').indexOf('interaction_in_progress')>=0){
+      _clearStaleMsalInteraction();
+      alert('Innloggingen ble avbrutt forrige gang. Trykk logg inn igjen.');
+    }
+  }
 }
-async function getToken(){
-  const a=msalInstance.getAllAccounts();if(!a.length)return null;
-  try{const r=await msalInstance.acquireTokenSilent({scopes:['Sites.ReadWrite.All','Mail.Send'],account:a[0]});accessToken=r.accessToken;return accessToken}
-  catch(e){const r=await msalInstance.acquireTokenPopup({scopes:['Sites.ReadWrite.All','Mail.Send']});accessToken=r.accessToken;return accessToken}
+
+// Get token. interactive=true (default) means: fall back to popup if silent fails.
+// interactive=false (used by background polling) means: never popup, just return null on failure.
+async function getToken(interactive=true){
+  // Reuse cached token if still valid
+  if(accessToken&&_tokenExpiresAt&&Date.now()<(_tokenExpiresAt-TOKEN_REFRESH_MARGIN_MS)){
+    return accessToken;
+  }
+  const a=msalInstance.getAllAccounts();
+  if(!a.length){
+    if(interactive&&!_sessionExpiredShown){
+      _sessionExpiredShown=true;
+      alert('Du er ikke logget inn. Last siden på nytt (F5) og logg inn på nytt.');
+    }
+    return null;
+  }
+  try{
+    const r=await msalInstance.acquireTokenSilent({scopes:['Sites.ReadWrite.All','Mail.Send'],account:a[0]});
+    if(!r||!r.accessToken)throw new Error('Silent returned empty token');
+    accessToken=r.accessToken;
+    _tokenExpiresAt=r.expiresOn?r.expiresOn.getTime():(Date.now()+50*60*1000);
+    _sessionExpiredShown=false;
+    return accessToken;
+  }catch(e){
+    console.warn('[Auth] Silent token failed:',e.message);
+    if(!interactive){
+      // Background call — fail silently, polling will skip this cycle
+      return null;
+    }
+    // Interactive call — try popup
+    try{
+      const r=await msalInstance.acquireTokenPopup({scopes:['Sites.ReadWrite.All','Mail.Send']});
+      if(!r||!r.accessToken)throw new Error('Popup returned empty token');
+      accessToken=r.accessToken;
+      _tokenExpiresAt=r.expiresOn?r.expiresOn.getTime():(Date.now()+50*60*1000);
+      _sessionExpiredShown=false;
+      return accessToken;
+    }catch(popupErr){
+      console.error('[Auth] Popup token failed:',popupErr.message);
+      accessToken=null;
+      _tokenExpiresAt=0;
+      if(!_sessionExpiredShown){
+        _sessionExpiredShown=true;
+        alert('Sesjonen har utløpt. Last siden på nytt (F5) og logg inn på nytt.');
+      }
+      throw new Error('Token unavailable');
+    }
+  }
 }
+
 function signOut(){msalInstance.logoutPopup();document.getElementById('app').style.display='none';document.getElementById('loginScreen').style.display='block'}
 function showApp(){document.getElementById('loginScreen').style.display='none';document.getElementById('app').style.display='block'}
 
-// --- GRAPH API ---
-async function graphGet(ep){await getToken();const r=await fetch('https://graph.microsoft.com/v1.0'+ep,{headers:{Authorization:'Bearer '+accessToken,Accept:'application/json'}});if(!r.ok)throw new Error('Graph error '+r.status+': '+await r.text());return r.json()}
-async function graphPatch(ep,body){await getToken();const r=await fetch('https://graph.microsoft.com/v1.0'+ep,{method:'PATCH',headers:{Authorization:'Bearer '+accessToken,'Content-Type':'application/json'},body:JSON.stringify(body)});if(!r.ok)throw new Error('Graph error '+r.status);return r.json()}
-async function graphPost(ep,body){await getToken();const r=await fetch('https://graph.microsoft.com/v1.0'+ep,{method:'POST',headers:{Authorization:'Bearer '+accessToken,'Content-Type':'application/json'},body:JSON.stringify(body)});if(!r.ok){const t=await r.text();throw new Error('Graph error '+r.status+': '+t)}return r.json()}
-async function graphDelete(ep){await getToken();const r=await fetch('https://graph.microsoft.com/v1.0'+ep,{method:'DELETE',headers:{Authorization:'Bearer '+accessToken}});if(!r.ok)throw new Error('Graph error '+r.status);return true}
+// --- GRAPH API (v14.5.11 — all calls accept silent flag) ---
+async function graphGet(ep,silent=false){
+  const tok=await getToken(!silent);
+  if(!tok){if(silent)return null;throw new Error('Token unavailable')}
+  const r=await fetch('https://graph.microsoft.com/v1.0'+ep,{headers:{Authorization:'Bearer '+tok,Accept:'application/json'}});
+  if(!r.ok){if(silent&&r.status===401)return null;throw new Error('Graph error '+r.status+': '+await r.text())}
+  return r.json();
+}
+async function graphPatch(ep,body){
+  const tok=await getToken();
+  const r=await fetch('https://graph.microsoft.com/v1.0'+ep,{method:'PATCH',headers:{Authorization:'Bearer '+tok,'Content-Type':'application/json'},body:JSON.stringify(body)});
+  if(!r.ok)throw new Error('Graph error '+r.status);
+  return r.json();
+}
+async function graphPost(ep,body){
+  const tok=await getToken();
+  const r=await fetch('https://graph.microsoft.com/v1.0'+ep,{method:'POST',headers:{Authorization:'Bearer '+tok,'Content-Type':'application/json'},body:JSON.stringify(body)});
+  if(!r.ok){const t=await r.text();throw new Error('Graph error '+r.status+': '+t)}
+  return r.json();
+}
+async function graphDelete(ep){
+  const tok=await getToken();
+  const r=await fetch('https://graph.microsoft.com/v1.0'+ep,{method:'DELETE',headers:{Authorization:'Bearer '+tok}});
+  if(!r.ok)throw new Error('Graph error '+r.status);
+  return true;
+}
 
 async function getSiteId(){if(siteId)return siteId;const r=await graphGet('/sites/'+SITE_HOST+':'+SITE_PATH);siteId=r.id;return siteId}
 // Cache for dynamically resolved list IDs (lists not in LIST_IDS hardcoded map)
@@ -137,8 +252,127 @@ async function fetchSiteFileText(pathInLibrary){
   }
   throw new Error('File not found. Tried:\n'+errors.join('\n'));
 }
-async function createListItem(listName,fields){const s=await getSiteId();const lid=await getListId(listName);return graphPost('/sites/'+s+'/lists/'+lid+'/items',{fields})}
-async function updateListItem(listName,itemId,fields){const s=await getSiteId();const lid=await getListId(listName);return graphPatch('/sites/'+s+'/lists/'+lid+'/items/'+itemId+'/fields',fields)}
+// Cache of known columns per list. Populated lazily on first save attempt.
+const _knownColumnsByList={};
+const _unknownFieldsByList={};
+
+async function _discoverColumns(listName){
+  if(_knownColumnsByList[listName])return _knownColumnsByList[listName];
+  try{
+    const s=await getSiteId();const lid=await getListId(listName);
+    const res=await graphGet('/sites/'+s+'/lists/'+lid+'/columns?$select=name,displayName');
+    const cols=new Set();
+    (res.value||[]).forEach(c=>{if(c.name)cols.add(c.name)});
+    // Also add common system fields that should always be allowed even if not in schema
+    ['Title'].forEach(k=>cols.add(k));
+    _knownColumnsByList[listName]=cols;
+    console.log('[SharePoint] Discovered '+cols.size+' columns for '+listName+':',[...cols].sort().join(', '));
+    return cols;
+  }catch(e){
+    console.warn('Could not discover columns for '+listName+':',e.message);
+    _knownColumnsByList[listName]=new Set();
+    return _knownColumnsByList[listName];
+  }
+}
+
+async function _stripUnknownFieldsAsync(listName,fields){
+  const cols=await _discoverColumns(listName);
+  if(!cols||!cols.size)return fields; // discovery failed — let SharePoint reject as before
+  const cleaned={};
+  const skipped=[];
+  Object.keys(fields).forEach(k=>{
+    // Always allow Lookup-prefixed fields (e.g. RoomLookupId) — SharePoint resolves these
+    if(k.endsWith('LookupId')||cols.has(k)){
+      let v=fields[k];
+      // PRAGMATIC: Yes/No fields cause 500 errors via Graph API.
+      // Skip them entirely — SharePoint default value will be used.
+      // TODO: figure out correct format. For now this gets bookings working.
+      const isBool=(typeof v==='boolean'||v===0||v===1);
+      const isYesNoField=(k==='Include_Checkout_Fee'||k==='Continuation');
+      if(isBool&&isYesNoField){
+        console.log('[SharePoint] Skipping Yes/No field "'+k+'" with value '+v+' (Graph API issue — using SharePoint default)');
+        return; // skip this field
+      }
+      cleaned[k]=v;
+    }else{
+      skipped.push(k);
+      if(!_unknownFieldsByList[listName])_unknownFieldsByList[listName]=new Set();
+      _unknownFieldsByList[listName].add(k);
+    }
+  });
+  if(skipped.length){
+    console.warn('[SharePoint] Skipping unknown columns in '+listName+': '+skipped.join(', ')+'. Create these in SharePoint to enable.');
+  }
+  return cleaned;
+}
+
+async function createListItem(listName,fields){
+  const cleaned=await _stripUnknownFieldsAsync(listName,fields);
+  // Strip null/undefined values for create — SharePoint can throw 500 on unexpected null
+  const final={};
+  Object.keys(cleaned).forEach(k=>{if(cleaned[k]!==null&&cleaned[k]!==undefined)final[k]=cleaned[k]});
+  const s=await getSiteId();const lid=await getListId(listName);
+  console.log('[SharePoint] CREATE '+listName+' payload:',JSON.parse(JSON.stringify(final)));
+  console.log('[SharePoint] CREATE '+listName+' field names:',Object.keys(final).join(', '));
+  console.log('[SharePoint] Known columns:',[..._knownColumnsByList[listName]||[]].sort().join(', '));
+  try{
+    return await graphPost('/sites/'+s+'/lists/'+lid+'/items',{fields:final});
+  }catch(e){
+    if(String(e.message||'').indexOf('500')<0&&String(e.message||'').indexOf('General exception')<0)throw e;
+    // 500 with no useful info → systematic bisect
+    console.warn('[BISECT] 500 received. Building payload up from minimal to find the broken field combination...');
+    const keys=Object.keys(final);
+    // Phase 1: try absolute minimal — just Title (or empty)
+    const startMinimal={};
+    if(final.Title)startMinimal.Title=final.Title;
+    else startMinimal.Title='_BISECT_TEST_'+Date.now();
+    let lastWorking=null;
+    let lastWorkingItemId=null;
+    try{
+      console.log('[BISECT] Phase 1: minimal payload',startMinimal);
+      const r=await graphPost('/sites/'+s+'/lists/'+lid+'/items',{fields:startMinimal});
+      console.log('[BISECT] ✓ Minimal succeeded with id='+r.id);
+      lastWorking={...startMinimal};
+      lastWorkingItemId=r.id;
+    }catch(e2){
+      console.warn('[BISECT] ✗ Even minimal payload failed:',e2.message);
+      throw new Error('Save failed. Even a minimal payload (just Title) fails. This is a list-level problem in SharePoint, not a field problem. Original error: '+e.message);
+    }
+    // Phase 2: add fields one at a time
+    let breakingField=null;
+    let breakingValue=null;
+    for(let i=0;i<keys.length;i++){
+      const k=keys[i];
+      if(k in lastWorking)continue;
+      const testFields={...lastWorking,[k]:final[k]};
+      try{
+        console.log('[BISECT] Adding "'+k+'"='+JSON.stringify(final[k])+'...');
+        // Delete previous test item before creating new one
+        if(lastWorkingItemId){try{await graphDelete('/sites/'+s+'/lists/'+lid+'/items/'+lastWorkingItemId)}catch(e3){}}
+        const r=await graphPost('/sites/'+s+'/lists/'+lid+'/items',{fields:testFields});
+        lastWorking=testFields;
+        lastWorkingItemId=r.id;
+        console.log('[BISECT] ✓ OK with "'+k+'"');
+      }catch(e2){
+        console.warn('[BISECT] ✗ FAILED when adding "'+k+'"='+JSON.stringify(final[k])+':',e2.message);
+        breakingField=k;
+        breakingValue=final[k];
+        break;
+      }
+    }
+    // Cleanup last test item
+    if(lastWorkingItemId){try{await graphDelete('/sites/'+s+'/lists/'+lid+'/items/'+lastWorkingItemId)}catch(e3){console.warn('[BISECT] Could not delete test item '+lastWorkingItemId+' — please remove manually')}}
+    if(breakingField){
+      throw new Error('Save failed. Adding field "'+breakingField+'" with value '+JSON.stringify(breakingValue)+' broke the request. Check SharePoint column type/required. Last working set: '+Object.keys(lastWorking).join(', '));
+    }
+    throw new Error('Save failed unexpectedly. Bisect added all fields without breaking but original payload still failed. Strange. Original error: '+e.message);
+  }
+}
+async function updateListItem(listName,itemId,fields){
+  const cleaned=await _stripUnknownFieldsAsync(listName,fields);
+  const s=await getSiteId();const lid=await getListId(listName);
+  return graphPatch('/sites/'+s+'/lists/'+lid+'/items/'+itemId+'/fields',cleaned);
+}
 
 // --- USER & PERMISSIONS ---
 async function loadCurrentUser(){
@@ -234,6 +468,11 @@ function applyPermissions(){
   show('btnNewBooking',can('edit_bookings'));
   show('btnNewGuest',can('edit_bookings'));
   show('menuBtnCompanies',can('manage_companies')||can('admin'));
+  show('menuBtnBackup',can('admin'));
+  show('menuBtnRestore',can('admin'));
+  show('menuBtnTemplates',can('admin')||can('manage_properties'));
+  show('menuBtnMassSMS',can('edit_bookings'));
+  show('menuBtnMassEmail',can('edit_bookings'));
   show('btnArchive',can('archive')||can('view_bookings'));
   show('btnUpcoming',can('view_bookings'));
   show('btnHours',can('view_hours')||can('edit_hours'));
@@ -301,14 +540,14 @@ async function loadProperties(){
       resetViewStateForPropertyChange();
       loadData();
     };
-    selectedProperty=properties[0];
+    selectedProperty=null; // v14.5.10: default to "All properties" instead of first property
   }catch(e){console.error('Error loading properties:',e)}
 }
 
 async function loadData(){
   _lastRefreshTime=Date.now();
   const isAll=selectedProperty===null;
-  document.getElementById('headerTitle').textContent='2GM Booking'+(isAll?' — All properties':(selectedProperty?' — '+selectedProperty.Title:''));
+  document.getElementById('headerTitle').textContent='2GM Eiendom AS – Booking'+(isAll?' — All properties':(selectedProperty?' — '+selectedProperty.Title:''));
   document.getElementById('floor1Body').innerHTML='<tr><td colspan="7" class="loading">Loading...</td></tr>';
   document.getElementById('floor2Body').innerHTML='<tr><td colspan="7" class="loading">Loading...</td></tr>';
   closeDetail();
@@ -337,16 +576,15 @@ async function loadData(){
 
 function filterBookingsForView(){
   const roomIds=new Set(rooms.map(r=>r.id));
-  const now=new Date();
   bookings=allBookings.filter(b=>{
     const rid=String(b.RoomLookupId||'');
     if(!roomIds.has(rid))return false;
     if(b.Status==='Active')return true;
     if(b.Status==='Upcoming'){
+      // v14.5.10: Show Upcoming in main list as soon as Check_In <= today (no kl-12 rule)
       const ci=new Date(b.Check_In);ci.setHours(0,0,0,0);
       const today=new Date();today.setHours(0,0,0,0);
-      if(ci.getTime()<today.getTime())return true;
-      if(ci.getTime()===today.getTime()&&now.getHours()>=12)return true;
+      if(ci.getTime()<=today.getTime())return true;
     }
     return false;
   });
@@ -538,6 +776,37 @@ function calcBookingNights(booking){
   return Math.max(0,Math.round((co-ci)/864e5));
 }
 
+// v14.5.15: Resolve property title for a booking. Used by all rate-calc callsites
+// so they work correctly in "All Properties" mode (where selectedProperty is null).
+// Lookup order:
+//   1. b.Property_Name (snapshot saved on booking) — BUT only if it matches a known property.
+//      Old bookings sometimes have legacy values like "Private" that don't match — we treat those
+//      as if Property_Name was missing and fall through to the room lookup.
+//   2. Room → Property lookup via b.RoomLookupId
+//   3. selectedProperty.Title (fallback for current view)
+//   4. '' (last resort — calcBookingCost will return missing rate)
+function getBookingPropertyTitle(b){
+  if(!b)return selectedProperty?selectedProperty.Title:'';
+  // 1. Try Property_Name, but verify it matches a known property
+  const pname=b.Property_Name?String(b.Property_Name).trim():'';
+  if(pname){
+    const known=properties.find(p=>(p.Title||'').trim().toLowerCase()===pname.toLowerCase());
+    if(known)return known.Title; // use canonical casing from Properties list
+    // pname is set but not a known property (e.g. legacy "Private") — fall through to room lookup
+  }
+  // 2. Look up property via room
+  const rid=String(b.RoomLookupId||'');
+  if(rid){
+    const room=allRooms.find(r=>r.id===rid);
+    if(room&&room.PropertyLookupId){
+      const prop=properties.find(p=>String(p.id)===String(room.PropertyLookupId));
+      if(prop&&prop.Title)return prop.Title;
+    }
+  }
+  // 3. Fallback to current view
+  return selectedProperty?selectedProperty.Title:'';
+}
+
 function calcBookingCost(booking,propertyTitle){
   const nights=calcBookingNights(booking);
   // Rate follows billing company (if set), otherwise guest's own company
@@ -553,8 +822,15 @@ function doorTagBtn(b){
   if(s==='Printed')return'<button class="status-btn printed" onclick="cycleDT(event,\''+b.id+'\')">✓</button>';
   return'<button class="status-btn" onclick="cycleDT(event,\''+b.id+'\')"></button>';
 }
-function cleanBtn(b){
-  if(!b)return'<button class="clean-btn" disabled></button>';
+function cleanBtn(b,room){
+  // v14.5.10: Support cleaning status on empty rooms via Room.Cleaning_Status
+  if(!b){
+    if(!room)return'<button class="clean-btn" disabled></button>';
+    const rs=room.Cleaning_Status||'None';
+    if(rs==='Dirty')return'<button class="clean-btn dirty" onclick="cycleRoomCS(event,\''+room.id+'\')" title="Empty room — cleaning status"></button>';
+    if(rs==='Clean')return'<button class="clean-btn clean" onclick="cycleRoomCS(event,\''+room.id+'\')" title="Empty room — cleaning status"></button>';
+    return'<button class="clean-btn" onclick="cycleRoomCS(event,\''+room.id+'\')" title="Empty room — cleaning status"></button>';
+  }
   const s=b.Cleaning_Status||'None';
   if(s==='Dirty')return'<button class="clean-btn dirty" onclick="cycleCS(event,\''+b.id+'\')"></button>';
   if(s==='Clean')return'<button class="clean-btn clean" onclick="cycleCS(event,\''+b.id+'\')"></button>';
@@ -567,7 +843,24 @@ function datesCell(b){
   const today=new Date();today.setHours(0,0,0,0);const ind=new Date(b.Check_In);ind.setHours(0,0,0,0);
   const days=Math.round((ind-today)/864e5);let s='';
   if(b.Status==='Upcoming'||days>0){if(days>=0&&days<=4)s='color:var(--accent);font-weight:500;';else if(days>4&&days<=30)s='color:#EF9F27;font-weight:500;'}
-  return'<span style="'+s+'">'+ci+'</span> — '+co;
+  // v14.5.10: overdue badges
+  let overdueBadge='';
+  if(isOverdueCheckIn(b)){
+    const d=daysOverdueCheckIn(b);
+    overdueBadge=' <span style="background:rgba(209,67,67,.12);color:#A32D2D;padding:1px 6px;border-radius:3px;font-size:10px;font-weight:500" title="Should have been checked in '+d+' day'+(d===1?'':'s')+' ago">⚠ Check-in '+d+'d</span>';
+  }else if(isOverdueCheckOut(b)){
+    const d=daysOverdueCheckOut(b);
+    overdueBadge=' <span style="background:rgba(209,67,67,.12);color:#A32D2D;padding:1px 6px;border-radius:3px;font-size:10px;font-weight:500" title="Should have been checked out '+d+' day'+(d===1?'':'s')+' ago">⚠ Check-out '+d+'d</span>';
+  }
+  // v14.5.18: needs-attention badge (orange) — adds on top of overdue badge if both apply
+  const att=bookingNeedsAttention(b);
+  if(att){
+    const tipText=att.type==='invalid_status'
+      ?'Status er '+(b.Status||'?')+' men Check_Out var '+att.daysSinceCheckOut+' dag'+(att.daysSinceCheckOut===1?'':'er')+' siden'
+      :'Status Upcoming men Check_In var '+att.daysSinceCheckIn+' dager siden';
+    overdueBadge+=' <span style="background:rgba(239,159,39,.15);color:#854F0B;padding:1px 6px;border-radius:3px;font-size:10px;font-weight:500" title="'+tipText+'">⚠ '+att.label+'</span>';
+  }
+  return'<span style="'+s+'">'+ci+'</span> — '+co+overdueBadge;
 }
 
 // Returns the full-tenant company for a property if active on the given date (default today), else null
@@ -649,6 +942,102 @@ function computeLongTermForRoomPeriod(room,fromDate,toDate){
     detailLabel=c.price.toLocaleString('nb-NO')+' kr/dag × '+days+' dager';
   }
   return{room,company:c.company,price:c.price,isMonthly:c.isMonthly,days,total,detailLabel};
+}
+
+// Splits a long-term room's invoicing period into segments based on actual bookings
+// in the room. Each segment is either a guest stay or an empty period (where the
+// company still pays). Total of all segments matches the room's contract amount,
+// with rounding adjustment on the last segment.
+//
+// Returns array of: {fromDate, toDate, days, name, isEmpty, total, dailyRate}
+function segmentLongTermRoom(room,fromDate,toDate){
+  const c=getActiveLongTermContract(room);
+  if(!c)return null;
+  // Determine the effective period (overlap of contract and invoicing period)
+  const agreementStart=room.LongTerm_StartDate?new Date(room.LongTerm_StartDate):new Date(1970,0,1);
+  const agreementEnd=room.LongTerm_EndDate?new Date(room.LongTerm_EndDate):new Date(2100,0,1);
+  agreementStart.setHours(0,0,0,0);
+  agreementEnd.setHours(23,59,59,999);
+  const effFrom=new Date(Math.max(fromDate.getTime(),agreementStart.getTime()));
+  const effTo=new Date(Math.min(toDate.getTime(),agreementEnd.getTime()));
+  effFrom.setHours(0,0,0,0);
+  effTo.setHours(23,59,59,999);
+  if(effFrom>effTo)return null;
+  const totalDays=Math.floor((effTo-effFrom)/86400000)+1;
+  // Compute the total contract amount for this period (with pro-rata)
+  const contractCalc=computeLongTermForRoomPeriod(room,fromDate,toDate);
+  if(!contractCalc)return null;
+  const contractTotal=contractCalc.total;
+  const dailyRate=contractTotal/totalDays;
+  // Find all bookings on this room that overlap the period
+  const roomBookings=allBookings.filter(b=>{
+    if(String(b.RoomLookupId)!==String(room.id))return false;
+    if(b.Status==='Cancelled')return false;
+    if(!b.Check_In)return false;
+    const ci=new Date(b.Check_In);ci.setHours(0,0,0,0);
+    const co=b.Check_Out?new Date(b.Check_Out):effTo;co.setHours(0,0,0,0);
+    if(co<effFrom||ci>effTo)return false;
+    return true;
+  }).map(b=>{
+    const ci=new Date(b.Check_In);ci.setHours(0,0,0,0);
+    const co=b.Check_Out?new Date(b.Check_Out):effTo;co.setHours(0,0,0,0);
+    // Clip to effective period
+    const sFrom=ci<effFrom?effFrom:ci;
+    const sTo=co>effTo?effTo:co;
+    return {bookingId:b.id,name:b.Person_Name||'(uten navn)',from:sFrom,to:sTo};
+  }).sort((a,b)=>a.from-b.from);
+  // Build segments: walk from effFrom forward, alternate between booking and empty
+  const segments=[];
+  let cursor=new Date(effFrom);
+  for(let i=0;i<roomBookings.length;i++){
+    const bk=roomBookings[i];
+    // Empty segment before this booking?
+    if(bk.from>cursor){
+      const segTo=new Date(bk.from.getTime()-86400000);// day before booking starts
+      segTo.setHours(0,0,0,0);
+      if(segTo>=cursor){
+        const days=Math.floor((segTo-cursor)/86400000)+1;
+        segments.push({fromDate:new Date(cursor),toDate:segTo,days,name:c.company+' (tomt)',isEmpty:true,bookingId:null});
+      }
+    }
+    // The booking segment
+    const bSegFrom=bk.from>cursor?bk.from:cursor;
+    const bSegTo=bk.to;
+    if(bSegTo>=bSegFrom){
+      const days=Math.floor((bSegTo-bSegFrom)/86400000)+1;
+      segments.push({fromDate:new Date(bSegFrom),toDate:new Date(bSegTo),days,name:bk.name,isEmpty:false,bookingId:bk.bookingId});
+    }
+    // Move cursor to day after booking ends
+    const nextCursor=new Date(bSegTo.getTime()+86400000);
+    nextCursor.setHours(0,0,0,0);
+    if(nextCursor>cursor)cursor=nextCursor;
+  }
+  // Trailing empty segment after last booking
+  if(cursor<=effTo){
+    const days=Math.floor((effTo-cursor)/86400000)+1;
+    segments.push({fromDate:new Date(cursor),toDate:new Date(effTo),days,name:c.company+' (tomt)',isEmpty:true,bookingId:null});
+  }
+  // No bookings at all → one big empty segment
+  if(segments.length===0){
+    segments.push({fromDate:new Date(effFrom),toDate:new Date(effTo),days:totalDays,name:c.company+' (tomt)',isEmpty:true,bookingId:null});
+  }
+  // Compute totals per segment, with rounding adjustment on last segment
+  let runningTotal=0;
+  segments.forEach((s,idx)=>{
+    if(idx===segments.length-1){
+      // Last segment gets the rounding diff
+      s.total=Math.round((contractTotal-runningTotal)*100)/100;
+    }else{
+      s.total=Math.round(s.days*dailyRate*100)/100;
+      runningTotal+=s.total;
+    }
+    s.dailyRate=dailyRate;
+  });
+  return{
+    room,company:c.company,price:c.price,isMonthly:c.isMonthly,
+    contractTotal,totalDays,dailyRate,segments,
+    contractDetailLabel:contractCalc.detailLabel
+  };
 }
 
 // Compute full-tenant lease amount for a property within a date period.
@@ -746,11 +1135,11 @@ function renderRow(room,booking){
     }
     const upcoming=findNextUpcomingForRoom(room.id);
     if(upcoming){
-      emptyCell=(reserveLabel?'<span style="color:#EF9F27;font-style:italic">🔒 '+escapeHtml(reserveLabel)+'</span>':'<span class="empty-text">—</span>')+' <span style="font-size:10px;color:#7B61FF;font-style:italic" title="Upcoming booking">📅 '+escapeHtml(upcoming.Person_Name||'')+(upcoming.Check_In?' · '+formatDate(upcoming.Check_In):'')+'</span>';
+      emptyCell=(reserveLabel?'<span style="color:#EF9F27;font-style:italic">🔒 '+escapeHtml(reserveLabel)+'</span>':'<span class="empty-text">—</span>')+' <span style="font-size:10px;color:#2C7A7B;font-style:italic" title="Upcoming booking">📅 '+escapeHtml(upcoming.Person_Name||'')+(upcoming.Check_In?' · '+formatDate(upcoming.Check_In):'')+'</span>';
     }
   }
   return'<tr onclick="showDetail(\''+room.id+'\')">'
-    +'<td>'+doorTagBtn(booking)+'</td><td>'+cleanBtn(booking)+'</td>'
+    +'<td>'+doorTagBtn(booking)+'</td><td>'+cleanBtn(booking,room)+'</td>'
     +'<td style="font-variant-numeric:tabular-nums;font-weight:500">'+room.Title+'</td>'
     +'<td>'+(n?guestMarkedName(n):emptyCell)+(booking&&booking.Notes?'<span class="note-dot"></span>':'')+'</td>'
     +'<td class="muted">'+c+'</td>'
@@ -767,7 +1156,7 @@ function findNextUpcomingForRoom(roomId){
 }
 
 function renderRowWithProperty(room,booking,propName){
-  const n=booking?booking.Person_Name:'';const washNext=booking?getNextWashDate(booking):'';
+  const n=booking?booking.Person_Name:'';const c=booking?(booking.Company||''):'';
   let emptyCell='<span class="empty-text">—</span>';
   if(!booking){
     const fullTenant=getRoomFullTenant(room);
@@ -778,22 +1167,37 @@ function renderRowWithProperty(room,booking,propName){
     }
     const upcoming=findNextUpcomingForRoom(room.id);
     if(upcoming){
-      emptyCell=(reserveLabel?'<span style="color:#EF9F27;font-style:italic">🔒 '+escapeHtml(reserveLabel)+'</span>':'<span class="empty-text">—</span>')+' <span style="font-size:10px;color:#7B61FF;font-style:italic">📅 '+escapeHtml(upcoming.Person_Name||'')+(upcoming.Check_In?' · '+formatDate(upcoming.Check_In):'')+'</span>';
+      emptyCell=(reserveLabel?'<span style="color:#EF9F27;font-style:italic">🔒 '+escapeHtml(reserveLabel)+'</span>':'<span class="empty-text">—</span>')+' <span style="font-size:10px;color:#2C7A7B;font-style:italic">📅 '+escapeHtml(upcoming.Person_Name||'')+(upcoming.Check_In?' · '+formatDate(upcoming.Check_In):'')+'</span>';
     }
   }
+  // v14.5.10 fix: 7 columns matching the header (T, C, Room, Name, Company, Bat., Dates)
   return'<tr onclick="showDetail(\''+room.id+'\')">'
-    +'<td>'+cleanBtn(booking)+'</td>'
-    +'<td style="font-variant-numeric:tabular-nums;font-weight:500">'+room.Title+'</td>'
-    +'<td class="muted" style="font-size:11px">'+propName+'</td>'
-    +'<td>'+(n?guestMarkedName(n):emptyCell)+'</td>'
-    +'<td>'+washNext+'</td>'
-    +'<td style="font-variant-numeric:tabular-nums">'+(booking?datesCell(booking):'')+'</td></tr>';
+    +'<td>'+doorTagBtn(booking)+'</td><td>'+cleanBtn(booking,room)+'</td>'
+    +'<td style="font-variant-numeric:tabular-nums;font-weight:500">'+room.Title+' <span class="muted" style="font-size:10px">'+escapeHtml(propName)+'</span></td>'
+    +'<td>'+(n?guestMarkedName(n):emptyCell)+(booking&&booking.Notes?'<span class="note-dot"></span>':'')+'</td>'
+    +'<td class="muted">'+c+'</td>'
+    +'<td style="text-align:right;font-variant-numeric:tabular-nums">'+batCell(room.Door_Battery_Level)+'</td>'
+    +'<td style="font-variant-numeric:tabular-nums">'+datesCell(booking)+'</td></tr>';
 }
 
 function renderFloors(){
   const sourceBk=(activeFilter==='dirty')?allBookings:bookings;
   const bMap={};
-  sourceBk.forEach(b=>{const rid=String(b.RoomLookupId||'');if(rid&&(b.Status==='Active'||b.Status==='Upcoming')&&(!bMap[rid]||b.Status==='Active'))bMap[rid]=b});
+  // v14.5.19: When needsAttention filter is active, surface the problematic booking on each row,
+  // even if it's behind another Active/Upcoming booking. Otherwise the row appears under the filter
+  // but shows a non-problematic booking with no warning badge — confusing UX.
+  if(activeFilter==='needsAttention'){
+    // First pass: any problematic booking takes priority on its room
+    allBookings.forEach(b=>{
+      const rid=String(b.RoomLookupId||'');
+      if(!rid)return;
+      if(bookingNeedsAttention(b)!==null&&!bMap[rid])bMap[rid]=b;
+    });
+    // Second pass: rooms without problematic booking get their normal active/upcoming
+    sourceBk.forEach(b=>{const rid=String(b.RoomLookupId||'');if(rid&&(b.Status==='Active'||b.Status==='Upcoming')&&!bMap[rid])bMap[rid]=b});
+  }else{
+    sourceBk.forEach(b=>{const rid=String(b.RoomLookupId||'');if(rid&&(b.Status==='Active'||b.Status==='Upcoming')&&(!bMap[rid]||b.Status==='Active'))bMap[rid]=b});
+  }
   const cols=7;
   const f1=getFilteredRoomsForFloor(1).sort((a,b)=>(a.Title||'').localeCompare(b.Title||'',undefined,{numeric:true}));
   const f2=getFilteredRoomsForFloor(2).sort((a,b)=>(a.Title||'').localeCompare(b.Title||'',undefined,{numeric:true}));
@@ -815,7 +1219,8 @@ function renderFloors(){
   document.getElementById('floor1Body').innerHTML=f1.length?f1.map(renderFn).join(''):noMatch;
   document.getElementById('floor2Body').innerHTML=f2.length?f2.map(renderFn).join(''):noMatch;
 
-  if(activeFilter==='dirty'||isAllProps){
+  const isStatFilter=activeFilter&&['dirty','checkedIn','empty','doorTag','battery','overdueCheckIn','overdueCheckOut','needsAttention'].includes(activeFilter);
+  if(isStatFilter||isAllProps){
     document.getElementById('floor1Sub').textContent=f1.length+' rooms — all properties';
     document.getElementById('floor2Sub').textContent=f2.length+' rooms — all properties';
   }else{
@@ -827,48 +1232,130 @@ function renderFloors(){
 }
 
 function updateStats(){
-  const tr=rooms.length;
+  // v14.5.10: All stat cards count across ALL assigned properties (regardless of selected property)
+  const assignedPropIds=new Set(properties.map(p=>String(p.id)));
+  const allAssignedRooms=allRooms.filter(r=>assignedPropIds.has(String(r.PropertyLookupId)));
+  const allAssignedRoomIds=new Set(allAssignedRooms.map(r=>r.id));
+  const tr=allAssignedRooms.length;
+  // Active bookings (current) across all
+  const today=new Date();today.setHours(0,0,0,0);
   const occupiedRoomIds=new Set();
-  bookings.forEach(b=>occupiedRoomIds.add(String(b.RoomLookupId||'')));
+  allBookings.forEach(b=>{
+    const rid=String(b.RoomLookupId||'');
+    if(!allAssignedRoomIds.has(rid))return;
+    // Active bookings: Status='Active' OR (Status='Upcoming' with Check_In <= today)
+    if(b.Status==='Active'){occupiedRoomIds.add(rid);return}
+    if(b.Status==='Upcoming'&&b.Check_In){
+      const ci=new Date(b.Check_In);ci.setHours(0,0,0,0);
+      if(ci.getTime()<=today.getTime())occupiedRoomIds.add(rid);
+    }
+  });
   document.getElementById('statCheckedIn').textContent=occupiedRoomIds.size+' / '+tr;
   document.getElementById('statEmpty').textContent=tr-occupiedRoomIds.size;
-  // Dirty: only current property (matches filter view)
-  const currentRoomIds=new Set(rooms.map(r=>r.id));
+
+  // v14.5.10 PERF: pre-build bookings-by-room map ONCE
+  const bookingsByRoom={};
+  allBookings.forEach(b=>{
+    const rid=String(b.RoomLookupId||'');
+    if(!allAssignedRoomIds.has(rid))return;
+    if(!bookingsByRoom[rid])bookingsByRoom[rid]=[];
+    bookingsByRoom[rid].push(b);
+  });
+
+  // Dirty rooms — both booked dirty AND empty rooms with Cleaning_Status='Dirty'
   const allDirtyRoomIds=new Set();
   allBookings.forEach(b=>{
     const rid=String(b.RoomLookupId||'');
-    if(!currentRoomIds.has(rid))return;
+    if(!allAssignedRoomIds.has(rid))return;
     if(b.Cleaning_Status==='Dirty'&&(b.Status==='Active'||b.Status==='Upcoming'))allDirtyRoomIds.add(rid);
     if(b.Status==='Active'&&b.Check_In){const w=calcWashDates(b.Check_In,b.Check_Out);if(w.some(x=>x.isToday))allDirtyRoomIds.add(rid)}
   });
-  document.getElementById('statDirty').textContent=allDirtyRoomIds.size;
-  document.getElementById('statDoorTag').textContent=bookings.filter(b=>b.Door_Tag_Status==='Needs-print').length;
-  document.getElementById('statBattery').textContent=rooms.filter(r=>r.Door_Battery_Level!=null&&r.Door_Battery_Level<30).length;
-  // Occupancy: current month for selected property
-  const now=new Date();const curMonth=now.getMonth();const curYear=now.getFullYear();
-  const daysInMonth=new Date(curYear,curMonth+1,0).getDate();
-  const today=now.getDate();
-  const propRoomIds=new Set(rooms.map(r=>r.id));
-  let occupiedNights=0;
-  allBookings.forEach(b=>{
-    if(b.Status!=='Active'&&b.Status!=='Completed')return;
-    const rid=String(b.RoomLookupId||'');if(!propRoomIds.has(rid))return;
-    const ci=new Date(b.Check_In);const co=b.Check_Out?new Date(b.Check_Out):now;
-    const monthStart=new Date(curYear,curMonth,1);const monthEnd=new Date(curYear,curMonth,today+1);
-    const start=ci>monthStart?ci:monthStart;const end=co<monthEnd?co:monthEnd;
-    const nights=Math.max(0,Math.round((end-start)/864e5));
-    occupiedNights+=nights;
+  // v14.5.10: empty rooms with Cleaning_Status='Dirty'
+  allAssignedRooms.forEach(r=>{
+    if(!occupiedRoomIds.has(r.id)&&r.Cleaning_Status==='Dirty')allDirtyRoomIds.add(r.id);
   });
-  const totalPossible=tr*today;
-  const occPct=totalPossible>0?Math.round(occupiedNights/totalPossible*100):0;
+  document.getElementById('statDirty').textContent=allDirtyRoomIds.size;
+
+  document.getElementById('statDoorTag').textContent=allBookings.filter(b=>{const rid=String(b.RoomLookupId||'');return allAssignedRoomIds.has(rid)&&b.Door_Tag_Status==='Needs-print'&&(b.Status==='Active'||b.Status==='Upcoming')}).length;
+  document.getElementById('statBattery').textContent=allAssignedRooms.filter(r=>r.Door_Battery_Level!=null&&r.Door_Battery_Level<30).length;
+
+  const overdueBookings=allBookings.filter(b=>{const rid=String(b.RoomLookupId||'');return allAssignedRoomIds.has(rid)});
+  const overdueCheckInCount=overdueBookings.filter(b=>isOverdueCheckIn(b)).length;
+  const overdueCheckOutCount=overdueBookings.filter(b=>isOverdueCheckOut(b)).length;
+  document.getElementById('statOverdueCheckIn').textContent=overdueCheckInCount;
+  document.getElementById('statOverdueCheckOut').textContent=overdueCheckOutCount;
+  const ciBox=document.getElementById('statOverdueCheckInBox');
+  if(ciBox)ciBox.style.cssText=overdueCheckInCount>0?'background:rgba(209,67,67,.10);border-color:#D14343':'';
+  const coBox=document.getElementById('statOverdueCheckOutBox');
+  if(coBox)coBox.style.cssText=overdueCheckOutCount>0?'background:rgba(209,67,67,.10);border-color:#D14343':'';
+
+  // v14.5.18: Needs-attention count (invalid status + extreme overdue) — orange tint
+  const needsAttentionCount=overdueBookings.filter(b=>bookingNeedsAttention(b)!==null).length;
+  const naEl=document.getElementById('statNeedsAttention');
+  if(naEl)naEl.textContent=needsAttentionCount;
+  const naBox=document.getElementById('statNeedsAttentionBox');
+  if(naBox)naBox.style.cssText=needsAttentionCount>0?'background:rgba(239,159,39,.12);border-color:#EF9F27':'';
+
+  // v14.5.10 PERF: Optimized occupancy with pre-processed boundaries
+  const now=new Date();const curMonth=now.getMonth();const curYear=now.getFullYear();
+  const todayDate=now.getDate();
+  let occupiedRoomDays=0;
+  allAssignedRooms.forEach(room=>{
+    const property=properties.find(p=>String(p.id)===String(room.PropertyLookupId));
+    // Pre-compute Full-tenant boundaries once
+    let ftStart=null,ftEnd=null,hasFT=false;
+    if(property){
+      const ftCompany=(property.FullTenant_Company||'').trim();
+      const ftRate=Number(property.FullTenant_RatePerRoom)||0;
+      if(ftCompany&&ftRate>0){
+        hasFT=true;
+        ftStart=property.FullTenant_StartDate?new Date(property.FullTenant_StartDate):null;
+        ftEnd=property.FullTenant_EndDate?new Date(property.FullTenant_EndDate):null;
+        if(ftStart)ftStart.setHours(0,0,0,0);
+        if(ftEnd)ftEnd.setHours(0,0,0,0);
+      }
+    }
+    // Long-term boundaries
+    let ltStart=null,ltEnd=null,hasLT=false;
+    const ltCompany=(room.LongTerm_Company||'').trim();
+    const ltPrice=Number(room.LongTerm_Price)||0;
+    if(ltCompany&&ltPrice>0){
+      hasLT=true;
+      ltStart=room.LongTerm_StartDate?new Date(room.LongTerm_StartDate):null;
+      ltEnd=room.LongTerm_EndDate?new Date(room.LongTerm_EndDate):null;
+      if(ltStart)ltStart.setHours(0,0,0,0);
+      if(ltEnd)ltEnd.setHours(0,0,0,0);
+    }
+    // Pre-process bookings for this room
+    const roomBookings=(bookingsByRoom[room.id]||[]).filter(b=>b.Status!=='Cancelled'&&b.Check_In).map(b=>{
+      const ci=new Date(b.Check_In);ci.setHours(0,0,0,0);
+      const co=b.Check_Out?new Date(b.Check_Out):now;
+      if(co instanceof Date)co.setHours(0,0,0,0);
+      return{ci,co};
+    });
+    // Iterate days
+    for(let d=1;d<=todayDate;d++){
+      const checkDate=new Date(curYear,curMonth,d);checkDate.setHours(0,0,0,0);
+      if(hasFT&&(!ftStart||checkDate>=ftStart)&&(!ftEnd||checkDate<=ftEnd)){occupiedRoomDays++;continue}
+      if(hasLT&&(!ltStart||checkDate>=ltStart)&&(!ltEnd||checkDate<=ltEnd)){occupiedRoomDays++;continue}
+      let occ=false;
+      for(let i=0;i<roomBookings.length;i++){
+        if(checkDate>=roomBookings[i].ci&&checkDate<=roomBookings[i].co){occ=true;break}
+      }
+      if(occ)occupiedRoomDays++;
+    }
+  });
+  const totalPossible=tr*todayDate;
+  const occPct=totalPossible>0?Math.round(occupiedRoomDays/totalPossible*100):0;
   document.getElementById('statOccupancy').textContent=occPct+'%';
 }
 
 // --- DETAIL PANEL ---
 function showDetail(roomId){
-  const room=(activeFilter==='dirty'?allRooms:rooms).find(r=>r.id===roomId);
+  const isStatFilter=activeFilter&&['dirty','checkedIn','empty','doorTag','battery','overdueCheckIn','overdueCheckOut','needsAttention'].includes(activeFilter);
+  const room=isStatFilter?allRooms.find(r=>r.id===roomId):rooms.find(r=>r.id===roomId);
   if(!room)return;
-  const sourceBk=(activeFilter==='dirty')?allBookings:bookings;
+  const sourceBk=isStatFilter?allBookings:bookings;
   const booking=sourceBk.find(b=>String(b.RoomLookupId)===roomId&&b.Status==='Active')
     ||sourceBk.find(b=>String(b.RoomLookupId)===roomId&&b.Status==='Upcoming');
   selectedRoom=room;selectedBooking=booking;
@@ -879,19 +1366,32 @@ function showDetail(roomId){
   if(!booking){
     // Check if room has an Upcoming booking (future)
     const upcoming=findNextUpcomingForRoom(room.id);
-    let subHtml='Empty — '+propName;
+    // v14.5.10: cleaning status for empty rooms
+    const roomCl=room.Cleaning_Status||'None';
+    const roomClLabel={'None':'—','Dirty':'● Needs cleaning','Clean':'● Clean'}[roomCl];
+    const roomClColor=roomCl==='Dirty'?'#A32D2D':(roomCl==='Clean'?'#0F6E56':'var(--text-tertiary)');
+    let subHtml='Empty — '+propName+' · <span style="color:'+roomClColor+';font-weight:500">'+roomClLabel+'</span>';
     if(upcoming){
       const ci=upcoming.Check_In?formatDate(upcoming.Check_In):'?';
       const name=upcoming.Person_Name||'(unnamed)';
       const company=upcoming.Company?' · '+escapeHtml(upcoming.Company):'';
-      subHtml='<div>Empty — '+propName+'</div>'
-        +'<div style="margin-top:8px;padding:8px 10px;background:rgba(123,97,255,.08);border-left:3px solid #7B61FF;border-radius:4px;font-size:12px">'
+      subHtml='<div>Empty — '+propName+' · <span style="color:'+roomClColor+';font-weight:500">'+roomClLabel+'</span></div>'
+        +'<div style="margin-top:8px;padding:8px 10px;background:rgba(44,122,123,.08);border-left:3px solid #2C7A7B;border-radius:4px;font-size:12px">'
         +'📅 <strong>Upcoming booking:</strong> '+escapeHtml(name)+company+' · Check-in <strong>'+ci+'</strong>'
         +'</div>';
     }
     let actions=(can('edit_bookings')?'<button class="primary" onclick="openNewBooking(\''+room.id+'\')">Create booking</button>':'');
     if(upcoming&&can('edit_bookings')){
-      actions+='<button onclick="openEditBooking(\''+upcoming.id+'\')" style="background:#7B61FF;color:#fff;border-color:#7B61FF">See Upcoming</button>';
+      actions+='<button onclick="openEditBooking(\''+upcoming.id+'\')" style="background:#2C7A7B;color:#fff;border-color:#2C7A7B">See Upcoming</button>';
+    }
+    // v14.5.10: Door code + messaging buttons also for Upcoming bookings on empty rooms
+    if(upcoming){
+      actions+='<button onclick="window._currentDoorCodeBookingId=\''+upcoming.id+'\';showRoomDoorCode(\''+upcoming.id+'\')" style="background:rgba(239,159,39,.1);color:#a76800;border-color:#EF9F27" title="Vis nåværende dørkode for rommet">🔑 Vis kode</button>';
+      actions+='<button onclick="window._currentDoorCodeBookingId=\''+upcoming.id+'\';generateRoomDoorCode(\''+upcoming.id+'\')" style="background:rgba(239,159,39,.1);color:#a76800;border-color:#EF9F27" title="Generer ny 6-sifret dørkode">🔑 Generer kode</button>';
+      actions+='<button onclick="copyBookingSMS(\''+upcoming.id+'\')" style="background:rgba(14,165,165,.1);color:#0EA5A5;border-color:#0EA5A5" title="Copy SMS to clipboard">📱 Copy SMS</button>';
+      actions+='<button onclick="openBookingSMS(\''+upcoming.id+'\')" style="background:rgba(14,165,165,.1);color:#0EA5A5;border-color:#0EA5A5" title="Open SMS app">📱 Send SMS</button>';
+      actions+='<button onclick="copyBookingEmail(\''+upcoming.id+'\')" style="background:rgba(123,97,255,.1);color:#7B61FF;border-color:#7B61FF" title="Copy email to clipboard">📧 Copy email</button>';
+      actions+='<button onclick="openBookingEmail(\''+upcoming.id+'\')" style="background:rgba(123,97,255,.1);color:#7B61FF;border-color:#7B61FF" title="Open email client">📧 Send email</button>';
     }
     if(upcoming&&can('cancel_bookings')){
       actions+='<button class="danger" onclick="cancelBookingConfirmed(\''+upcoming.id+'\')">Cancel Upcoming</button>';
@@ -910,7 +1410,24 @@ function showDetail(roomId){
       const phone=person?(person.Mobile||person.Phone||person.Telefon||''):'';
       const email=person?(person.Email||''):'';
       const addr=person?(person.Address||''):'';
-      infoHtml='<div class="detail-name">'+booking.Person_Name+'</div>'
+      // v14.5.10: Overdue banner at top of detail
+      let overdueBanner='';
+      if(isOverdueCheckIn(booking)){
+        const d=daysOverdueCheckIn(booking);
+        overdueBanner='<div style="background:rgba(209,67,67,.10);border-left:3px solid #D14343;padding:10px 14px;margin-bottom:12px;border-radius:6px;display:flex;align-items:center;gap:10px"><div style="flex:1;font-size:13px;color:#A32D2D"><strong>⚠ Overdue check-in:</strong> This booking should have been checked in '+d+' day'+(d===1?'':'s')+' ago.</div>'+(can('checkin_out')?'<button onclick="checkIn(\''+booking.id+'\')" style="padding:6px 14px;background:#1D9E75;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px;font-family:inherit;font-weight:500">✓ Check in now</button>':'')+'</div>';
+      }else if(isOverdueCheckOut(booking)){
+        const d=daysOverdueCheckOut(booking);
+        overdueBanner='<div style="background:rgba(209,67,67,.10);border-left:3px solid #D14343;padding:10px 14px;margin-bottom:12px;border-radius:6px;display:flex;align-items:center;gap:10px"><div style="flex:1;font-size:13px;color:#A32D2D"><strong>⚠ Overdue check-out:</strong> This booking should have been checked out '+d+' day'+(d===1?'':'s')+' ago.</div>'+(can('checkin_out')?'<button onclick="openCheckoutModal(\''+booking.id+'\')" style="padding:6px 14px;background:#1D9E75;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px;font-family:inherit;font-weight:500">✓ Mark as Completed</button>':'')+'</div>';
+      }
+      // v14.5.18: Needs-attention banner (orange) — shown in addition to overdue banner if applicable
+      const naAtt=bookingNeedsAttention(booking);
+      if(naAtt){
+        const explanation=naAtt.type==='invalid_status'
+          ?'Status er <strong>'+(booking.Status||'?')+'</strong> men Check_Out var <strong>'+naAtt.daysSinceCheckOut+' dag'+(naAtt.daysSinceCheckOut===1?'':'er')+' siden</strong>. Bookingen burde sannsynligvis vært markert som Completed.'
+          :'Status er <strong>Upcoming</strong> men Check_In var <strong>'+naAtt.daysSinceCheckIn+' dager siden</strong>. Bookingen kan ha blitt glemt — sjekk om gjesten faktisk var her.';
+        overdueBanner+='<div style="background:rgba(239,159,39,.12);border-left:3px solid #EF9F27;padding:10px 14px;margin-bottom:12px;border-radius:6px"><div style="font-size:13px;color:#854F0B"><strong>⚠ '+naAtt.label+':</strong> '+explanation+'</div></div>';
+      }
+      infoHtml=overdueBanner+'<div class="detail-name">'+booking.Person_Name+'</div>'
         +'<div class="detail-sub">Room '+room.Title+' · '+(booking.Company||'')+' · '+propName+'</div>'
         +'<table class="detail-info">'
         +(phone?'<tr><td>Mobile</td><td><a href="tel:'+phone+'" style="color:var(--accent)">'+phone+'</a></td></tr>':'')
@@ -922,6 +1439,7 @@ function showDetail(roomId){
         +'<tr><td>Door tag</td><td>'+dt+'</td></tr>'
         +'<tr><td>Cleaning</td><td>'+cl+'</td></tr>'
         +(booking.Notes?'<tr><td>Notes</td><td>'+booking.Notes+'</td></tr>':'')
+        +'<tr><td>Battery</td><td>'+(typeof renderBatteryStatusHtml==='function'?renderBatteryStatusHtml(room):'(n/a)')+'</td></tr>'
         +((booking.Continuation===true||booking.Continuation==='true'||booking.Continuation===1)?'<tr><td>🔗 Continuation</td><td><span style="color:#7B61FF;font-weight:500">Yes — utvask skipped</span></td></tr>':'')
         +((booking.Billing_Company||'').trim()&&(booking.Billing_Company||'').trim()!==(booking.Company||'').trim()?'<tr><td>💳 Billing</td><td><span style="color:var(--accent);font-weight:500">'+escapeHtml(booking.Billing_Company)+'</span> <span style="color:var(--text-tertiary);font-size:11px">(rate &amp; invoice follow billing company)</span></td></tr>':'')
         +'</table>'
@@ -947,7 +1465,7 @@ function showDetail(roomId){
         })():'')
         +washHtml;
     }else{
-      infoHtml='<div class="detail-name">Room '+room.Title+'</div><div class="detail-sub">'+cl+'</div>'+washHtml;
+      infoHtml='<div class="detail-name">Room '+room.Title+'</div><div class="detail-sub">'+cl+'</div>'+(typeof renderBatteryStatusHtml==='function'?renderBatteryStatusHtml(room):'')+washHtml;
     }
     let btns='';
     if(can('edit_bookings'))btns+='<button onclick="openEditBooking(\''+booking.id+'\')">Edit booking</button>';
@@ -967,6 +1485,14 @@ function showDetail(roomId){
       }
     }
     if(can('print_doortag'))btns+='<button onclick="printDoorTag(\''+booking.id+'\')">Print door tag</button>';
+    // Door code buttons (Phase 1: per-room, manual)
+    btns+='<button onclick="window._currentDoorCodeBookingId=\''+booking.id+'\';showRoomDoorCode(\''+booking.id+'\')" style="background:rgba(239,159,39,.1);color:#a76800;border-color:#EF9F27" title="Vis nåværende dørkode for rommet">🔑 Vis kode</button>';
+    btns+='<button onclick="window._currentDoorCodeBookingId=\''+booking.id+'\';generateRoomDoorCode(\''+booking.id+'\')" style="background:rgba(239,159,39,.1);color:#a76800;border-color:#EF9F27" title="Generer ny 6-sifret dørkode for rommet">🔑 Generer kode</button>';
+    // Messaging buttons
+    btns+='<button onclick="copyBookingSMS(\''+booking.id+'\')" style="background:rgba(14,165,165,.1);color:#0EA5A5;border-color:#0EA5A5" title="Kopier SMS-tekst til utklippstavle">📱 Kopier SMS</button>';
+    btns+='<button onclick="openBookingSMS(\''+booking.id+'\')" style="background:rgba(14,165,165,.1);color:#0EA5A5;border-color:#0EA5A5" title="Åpne SMS-app med ferdig tekst">📱 Send SMS</button>';
+    btns+='<button onclick="copyBookingEmail(\''+booking.id+'\')" style="background:rgba(123,97,255,.1);color:#7B61FF;border-color:#7B61FF" title="Kopier e-post-tekst til utklippstavle">📧 Kopier e-post</button>';
+    btns+='<button onclick="openBookingEmail(\''+booking.id+'\')" style="background:rgba(123,97,255,.1);color:#7B61FF;border-color:#7B61FF" title="Åpne e-postklient med ferdig tekst">📧 Send e-post</button>';
     if(booking.Status==='Upcoming'&&can('checkin_out'))btns+='<button class="primary" onclick="checkIn(\''+booking.id+'\')">Check in</button>';
     if(booking.Status==='Active'&&can('checkin_out'))btns+='<button class="primary" style="background:#EF9F27;border-color:#EF9F27" onclick="checkOut(\''+booking.id+'\')">Check out</button>';
     if(can('cleaning')){
@@ -996,6 +1522,13 @@ async function cycleCS(e,id){
   const c={'None':'Dirty','Dirty':'Clean','Clean':'None'};const ns=c[b.Cleaning_Status||'None'];
   try{await updateListItem('Bookings',id,{Cleaning_Status:ns});b.Cleaning_Status=ns;renderFloors();updateStats()}catch(er){console.error(er);alert('Failed')}
 }
+// v14.5.10: Cycle cleaning status on empty rooms (Room.Cleaning_Status)
+async function cycleRoomCS(e,roomId){
+  e.stopPropagation();if(!can('cleaning'))return;
+  const r=allRooms.find(x=>x.id===roomId);if(!r)return;
+  const c={'None':'Dirty','Dirty':'Clean','Clean':'None'};const ns=c[r.Cleaning_Status||'None'];
+  try{await updateListItem('Rooms',roomId,{Cleaning_Status:ns});r.Cleaning_Status=ns;renderFloors();updateStats()}catch(er){console.error(er);alert('Failed: '+er.message)}
+}
 async function markClean(id){try{await updateListItem('Bookings',id,{Cleaning_Status:'Clean'});const l=allBookings.find(x=>x.id===id);if(l)l.Cleaning_Status='Clean';closeDetail();refreshLocal();loadData()}catch(e){alert('Failed')}}
 async function markDirty(id){try{await updateListItem('Bookings',id,{Cleaning_Status:'Dirty'});const l=allBookings.find(x=>x.id===id);if(l)l.Cleaning_Status='Dirty';closeDetail();refreshLocal();loadData()}catch(e){alert('Failed')}}
 
@@ -1014,7 +1547,16 @@ function closeCheckoutModal(){document.getElementById('checkoutModal').classList
 async function confirmCheckout(){
   if(!checkoutBookingId)return;const dateVal=document.getElementById('fCheckOutDate').value;if(!dateVal){alert('Select a date');return}
   const btn=document.getElementById('checkoutConfirmBtn');btn.disabled=true;btn.textContent='Processing...';
-  try{await updateListItem('Bookings',checkoutBookingId,{Status:'Completed',Cleaning_Status:'Dirty',Check_Out:dateVal+'T12:00:00Z'});const l=allBookings.find(x=>x.id===checkoutBookingId);if(l){l.Status='Completed';l.Cleaning_Status='Dirty';l.Check_Out=dateVal+'T12:00:00Z'}closeCheckoutModal();closeDetail();refreshLocal();loadData()}catch(e){alert('Failed: '+e.message)}finally{btn.disabled=false;btn.textContent='Confirm check-out'}
+  try{
+    await updateListItem('Bookings',checkoutBookingId,{Status:'Completed',Cleaning_Status:'Dirty',Check_Out:dateVal+'T12:00:00Z'});
+    const l=allBookings.find(x=>x.id===checkoutBookingId);
+    if(l){l.Status='Completed';l.Cleaning_Status='Dirty';l.Check_Out=dateVal+'T12:00:00Z';
+      // v14.5.10: copy cleaning status to room
+      const r=allRooms.find(x=>x.id===String(l.RoomLookupId));
+      if(r){try{await updateListItem('Rooms',r.id,{Cleaning_Status:'Dirty'});r.Cleaning_Status='Dirty'}catch(_){}}
+    }
+    closeCheckoutModal();closeDetail();refreshLocal();loadData()
+  }catch(e){alert('Failed: '+e.message)}finally{btn.disabled=false;btn.textContent='Confirm check-out'}
 }
 async function cancelBooking(id){
   return cancelBookingConfirmed(id);
@@ -1323,8 +1865,11 @@ function printDoorTag(bookingId){
 }
 
 // --- VIEW SWITCHING ---
-function showMainView(){currentView='main';document.getElementById('mainView').style.display='';document.getElementById('hoursView').style.display='none';document.getElementById('propertySelect').style.display='';if(selectedProperty)document.getElementById('headerTitle').textContent='2GM Booking — '+selectedProperty.Title;updateNavActiveState()}
-function showHoursView(){currentView='hours';document.getElementById('mainView').style.display='none';document.getElementById('mainView').classList.remove('panel-mode');document.getElementById('incomingPanel').classList.remove('open');document.getElementById('archivePanel').classList.remove('open');const pp=document.getElementById('personsPanel');if(pp)pp.classList.remove('open');const ip=document.getElementById('invoicingPanel');if(ip)ip.classList.remove('open');document.getElementById('hoursView').style.display='';document.getElementById('propertySelect').style.display='none';document.getElementById('headerTitle').textContent='2GM Booking — Hours';updateNavActiveState()}
+function showMainView(){currentView='main';document.getElementById('mainView').style.display='';document.getElementById('hoursView').style.display='none';document.getElementById('propertySelect').style.display='';if(selectedProperty)document.getElementById('headerTitle').textContent='2GM Eiendom AS – Booking — '+selectedProperty.Title;updateNavActiveState()}
+function showHoursView(){currentView='hours';document.getElementById('mainView').style.display='none';document.getElementById('mainView').classList.remove('panel-mode');document.getElementById('incomingPanel').classList.remove('open');document.getElementById('archivePanel').classList.remove('open');const pp=document.getElementById('personsPanel');if(pp)pp.classList.remove('open');const ip=document.getElementById('invoicingPanel');if(ip)ip.classList.remove('open');const cp=document.getElementById('companiesPanel');if(cp)cp.classList.remove('open');
+  const pr=document.getElementById('pricingPanel');if(pr)pr.classList.remove('open');
+  const ap=document.getElementById('adminPanel');if(ap)ap.classList.remove('open');
+  document.getElementById('hoursView').style.display='';document.getElementById('propertySelect').style.display='none';document.getElementById('headerTitle').textContent='2GM Eiendom AS – Booking — Hours';updateNavActiveState()}
 function ensureMainView(){if(currentView==='hours')showMainView()}
 
 // --- FILTER ---
@@ -1332,7 +1877,7 @@ function toggleFilter(filter){
   if(activeFilter===filter){clearFilter();return}
   activeFilter=filter;
   document.querySelectorAll('.stat').forEach((el,i)=>{const f=['checkedIn','empty','dirty','doorTag','battery'];el.classList.toggle('active',f[i]===filter)});
-  const labels={checkedIn:'Showing: Checked-in rooms',empty:'Showing: Empty rooms',dirty:'Showing: Rooms needing cleaning',doorTag:'Showing: Door tags needing print',battery:'Showing: Low battery rooms (<30%)'};
+  const labels={checkedIn:'Showing: Checked-in rooms',empty:'Showing: Empty rooms',dirty:'Showing: Rooms needing cleaning',doorTag:'Showing: Door tags needing print',battery:'Showing: Low battery rooms (<30%)',overdueCheckIn:'Showing: Overdue check-in',overdueCheckOut:'Showing: Overdue check-out',needsAttention:'Showing: Bookings som trenger oppmerksomhet'};
   document.getElementById('filterLabel').textContent=labels[filter]||'';
   document.getElementById('filterBar').classList.add('open');renderFloors();
   // Show action button for door-tag filter
@@ -1402,12 +1947,15 @@ function printAllPendingDoorTags(){
 }
 
 function getFilteredRoomsForFloor(floor){
-  // For dirty filter: show rooms from all assigned properties (not just selected)
+  // v14.5.10: All stat filters now show across ALL assigned properties (not just selected)
   const assignedPropIds=new Set(properties.map(p=>p.id));
-  const sourceRooms=(activeFilter==='dirty')?allRooms.filter(r=>assignedPropIds.has(String(r.PropertyLookupId))):rooms;
+  const allAssignedRooms=allRooms.filter(r=>assignedPropIds.has(String(r.PropertyLookupId)));
+  // For stat filters, use cross-property source. For non-filter view, use selected property
+  const isStatFilter=activeFilter&&['dirty','checkedIn','empty','doorTag','battery','overdueCheckIn','overdueCheckOut','needsAttention'].includes(activeFilter);
+  const sourceRooms=isStatFilter?allAssignedRooms:rooms;
   let floorRooms=sourceRooms.filter(r=>r.Floor===floor||String(r.Floor)===String(floor));
   if(!activeFilter)return floorRooms;
-  const sourceBookings=(activeFilter==='dirty')?allBookings:bookings;
+  const sourceBookings=isStatFilter?allBookings:bookings;
   const bMap={};sourceBookings.forEach(b=>{const rid=String(b.RoomLookupId||'');if(rid&&(b.Status==='Active'||b.Status==='Upcoming')&&(!bMap[rid]||b.Status==='Active'))bMap[rid]=b});
   switch(activeFilter){
     case 'checkedIn':return floorRooms.filter(r=>!!bMap[r.id]);
@@ -1415,6 +1963,15 @@ function getFilteredRoomsForFloor(floor){
     case 'dirty':return floorRooms.filter(r=>{const b=bMap[r.id];if(!b)return false;if(b.Cleaning_Status==='Dirty')return true;if(b.Status==='Active'&&b.Check_In){const w=calcWashDates(b.Check_In,b.Check_Out);if(w.some(x=>x.isToday))return true}return false});
     case 'doorTag':return floorRooms.filter(r=>bMap[r.id]&&bMap[r.id].Door_Tag_Status==='Needs-print');
     case 'battery':return floorRooms.filter(r=>r.Door_Battery_Level!=null&&r.Door_Battery_Level<30);
+    case 'overdueCheckIn':return floorRooms.filter(r=>{const b=bMap[r.id];return b&&isOverdueCheckIn(b)});
+    case 'overdueCheckOut':return floorRooms.filter(r=>{const b=bMap[r.id];return b&&isOverdueCheckOut(b)});
+    // v14.5.19: needsAttention-filter must check ALL bookings on the room, not just the one in bMap.
+    // bMap only keeps the "active" booking per room (preferring Active over Upcoming), but a
+    // problematic booking may be hidden behind a newer one. Without this fix, the count and
+    // filter results disagree (count says 1, filter returns 0).
+    case 'needsAttention':return floorRooms.filter(r=>{
+      return allBookings.some(b=>String(b.RoomLookupId||'')===r.id&&bookingNeedsAttention(b)!==null);
+    });
     default:return floorRooms;
   }
 }
@@ -1476,16 +2033,30 @@ async function checkHoursReminder(){
 
 function dismissReminder(){document.getElementById('hoursReminder').style.display='none'}
 
-// --- INIT ---
+// --- INIT (v14.5.11 — handleRedirectPromise to consume any leftover auth code in URL) ---
 let msalReady=false;
-msalInstance.initialize().then(()=>{
+msalInstance.initialize().then(async()=>{
+  // Consume any redirect response sitting in URL (#code=...) — MSAL otherwise leaves it
+  // hanging which causes silent token failures later
+  try{
+    const resp=await msalInstance.handleRedirectPromise();
+    if(resp&&resp.accessToken){
+      accessToken=resp.accessToken;
+      _tokenExpiresAt=resp.expiresOn?resp.expiresOn.getTime():(Date.now()+50*60*1000);
+    }
+  }catch(e){console.warn('[Auth] handleRedirectPromise:',e.message)}
   msalReady=true;initResize();
   const a=msalInstance.getAllAccounts();
-  if(a.length>0){getToken().then(async()=>{if(accessToken){await loadCurrentUser();showApp();applyPermissions();await loadProperties();await loadData();checkHoursReminder()}})}
+  if(a.length>0){
+    try{
+      const tok=await getToken(false); // non-interactive on startup — don't blast popup
+      if(tok){await loadCurrentUser();showApp();applyPermissions();await loadProperties();await loadData();checkHoursReminder()}
+    }catch(e){console.warn('[Init] startup token failed:',e.message)}
+  }
 });
 
 // ============================================================
-// AUTO-REFRESH (v13.20)
+// AUTO-REFRESH (v14.5.10)
 // ============================================================
 
 // Build a fingerprint that tells us if data has changed without full reload
@@ -1493,10 +2064,14 @@ async function _checkBookingChanges(){
   // Skip if any modal is open (don't disturb the user)
   if(document.querySelector('.modal-overlay.open'))return;
   try{
+    // v14.5.11: silent mode — never trigger popup from background polling
+    const tok=await getToken(false);
+    if(!tok)return; // no token, skip this cycle quietly
     const s=await getSiteId();
     const lid=await getListId('Bookings');
     // Minimal fields to detect changes — get only id + Modified
-    const r=await graphGet('/sites/'+s+'/lists/'+lid+'/items?$expand=fields($select=Modified,Status)&$top=500&$orderby=fields/Modified desc');
+    const r=await graphGet('/sites/'+s+'/lists/'+lid+'/items?$expand=fields($select=Modified,Status)&$top=500&$orderby=fields/Modified desc',true);
+    if(!r)return; // silent fail
     const currentIds=new Set(r.value.map(i=>i.id));
     let maxModified='';
     r.value.forEach(i=>{if(i.fields.Modified>maxModified)maxModified=i.fields.Modified});
@@ -1604,20 +2179,128 @@ function showFullTenantDebug(){
   lines.push('Test period: '+formatDate(fromDate)+' to '+formatDate(toDate));
   const result=computeFullTenantForPeriod(p,fromDate,toDate);
   if(!result){
-    lines.push('\n⚠ computeFullTenantForPeriod returned NULL');
-    lines.push('Possible reasons:');
-    lines.push('- Company is empty');
-    lines.push('- Rate is 0 or invalid');
-    lines.push('- Period is outside agreement dates');
-    lines.push('- 0 rooms matched');
+    lines.push('\n⚠ computeFullTenantForPeriod returned NULL (no full-tenant — that may be OK)');
   }else{
-    lines.push('\nResult:');
+    lines.push('\nFull-tenant Result:');
     lines.push('  days: '+result.days);
     lines.push('  rooms: '+result.rooms);
     lines.push('  rate: '+result.rate);
     lines.push('  TOTAL: '+result.total+' kr');
-    lines.push('  Expected: '+(result.rooms*result.rate*result.days)+' kr');
+  }
+  // Long-term contracts on individual rooms
+  lines.push('\n--- LONG-TERM CONTRACTS (per-room) ---');
+  let ltTotal=0;
+  let ltCount=0;
+  matching.forEach(r=>{
+    const lt=computeLongTermForRoomPeriod(r,fromDate,toDate);
+    if(lt){
+      ltCount++;
+      ltTotal+=lt.total;
+      lines.push('  '+r.Title+' → '+lt.company+' · '+lt.detailLabel+' = '+lt.total.toLocaleString('nb-NO')+' kr');
+    }
+  });
+  if(ltCount===0){
+    lines.push('  (no rooms with active LongTerm contracts on this property)');
+    // Show rooms that have LongTerm_Company but no active contract — likely misconfigured
+    const partialConfig=matching.filter(r=>(r.LongTerm_Company||'').trim()&&!computeLongTermForRoomPeriod(r,fromDate,toDate));
+    if(partialConfig.length){
+      lines.push('\n⚠ Rooms with LongTerm_Company but inactive contract:');
+      partialConfig.forEach(r=>{
+        lines.push('  '+r.Title+': Company="'+(r.LongTerm_Company||'')+'", Price='+r.LongTerm_Price+', Start='+r.LongTerm_StartDate+', End='+r.LongTerm_EndDate);
+      });
+    }
+    // Show all field names on first room — to diagnose field-name mismatches
+    if(matching.length){
+      const sample=matching[0];
+      const allKeys=Object.keys(sample).sort();
+      const longTermKeys=allKeys.filter(k=>k.toLowerCase().indexOf('long')>=0||k.toLowerCase().indexOf('tenant')>=0);
+      lines.push('\nAll fields on first room ('+sample.Title+'):');
+      lines.push(allKeys.join(', '));
+      if(longTermKeys.length){
+        lines.push('\nLongTerm/Tenant-related fields found:');
+        longTermKeys.forEach(k=>{
+          lines.push('  '+k+' = '+JSON.stringify(sample[k]));
+        });
+      }else{
+        lines.push('\n⚠ No fields containing "long" or "tenant" found on this room');
+      }
+    }
+  }else{
+    lines.push('  Total: '+ltCount+' rooms · '+ltTotal.toLocaleString('nb-NO')+' kr');
   }
   console.log(lines.join('\n'));
-  alert(lines.join('\n'));
+  // Use a popup window for long output (alert() truncates above ~1024 chars in Chrome)
+  const txt=lines.join('\n');
+  if(txt.length>800){
+    const w=window.open('','_blank','width=700,height=600');
+    if(w){
+      w.document.write('<pre style="font-family:Consolas,monospace;font-size:12px;white-space:pre-wrap;padding:20px">'+txt.replace(/</g,'&lt;')+'</pre>');
+      w.document.close();
+    }else{
+      alert(txt);
+    }
+  }else{
+    alert(txt);
+  }
+}
+
+// ============================================================
+// OVERDUE CHECK-IN / CHECK-OUT (v14.5.10)
+// ============================================================
+function isOverdueCheckIn(b){
+  if(!b||b.Status!=='Upcoming'||!b.Check_In)return false;
+  const ci=new Date(b.Check_In);ci.setHours(0,0,0,0);
+  const today=new Date();today.setHours(0,0,0,0);
+  return ci.getTime()<today.getTime();
+}
+function isOverdueCheckOut(b){
+  if(!b||b.Status!=='Active'||!b.Check_Out)return false;
+  const co=new Date(b.Check_Out);co.setHours(0,0,0,0);
+  const today=new Date();today.setHours(0,0,0,0);
+  return co.getTime()<today.getTime();
+}
+function daysOverdueCheckIn(b){
+  if(!isOverdueCheckIn(b))return 0;
+  const ci=new Date(b.Check_In);ci.setHours(0,0,0,0);
+  const today=new Date();today.setHours(0,0,0,0);
+  return Math.round((today-ci)/864e5);
+}
+function daysOverdueCheckOut(b){
+  if(!isOverdueCheckOut(b))return 0;
+  const co=new Date(b.Check_Out);co.setHours(0,0,0,0);
+  const today=new Date();today.setHours(0,0,0,0);
+  return Math.round((today-co)/864e5);
+}
+
+// v14.5.18: Detect bookings with logically inconsistent state.
+// Returns null if booking is OK, otherwise an object describing the issue.
+// Two issue types:
+//   - 'invalid_status': Check_Out has passed but Status is still Upcoming/Active
+//   - 'extreme_overdue_in': Status=Upcoming but Check_In was >30 days ago (forgotten booking)
+function bookingNeedsAttention(b){
+  if(!b)return null;
+  if(b.Status==='Completed'||b.Status==='Cancelled')return null;
+  const today=new Date();today.setHours(0,0,0,0);
+  // 1. Invalid status: Check_Out is in the past but status is still active/upcoming
+  if(b.Check_Out){
+    const co=new Date(b.Check_Out);co.setHours(0,0,0,0);
+    if(co.getTime()<today.getTime()){
+      const days=Math.round((today-co)/864e5);
+      return{type:'invalid_status',label:'Status burde vært Completed',daysSinceCheckOut:days};
+    }
+  }
+  // 2. Extreme overdue check-in: Upcoming but Check_In was >30 days ago
+  if(b.Status==='Upcoming'&&b.Check_In){
+    const ci=new Date(b.Check_In);ci.setHours(0,0,0,0);
+    const daysSince=Math.round((today-ci)/864e5);
+    if(daysSince>30){
+      return{type:'extreme_overdue_in',label:'Aldri sjekket inn',daysSinceCheckIn:daysSince};
+    }
+  }
+  return null;
+}
+
+// Convenience: return all bookings that need attention from given list
+function getBookingsNeedingAttention(bookings){
+  return (bookings||[]).filter(b=>bookingNeedsAttention(b)!==null);
 }
