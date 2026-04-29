@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v14.5.16 — modules.js
+// 2GM Booking v14.5.18 — modules.js
 // Hours, Archive, Import/Export, Admin (checkbox permissions)
 // ============================================================
 
@@ -2253,12 +2253,34 @@ function renderInvoicing(){
   const missingRate=finalItems.filter(i=>!i.rate&&i.lineType==='nights');
   const warnings=missingRate.length?'<div style="margin-bottom:12px;padding:8px 12px;background:var(--bg-warning);border:1px solid #EF9F27;border-radius:6px;font-size:12px;color:var(--text-warning)">⚠ '+missingRate.length+' booking'+(missingRate.length!==1?'s':'')+' without rates — these are not included in totals. Check rate configuration.</div>':'';
 
+  // v14.5.18: Needs-attention banner — bookings with logically inconsistent state
+  // (Status=Upcoming/Active but Check_Out passed, OR Upcoming with Check_In >30d ago)
+  // These ARE included in totals — banner just warns the user to verify before sending invoice.
+  const naItems=finalItems.filter(i=>i.booking&&bookingNeedsAttention(i.booking)!==null);
+  // Get unique bookings (one booking can produce multiple line items: nights + utvask)
+  const naBookingsMap={};
+  naItems.forEach(i=>{if(i.booking&&!naBookingsMap[i.booking.id])naBookingsMap[i.booking.id]={booking:i.booking,room:i.room,name:i.name,issue:bookingNeedsAttention(i.booking)}});
+  const naBookings=Object.values(naBookingsMap);
+  let attentionBanner='';
+  if(naBookings.length){
+    const list=naBookings.map(x=>{
+      const issueText=x.issue.type==='invalid_status'
+        ?'Status='+(x.booking.Status||'?')+', Check_Out passert for '+x.issue.daysSinceCheckOut+' dag'+(x.issue.daysSinceCheckOut===1?'':'er')+' siden'
+        :'Aldri sjekket inn ('+x.issue.daysSinceCheckIn+' dager siden Check_In)';
+      return '<li style="margin:4px 0"><strong>'+escapeHtml(x.name||'?')+'</strong> · Rom '+escapeHtml(x.room||'?')+' — '+escapeHtml(issueText)+'</li>';
+    }).join('');
+    attentionBanner='<div style="margin-bottom:12px;padding:10px 14px;background:rgba(239,159,39,.12);border-left:3px solid #EF9F27;border-radius:6px;font-size:12px;color:#854F0B">'
+      +'<div style="font-weight:500;margin-bottom:6px">⚠ '+naBookings.length+' booking'+(naBookings.length!==1?'er':'')+' med ugyldig status — inkludert i totalsummene, men bør sjekkes før faktura sendes.</div>'
+      +'<ul style="margin:4px 0 0 20px;padding:0">'+list+'</ul>'
+      +'</div>';
+  }
+
   if(!finalItems.length){
     body.innerHTML='<div style="text-align:center;padding:40px;color:var(--text-secondary)">No bookings in this period'+(cfSel.value!=='__ALL__'?' for '+escapeHtml(cfSel.value):'')+' on '+(selectedProperty?selectedProperty.Title:'selected property')+'.</div>';
     return;
   }
 
-  let html=warnings;
+  let html=attentionBanner+warnings;
 
   // Grand totals — separate nights from checkout/percent fees and full-tenant leases
   const nightItems=finalItems.filter(i=>i.lineType==='nights');

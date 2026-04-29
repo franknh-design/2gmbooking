@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v14.5.16 — app.js (Core)
+// 2GM Booking v14.5.18 — app.js (Core)
 // Auth, Graph API, Data, Rendering, Bookings
 // ============================================================
 
@@ -852,6 +852,14 @@ function datesCell(b){
     const d=daysOverdueCheckOut(b);
     overdueBadge=' <span style="background:rgba(209,67,67,.12);color:#A32D2D;padding:1px 6px;border-radius:3px;font-size:10px;font-weight:500" title="Should have been checked out '+d+' day'+(d===1?'':'s')+' ago">⚠ Check-out '+d+'d</span>';
   }
+  // v14.5.18: needs-attention badge (orange) — adds on top of overdue badge if both apply
+  const att=bookingNeedsAttention(b);
+  if(att){
+    const tipText=att.type==='invalid_status'
+      ?'Status er '+(b.Status||'?')+' men Check_Out var '+att.daysSinceCheckOut+' dag'+(att.daysSinceCheckOut===1?'':'er')+' siden'
+      :'Status Upcoming men Check_In var '+att.daysSinceCheckIn+' dager siden';
+    overdueBadge+=' <span style="background:rgba(239,159,39,.15);color:#854F0B;padding:1px 6px;border-radius:3px;font-size:10px;font-weight:500" title="'+tipText+'">⚠ '+att.label+'</span>';
+  }
   return'<span style="'+s+'">'+ci+'</span> — '+co+overdueBadge;
 }
 
@@ -1197,7 +1205,7 @@ function renderFloors(){
   document.getElementById('floor1Body').innerHTML=f1.length?f1.map(renderFn).join(''):noMatch;
   document.getElementById('floor2Body').innerHTML=f2.length?f2.map(renderFn).join(''):noMatch;
 
-  const isStatFilter=activeFilter&&['dirty','checkedIn','empty','doorTag','battery','overdueCheckIn','overdueCheckOut'].includes(activeFilter);
+  const isStatFilter=activeFilter&&['dirty','checkedIn','empty','doorTag','battery','overdueCheckIn','overdueCheckOut','needsAttention'].includes(activeFilter);
   if(isStatFilter||isAllProps){
     document.getElementById('floor1Sub').textContent=f1.length+' rooms — all properties';
     document.getElementById('floor2Sub').textContent=f2.length+' rooms — all properties';
@@ -1267,6 +1275,13 @@ function updateStats(){
   const coBox=document.getElementById('statOverdueCheckOutBox');
   if(coBox)coBox.style.cssText=overdueCheckOutCount>0?'background:rgba(209,67,67,.10);border-color:#D14343':'';
 
+  // v14.5.18: Needs-attention count (invalid status + extreme overdue) — orange tint
+  const needsAttentionCount=overdueBookings.filter(b=>bookingNeedsAttention(b)!==null).length;
+  const naEl=document.getElementById('statNeedsAttention');
+  if(naEl)naEl.textContent=needsAttentionCount;
+  const naBox=document.getElementById('statNeedsAttentionBox');
+  if(naBox)naBox.style.cssText=needsAttentionCount>0?'background:rgba(239,159,39,.12);border-color:#EF9F27':'';
+
   // v14.5.10 PERF: Optimized occupancy with pre-processed boundaries
   const now=new Date();const curMonth=now.getMonth();const curYear=now.getFullYear();
   const todayDate=now.getDate();
@@ -1323,7 +1338,7 @@ function updateStats(){
 
 // --- DETAIL PANEL ---
 function showDetail(roomId){
-  const isStatFilter=activeFilter&&['dirty','checkedIn','empty','doorTag','battery','overdueCheckIn','overdueCheckOut'].includes(activeFilter);
+  const isStatFilter=activeFilter&&['dirty','checkedIn','empty','doorTag','battery','overdueCheckIn','overdueCheckOut','needsAttention'].includes(activeFilter);
   const room=isStatFilter?allRooms.find(r=>r.id===roomId):rooms.find(r=>r.id===roomId);
   if(!room)return;
   const sourceBk=isStatFilter?allBookings:bookings;
@@ -1389,6 +1404,14 @@ function showDetail(roomId){
       }else if(isOverdueCheckOut(booking)){
         const d=daysOverdueCheckOut(booking);
         overdueBanner='<div style="background:rgba(209,67,67,.10);border-left:3px solid #D14343;padding:10px 14px;margin-bottom:12px;border-radius:6px;display:flex;align-items:center;gap:10px"><div style="flex:1;font-size:13px;color:#A32D2D"><strong>⚠ Overdue check-out:</strong> This booking should have been checked out '+d+' day'+(d===1?'':'s')+' ago.</div>'+(can('checkin_out')?'<button onclick="openCheckoutModal(\''+booking.id+'\')" style="padding:6px 14px;background:#1D9E75;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px;font-family:inherit;font-weight:500">✓ Mark as Completed</button>':'')+'</div>';
+      }
+      // v14.5.18: Needs-attention banner (orange) — shown in addition to overdue banner if applicable
+      const naAtt=bookingNeedsAttention(booking);
+      if(naAtt){
+        const explanation=naAtt.type==='invalid_status'
+          ?'Status er <strong>'+(booking.Status||'?')+'</strong> men Check_Out var <strong>'+naAtt.daysSinceCheckOut+' dag'+(naAtt.daysSinceCheckOut===1?'':'er')+' siden</strong>. Bookingen burde sannsynligvis vært markert som Completed.'
+          :'Status er <strong>Upcoming</strong> men Check_In var <strong>'+naAtt.daysSinceCheckIn+' dager siden</strong>. Bookingen kan ha blitt glemt — sjekk om gjesten faktisk var her.';
+        overdueBanner+='<div style="background:rgba(239,159,39,.12);border-left:3px solid #EF9F27;padding:10px 14px;margin-bottom:12px;border-radius:6px"><div style="font-size:13px;color:#854F0B"><strong>⚠ '+naAtt.label+':</strong> '+explanation+'</div></div>';
       }
       infoHtml=overdueBanner+'<div class="detail-name">'+booking.Person_Name+'</div>'
         +'<div class="detail-sub">Room '+room.Title+' · '+(booking.Company||'')+' · '+propName+'</div>'
@@ -1840,7 +1863,7 @@ function toggleFilter(filter){
   if(activeFilter===filter){clearFilter();return}
   activeFilter=filter;
   document.querySelectorAll('.stat').forEach((el,i)=>{const f=['checkedIn','empty','dirty','doorTag','battery'];el.classList.toggle('active',f[i]===filter)});
-  const labels={checkedIn:'Showing: Checked-in rooms',empty:'Showing: Empty rooms',dirty:'Showing: Rooms needing cleaning',doorTag:'Showing: Door tags needing print',battery:'Showing: Low battery rooms (<30%)'};
+  const labels={checkedIn:'Showing: Checked-in rooms',empty:'Showing: Empty rooms',dirty:'Showing: Rooms needing cleaning',doorTag:'Showing: Door tags needing print',battery:'Showing: Low battery rooms (<30%)',overdueCheckIn:'Showing: Overdue check-in',overdueCheckOut:'Showing: Overdue check-out',needsAttention:'Showing: Bookings som trenger oppmerksomhet'};
   document.getElementById('filterLabel').textContent=labels[filter]||'';
   document.getElementById('filterBar').classList.add('open');renderFloors();
   // Show action button for door-tag filter
@@ -1914,7 +1937,7 @@ function getFilteredRoomsForFloor(floor){
   const assignedPropIds=new Set(properties.map(p=>p.id));
   const allAssignedRooms=allRooms.filter(r=>assignedPropIds.has(String(r.PropertyLookupId)));
   // For stat filters, use cross-property source. For non-filter view, use selected property
-  const isStatFilter=activeFilter&&['dirty','checkedIn','empty','doorTag','battery','overdueCheckIn','overdueCheckOut'].includes(activeFilter);
+  const isStatFilter=activeFilter&&['dirty','checkedIn','empty','doorTag','battery','overdueCheckIn','overdueCheckOut','needsAttention'].includes(activeFilter);
   const sourceRooms=isStatFilter?allAssignedRooms:rooms;
   let floorRooms=sourceRooms.filter(r=>r.Floor===floor||String(r.Floor)===String(floor));
   if(!activeFilter)return floorRooms;
@@ -1928,6 +1951,7 @@ function getFilteredRoomsForFloor(floor){
     case 'battery':return floorRooms.filter(r=>r.Door_Battery_Level!=null&&r.Door_Battery_Level<30);
     case 'overdueCheckIn':return floorRooms.filter(r=>{const b=bMap[r.id];return b&&isOverdueCheckIn(b)});
     case 'overdueCheckOut':return floorRooms.filter(r=>{const b=bMap[r.id];return b&&isOverdueCheckOut(b)});
+    case 'needsAttention':return floorRooms.filter(r=>{const b=bMap[r.id];return b&&bookingNeedsAttention(b)!==null});
     default:return floorRooms;
   }
 }
@@ -2226,4 +2250,37 @@ function daysOverdueCheckOut(b){
   const co=new Date(b.Check_Out);co.setHours(0,0,0,0);
   const today=new Date();today.setHours(0,0,0,0);
   return Math.round((today-co)/864e5);
+}
+
+// v14.5.18: Detect bookings with logically inconsistent state.
+// Returns null if booking is OK, otherwise an object describing the issue.
+// Two issue types:
+//   - 'invalid_status': Check_Out has passed but Status is still Upcoming/Active
+//   - 'extreme_overdue_in': Status=Upcoming but Check_In was >30 days ago (forgotten booking)
+function bookingNeedsAttention(b){
+  if(!b)return null;
+  if(b.Status==='Completed'||b.Status==='Cancelled')return null;
+  const today=new Date();today.setHours(0,0,0,0);
+  // 1. Invalid status: Check_Out is in the past but status is still active/upcoming
+  if(b.Check_Out){
+    const co=new Date(b.Check_Out);co.setHours(0,0,0,0);
+    if(co.getTime()<today.getTime()){
+      const days=Math.round((today-co)/864e5);
+      return{type:'invalid_status',label:'Status burde vært Completed',daysSinceCheckOut:days};
+    }
+  }
+  // 2. Extreme overdue check-in: Upcoming but Check_In was >30 days ago
+  if(b.Status==='Upcoming'&&b.Check_In){
+    const ci=new Date(b.Check_In);ci.setHours(0,0,0,0);
+    const daysSince=Math.round((today-ci)/864e5);
+    if(daysSince>30){
+      return{type:'extreme_overdue_in',label:'Aldri sjekket inn',daysSinceCheckIn:daysSince};
+    }
+  }
+  return null;
+}
+
+// Convenience: return all bookings that need attention from given list
+function getBookingsNeedingAttention(bookings){
+  return (bookings||[]).filter(b=>bookingNeedsAttention(b)!==null);
 }
