@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v14.5.26 — modules.js
+// 2GM Booking v14.5.27 — modules.js
 // Hours, Archive, Import/Export, Admin (checkbox permissions)
 // ============================================================
 

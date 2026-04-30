@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v14.5.26 — app.js (Core)
+// 2GM Booking v14.5.27 — app.js (Core)
 // Auth, Graph API, Data, Rendering, Bookings
 // ============================================================
 
@@ -476,7 +476,7 @@ function applyPermissions(){
   show('btnArchive',can('archive')||can('view_bookings'));
   show('btnUpcoming',can('view_bookings'));
   show('btnHours',can('view_hours')||can('edit_hours'));
-  // v14.5.26: Cleaning calendar — admin or cleaning permission
+  // v14.5.27: Cleaning calendar — admin or cleaning permission
   show('btnCleaningCalendar',can('admin')||can('cleaning'));
   show('efficiencyBtn',can('view_efficiency'));
   showBlock('adminBar',can('admin')||can('manage_rates'));
@@ -606,7 +606,7 @@ function toISODate(d){if(!d)return'';const dt=new Date(d);return dt.getFullYear(
 function getNextWeekday(date){const d=new Date(date);const day=d.getDay();if(day===0)d.setDate(d.getDate()+1);else if(day===6)d.setDate(d.getDate()+2);return d}
 
 // ============================================================
-// NORWEGIAN PUBLIC HOLIDAYS (v14.5.26) — calculated, no API needed
+// NORWEGIAN PUBLIC HOLIDAYS (v14.5.27) — calculated, no API needed
 // Easter is calculated via Gauss' algorithm (valid for years 1583-4099).
 // All movable holidays are derived from Easter Sunday.
 // ============================================================
@@ -691,7 +691,7 @@ function isNonWorkingDay(date){
   return getHolidayName(d)!==null;
 }
 
-// v14.5.26: Returns next non-weekend, non-holiday day at or after given date.
+// v14.5.27: Returns next non-weekend, non-holiday day at or after given date.
 // Replaces previous getNextWeekday for wash scheduling so we never schedule on holidays.
 function getNextWorkingDay(date){
   const d=new Date(date);d.setHours(0,0,0,0);
@@ -889,7 +889,7 @@ function getWashScheduleHtml(booking){
   const washes=calcWashDates(booking.Check_In,booking.Check_Out,booking.id);
   const show=washes.filter(w=>!w.isPast).slice(0,6);if(!show.length)return'';
   const days=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-  // v14.5.26: Manage button for cleaners/admin
+  // v14.5.27: Manage button for cleaners/admin
   const manageBtn=canManageWashSchedule()
     ?' <button onclick="openWashScheduleModal(\''+booking.id+'\')" style="margin-left:8px;padding:2px 8px;border:1px solid var(--accent);border-radius:4px;background:rgba(29,158,117,.1);color:var(--accent);cursor:pointer;font-size:10px;font-family:inherit">Manage</button>'
     :'';
@@ -914,10 +914,13 @@ function getNextWashDate(booking){
 }
 
 // ============================================================
-// WASH SCHEDULE MODAL (v14.5.26) — Iteration 3: UI for cleaners/admin
+// WASH SCHEDULE MODAL (v14.5.27) — Iteration 3: UI for cleaners/admin
 // Allows Move / Remove / Add operations on wash dates with audit trail.
 // ============================================================
 let _washScheduleBookingId=null;
+let _washScheduleWashes=[]; // v14.5.27: cached washes-array used by inline Move toggle
+let _washScheduleMinDate='';
+let _washScheduleMaxDate='';
 
 function canManageWashSchedule(){return can('admin')||can('cleaning')}
 
@@ -937,7 +940,7 @@ function closeWashScheduleModal(){
   const hadId=_washScheduleBookingId;
   _washScheduleBookingId=null;
   document.getElementById('washScheduleModal').classList.remove('open');
-  // v14.5.26: If cleaning calendar / day modal is still open underneath, refresh them
+  // v14.5.27: If cleaning calendar / day modal is still open underneath, refresh them
   // so the user sees their changes immediately when returning to the calendar context.
   if(document.getElementById('cleaningCalendarModal').classList.contains('open')){
     renderCleaningCalendar();
@@ -963,10 +966,16 @@ function renderWashScheduleModal(){
   const minDate=toISODate(b.Check_In);
   const maxDate=b.Check_Out?toISODate(b.Check_Out):'';
 
+  // v14.5.27: Cache for inline Move toggle
+  _washScheduleWashes=washes;
+  _washScheduleMinDate=minDate;
+  _washScheduleMaxDate=maxDate;
+
   // Section 1: Wash list with Move/Skip buttons per row
-  let listHtml='<table style="width:100%;font-size:13px;margin-bottom:16px"><thead><tr><th style="text-align:left">Date</th><th style="text-align:left">Type</th><th style="text-align:left;width:40px"></th><th style="width:160px"></th></tr></thead><tbody>';
+  // v14.5.27: Date picker is hidden by default — appears inline only when "Move" is clicked.
+  let listHtml='<table style="width:100%;font-size:13px;margin-bottom:16px"><thead><tr><th style="text-align:left">Date</th><th style="text-align:left">Type</th><th style="width:280px"></th></tr></thead><tbody>';
   if(!washes.length){
-    listHtml+='<tr><td colspan="4" class="muted" style="padding:12px 0">No wash dates in current schedule.</td></tr>';
+    listHtml+='<tr><td colspan="3" class="muted" style="padding:12px 0">No wash dates in current schedule.</td></tr>';
   }else{
     washes.forEach((w,idx)=>{
       const dateStr=days[w.date.getDay()]+' '+formatDate(w.date);
@@ -976,9 +985,16 @@ function renderWashScheduleModal(){
       else if(w.isNext)stylings='color:var(--accent);font-weight:500';
       const customBadge=w.custom?' <span class="pill" style="background:rgba(239,159,39,.15);color:#854F0B;font-size:10px">custom</span>':'';
       const moveDateInputId='wsMoveDate_'+idx;
-      const buttons='<button onclick="washMove(\''+w.date.toISOString()+'\',\''+moveDateInputId+'\')" style="padding:3px 8px;border:1px solid var(--border-tertiary);border-radius:4px;background:var(--bg-secondary);cursor:pointer;font-size:11px;font-family:inherit">Move</button> '
-        +'<button onclick="washRemove(\''+w.date.toISOString()+'\')" style="padding:3px 8px;border:1px solid var(--border-tertiary);border-radius:4px;background:var(--bg-secondary);cursor:pointer;font-size:11px;font-family:inherit">Skip</button>';
-      listHtml+='<tr style="'+stylings+'"><td style="padding:6px 0">'+dateStr+customBadge+'</td><td>'+w.type+'</td><td><input type="date" id="'+moveDateInputId+'" min="'+minDate+'" '+(maxDate?'max="'+maxDate+'"':'')+' style="padding:2px 4px;font-size:11px;width:130px"></td><td style="text-align:right">'+buttons+'</td></tr>';
+      const moveCellId='wsMoveCell_'+idx;
+      const moveBtn='<button onclick="washToggleMove('+idx+')" style="padding:3px 8px;border:1px solid var(--border-tertiary);border-radius:4px;background:var(--bg-secondary);cursor:pointer;font-size:11px;font-family:inherit">Move</button>';
+      const skipBtn='<button onclick="washRemove(\''+w.date.toISOString()+'\')" style="padding:3px 8px;border:1px solid var(--border-tertiary);border-radius:4px;background:var(--bg-secondary);cursor:pointer;font-size:11px;font-family:inherit">Skip</button>';
+      // The cell starts with just the buttons. When Move is clicked, replaceContent shows date picker + confirm/cancel.
+      listHtml+='<tr style="'+stylings+'">'
+        +'<td style="padding:6px 0">'+dateStr+customBadge+'</td>'
+        +'<td>'+w.type+'</td>'
+        +'<td id="'+moveCellId+'" style="text-align:right">'+moveBtn+' '+skipBtn+'</td>'
+        +'</tr>';
+      // Stash the inputs we'll need later in window state — reusable via washToggleMove()
     });
   }
   listHtml+='</tbody></table>';
@@ -1022,14 +1038,41 @@ function renderWashScheduleModal(){
   document.getElementById('washScheduleBody').innerHTML=listHtml+addHtml+reasonHtml+historyHtml;
 }
 
-async function washMove(originalDateIso,newDateInputId){
-  const newDateInput=document.getElementById(newDateInputId);
+// v14.5.27: Toggle inline date picker for moving a specific wash
+function washToggleMove(idx){
+  const cellId='wsMoveCell_'+idx;
+  const cell=document.getElementById(cellId);
+  if(!cell)return;
+  const w=_washScheduleWashes[idx];
+  if(!w)return;
+  const inputId='wsMoveDate_'+idx;
+  // If already showing the date picker, close it back to buttons
+  if(document.getElementById(inputId)){
+    const moveBtn='<button onclick="washToggleMove('+idx+')" style="padding:3px 8px;border:1px solid var(--border-tertiary);border-radius:4px;background:var(--bg-secondary);cursor:pointer;font-size:11px;font-family:inherit">Move</button>';
+    const skipBtn='<button onclick="washRemove(\''+w.date.toISOString()+'\')" style="padding:3px 8px;border:1px solid var(--border-tertiary);border-radius:4px;background:var(--bg-secondary);cursor:pointer;font-size:11px;font-family:inherit">Skip</button>';
+    cell.innerHTML=moveBtn+' '+skipBtn;
+    return;
+  }
+  // Show date picker + Confirm/Cancel buttons
+  const maxAttr=_washScheduleMaxDate?'max="'+_washScheduleMaxDate+'"':'';
+  cell.innerHTML='<input type="date" id="'+inputId+'" min="'+_washScheduleMinDate+'" '+maxAttr+' style="padding:2px 4px;font-size:11px;width:130px"> '
+    +'<button onclick="washMove('+idx+')" style="padding:3px 8px;border:1px solid var(--accent);border-radius:4px;background:var(--accent);color:#fff;cursor:pointer;font-size:11px;font-family:inherit">Confirm</button> '
+    +'<button onclick="washToggleMove('+idx+')" style="padding:3px 8px;border:1px solid var(--border-tertiary);border-radius:4px;background:var(--bg-secondary);cursor:pointer;font-size:11px;font-family:inherit">Cancel</button>';
+  // Auto-focus the date picker for quick entry
+  setTimeout(()=>{const inp=document.getElementById(inputId);if(inp)inp.focus()},0);
+}
+
+async function washMove(idx){
+  const w=_washScheduleWashes[idx];
+  if(!w){alert('Internal error: wash not found.');return}
+  const newDateInput=document.getElementById('wsMoveDate_'+idx);
+  if(!newDateInput){alert('Date picker not visible.');return}
   const newDateStr=newDateInput.value;
   if(!newDateStr){alert('Pick a new date first.');newDateInput.focus();return}
   const reason=(document.getElementById('wsReason')||{}).value||'';
   const newDate=new Date(newDateStr+'T12:00:00');
   try{
-    await saveWashOverride(_washScheduleBookingId,'Move',new Date(originalDateIso),newDate,reason);
+    await saveWashOverride(_washScheduleBookingId,'Move',w.date,newDate,reason);
     document.getElementById('wsReason').value='';
     renderWashScheduleModal();
   }catch(e){console.error(e);alert('Failed to save: '+e.message)}
@@ -1059,7 +1102,7 @@ async function washAdd(){
 }
 
 // ============================================================
-// CLEANING CALENDAR (v14.5.26) — Visualize cleaning load over the next 4 weeks
+// CLEANING CALENDAR (v14.5.27) — Visualize cleaning load over the next 4 weeks
 // Helps spot clustering days (30-40 rooms on one day) before they happen.
 // ============================================================
 
@@ -1151,7 +1194,7 @@ function renderCleaningCalendar(){
       const key=toISODate(cellDate);
       const items=loadMap[key]||[];
       const count=items.length;
-      // v14.5.26: Norwegian holidays — distinct visual signal
+      // v14.5.27: Norwegian holidays — distinct visual signal
       const holidayName=getHolidayName(cellDate);
 
       // Color
