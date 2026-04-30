@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v14.5.25 — app.js (Core)
+// 2GM Booking v14.5.26 — app.js (Core)
 // Auth, Graph API, Data, Rendering, Bookings
 // ============================================================
 
@@ -476,7 +476,7 @@ function applyPermissions(){
   show('btnArchive',can('archive')||can('view_bookings'));
   show('btnUpcoming',can('view_bookings'));
   show('btnHours',can('view_hours')||can('edit_hours'));
-  // v14.5.25: Cleaning calendar — admin or cleaning permission
+  // v14.5.26: Cleaning calendar — admin or cleaning permission
   show('btnCleaningCalendar',can('admin')||can('cleaning'));
   show('efficiencyBtn',can('view_efficiency'));
   showBlock('adminBar',can('admin')||can('manage_rates'));
@@ -606,7 +606,7 @@ function toISODate(d){if(!d)return'';const dt=new Date(d);return dt.getFullYear(
 function getNextWeekday(date){const d=new Date(date);const day=d.getDay();if(day===0)d.setDate(d.getDate()+1);else if(day===6)d.setDate(d.getDate()+2);return d}
 
 // ============================================================
-// NORWEGIAN PUBLIC HOLIDAYS (v14.5.25) — calculated, no API needed
+// NORWEGIAN PUBLIC HOLIDAYS (v14.5.26) — calculated, no API needed
 // Easter is calculated via Gauss' algorithm (valid for years 1583-4099).
 // All movable holidays are derived from Easter Sunday.
 // ============================================================
@@ -691,7 +691,7 @@ function isNonWorkingDay(date){
   return getHolidayName(d)!==null;
 }
 
-// v14.5.25: Returns next non-weekend, non-holiday day at or after given date.
+// v14.5.26: Returns next non-weekend, non-holiday day at or after given date.
 // Replaces previous getNextWeekday for wash scheduling so we never schedule on holidays.
 function getNextWorkingDay(date){
   const d=new Date(date);d.setHours(0,0,0,0);
@@ -889,7 +889,7 @@ function getWashScheduleHtml(booking){
   const washes=calcWashDates(booking.Check_In,booking.Check_Out,booking.id);
   const show=washes.filter(w=>!w.isPast).slice(0,6);if(!show.length)return'';
   const days=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-  // v14.5.25: Manage button for cleaners/admin
+  // v14.5.26: Manage button for cleaners/admin
   const manageBtn=canManageWashSchedule()
     ?' <button onclick="openWashScheduleModal(\''+booking.id+'\')" style="margin-left:8px;padding:2px 8px;border:1px solid var(--accent);border-radius:4px;background:rgba(29,158,117,.1);color:var(--accent);cursor:pointer;font-size:10px;font-family:inherit">Manage</button>'
     :'';
@@ -914,7 +914,7 @@ function getNextWashDate(booking){
 }
 
 // ============================================================
-// WASH SCHEDULE MODAL (v14.5.25) — Iteration 3: UI for cleaners/admin
+// WASH SCHEDULE MODAL (v14.5.26) — Iteration 3: UI for cleaners/admin
 // Allows Move / Remove / Add operations on wash dates with audit trail.
 // ============================================================
 let _washScheduleBookingId=null;
@@ -934,8 +934,23 @@ function openWashScheduleModal(bookingId){
 }
 
 function closeWashScheduleModal(){
+  const hadId=_washScheduleBookingId;
   _washScheduleBookingId=null;
   document.getElementById('washScheduleModal').classList.remove('open');
+  // v14.5.26: If cleaning calendar / day modal is still open underneath, refresh them
+  // so the user sees their changes immediately when returning to the calendar context.
+  if(document.getElementById('cleaningCalendarModal').classList.contains('open')){
+    renderCleaningCalendar();
+  }
+  if(document.getElementById('cleaningDayModal').classList.contains('open')){
+    // Re-render the currently-open day modal by re-extracting its date from title
+    // — simpler: just close the day modal so user sees fresh calendar
+    document.getElementById('cleaningDayModal').classList.remove('open');
+  }
+  // Also refresh main floors view if it's currently visible
+  if(typeof renderFloors==='function'&&document.getElementById('mainPanel')){
+    try{renderFloors()}catch(e){}
+  }
 }
 
 function renderWashScheduleModal(){
@@ -1044,7 +1059,7 @@ async function washAdd(){
 }
 
 // ============================================================
-// CLEANING CALENDAR (v14.5.25) — Visualize cleaning load over the next 4 weeks
+// CLEANING CALENDAR (v14.5.26) — Visualize cleaning load over the next 4 weeks
 // Helps spot clustering days (30-40 rooms on one day) before they happen.
 // ============================================================
 
@@ -1136,7 +1151,7 @@ function renderCleaningCalendar(){
       const key=toISODate(cellDate);
       const items=loadMap[key]||[];
       const count=items.length;
-      // v14.5.25: Norwegian holidays — distinct visual signal
+      // v14.5.26: Norwegian holidays — distinct visual signal
       const holidayName=getHolidayName(cellDate);
 
       // Color
@@ -1201,7 +1216,7 @@ function openCleaningDayModal(isoDate){
       const typeStyle=it.isCheckout?'color:#EF9F27;font-weight:500':(it.custom?'color:#854F0B':'');
       const customMark=it.custom?' <span class="pill" style="background:rgba(239,159,39,.15);color:#854F0B;font-size:10px">custom</span>':'';
       const manageBtn=canManageWashSchedule()&&!it.isCheckout
-        ?'<button onclick="closeCleaningDayModal();openWashScheduleModal(\''+it.booking.id+'\')" style="padding:3px 8px;border:1px solid var(--accent);border-radius:4px;background:rgba(29,158,117,.1);color:var(--accent);cursor:pointer;font-size:11px;font-family:inherit">Manage</button>'
+        ?'<button onclick="openWashScheduleModal(\''+it.booking.id+'\')" style="padding:3px 8px;border:1px solid var(--accent);border-radius:4px;background:rgba(29,158,117,.1);color:var(--accent);cursor:pointer;font-size:11px;font-family:inherit">Manage</button>'
         :'';
       html+='<tr><td style="padding:5px 0">'+escapeHtml(room)+'</td><td>'+escapeHtml(name)+'</td><td style="'+typeStyle+'">'+escapeHtml(it.washType)+customMark+'</td><td style="text-align:right">'+manageBtn+'</td></tr>';
     });
