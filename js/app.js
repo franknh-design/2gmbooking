@@ -1,5 +1,5 @@
 // ============================================================
-// 2GM Booking v14.5.27 — app.js (Core)
+// 2GM Booking v14.6.0 — app.js (Core)
 // Auth, Graph API, Data, Rendering, Bookings
 // ============================================================
 
@@ -86,23 +86,21 @@ async function signIn(){
   // v14.5.16: proactively clear any stuck interaction flag from a previous failed login
   _clearStaleMsalInteraction();
   try{
-    const r=await msalInstance.loginPopup({scopes:['Sites.ReadWrite.All','Mail.Send']});
-    // Cache the token from login result directly
-    if(r&&r.accessToken){
-      accessToken=r.accessToken;
-      _tokenExpiresAt=r.expiresOn?r.expiresOn.getTime():(Date.now()+50*60*1000);
-    }
-    _sessionExpiredShown=false;
-    await loadCurrentUser();
-    showApp();applyPermissions();
-    await loadProperties();await loadData();
-    checkHoursReminder();
+    // v14.6.0: Switch from loginPopup to loginRedirect.
+    // Reason: iOS Safari/Chrome (and some desktop Chrome configurations) block popup→opener
+    // communication, causing 'monitor_window_timeout' errors or silent failures. Redirect flow
+    // avoids popup entirely — full-page navigation to Microsoft and back.
+    // The redirect-back is handled by handleRedirectPromise() in the init block (see bottom of app.js).
+    await msalInstance.loginRedirect({scopes:['Sites.ReadWrite.All','Mail.Send']});
+    // Code below this point will NOT execute on success — page will redirect to Microsoft.
+    // If it does execute, loginRedirect was misconfigured.
   }catch(e){
     console.error('Login failed:',e);
-    // If interaction_in_progress somehow surfaces despite our cleanup, surface a helpful message
     if(String(e.message||'').indexOf('interaction_in_progress')>=0){
       _clearStaleMsalInteraction();
       alert('Innloggingen ble avbrutt forrige gang. Trykk logg inn igjen.');
+    }else{
+      alert('Kunne ikke starte innlogging: '+e.message);
     }
   }
 }
@@ -135,16 +133,14 @@ async function getToken(interactive=true){
       // Background call — fail silently, polling will skip this cycle
       return null;
     }
-    // Interactive call — try popup
+    // Interactive call — fall back to redirect (v14.6.0: was popup, but iOS Safari blocks popups)
     try{
-      const r=await msalInstance.acquireTokenPopup({scopes:['Sites.ReadWrite.All','Mail.Send']});
-      if(!r||!r.accessToken)throw new Error('Popup returned empty token');
-      accessToken=r.accessToken;
-      _tokenExpiresAt=r.expiresOn?r.expiresOn.getTime():(Date.now()+50*60*1000);
-      _sessionExpiredShown=false;
-      return accessToken;
-    }catch(popupErr){
-      console.error('[Auth] Popup token failed:',popupErr.message);
+      // acquireTokenRedirect navigates the page — code below this won't run on success
+      await msalInstance.acquireTokenRedirect({scopes:['Sites.ReadWrite.All','Mail.Send']});
+      // If we somehow get here, treat as failure
+      throw new Error('Redirect did not navigate');
+    }catch(redirectErr){
+      console.error('[Auth] Redirect token failed:',redirectErr.message);
       accessToken=null;
       _tokenExpiresAt=0;
       if(!_sessionExpiredShown){
@@ -156,7 +152,8 @@ async function getToken(interactive=true){
   }
 }
 
-function signOut(){msalInstance.logoutPopup();document.getElementById('app').style.display='none';document.getElementById('loginScreen').style.display='block'}
+// v14.6.0: Use logoutRedirect instead of logoutPopup for same reasons as login
+function signOut(){msalInstance.logoutRedirect();document.getElementById('app').style.display='none';document.getElementById('loginScreen').style.display='block'}
 function showApp(){document.getElementById('loginScreen').style.display='none';document.getElementById('app').style.display='block'}
 
 // --- GRAPH API (v14.5.11 — all calls accept silent flag) ---
@@ -476,7 +473,7 @@ function applyPermissions(){
   show('btnArchive',can('archive')||can('view_bookings'));
   show('btnUpcoming',can('view_bookings'));
   show('btnHours',can('view_hours')||can('edit_hours'));
-  // v14.5.27: Cleaning calendar — admin or cleaning permission
+  // v14.6.0: Cleaning calendar — admin or cleaning permission
   show('btnCleaningCalendar',can('admin')||can('cleaning'));
   show('efficiencyBtn',can('view_efficiency'));
   showBlock('adminBar',can('admin')||can('manage_rates'));
@@ -606,7 +603,7 @@ function toISODate(d){if(!d)return'';const dt=new Date(d);return dt.getFullYear(
 function getNextWeekday(date){const d=new Date(date);const day=d.getDay();if(day===0)d.setDate(d.getDate()+1);else if(day===6)d.setDate(d.getDate()+2);return d}
 
 // ============================================================
-// NORWEGIAN PUBLIC HOLIDAYS (v14.5.27) — calculated, no API needed
+// NORWEGIAN PUBLIC HOLIDAYS (v14.6.0) — calculated, no API needed
 // Easter is calculated via Gauss' algorithm (valid for years 1583-4099).
 // All movable holidays are derived from Easter Sunday.
 // ============================================================
@@ -691,7 +688,7 @@ function isNonWorkingDay(date){
   return getHolidayName(d)!==null;
 }
 
-// v14.5.27: Returns next non-weekend, non-holiday day at or after given date.
+// v14.6.0: Returns next non-weekend, non-holiday day at or after given date.
 // Replaces previous getNextWeekday for wash scheduling so we never schedule on holidays.
 function getNextWorkingDay(date){
   const d=new Date(date);d.setHours(0,0,0,0);
@@ -889,7 +886,7 @@ function getWashScheduleHtml(booking){
   const washes=calcWashDates(booking.Check_In,booking.Check_Out,booking.id);
   const show=washes.filter(w=>!w.isPast).slice(0,6);if(!show.length)return'';
   const days=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-  // v14.5.27: Manage button for cleaners/admin
+  // v14.6.0: Manage button for cleaners/admin
   const manageBtn=canManageWashSchedule()
     ?' <button onclick="openWashScheduleModal(\''+booking.id+'\')" style="margin-left:8px;padding:2px 8px;border:1px solid var(--accent);border-radius:4px;background:rgba(29,158,117,.1);color:var(--accent);cursor:pointer;font-size:10px;font-family:inherit">Manage</button>'
     :'';
@@ -914,11 +911,11 @@ function getNextWashDate(booking){
 }
 
 // ============================================================
-// WASH SCHEDULE MODAL (v14.5.27) — Iteration 3: UI for cleaners/admin
+// WASH SCHEDULE MODAL (v14.6.0) — Iteration 3: UI for cleaners/admin
 // Allows Move / Remove / Add operations on wash dates with audit trail.
 // ============================================================
 let _washScheduleBookingId=null;
-let _washScheduleWashes=[]; // v14.5.27: cached washes-array used by inline Move toggle
+let _washScheduleWashes=[]; // v14.6.0: cached washes-array used by inline Move toggle
 let _washScheduleMinDate='';
 let _washScheduleMaxDate='';
 
@@ -940,7 +937,7 @@ function closeWashScheduleModal(){
   const hadId=_washScheduleBookingId;
   _washScheduleBookingId=null;
   document.getElementById('washScheduleModal').classList.remove('open');
-  // v14.5.27: If cleaning calendar / day modal is still open underneath, refresh them
+  // v14.6.0: If cleaning calendar / day modal is still open underneath, refresh them
   // so the user sees their changes immediately when returning to the calendar context.
   if(document.getElementById('cleaningCalendarModal').classList.contains('open')){
     renderCleaningCalendar();
@@ -966,13 +963,13 @@ function renderWashScheduleModal(){
   const minDate=toISODate(b.Check_In);
   const maxDate=b.Check_Out?toISODate(b.Check_Out):'';
 
-  // v14.5.27: Cache for inline Move toggle
+  // v14.6.0: Cache for inline Move toggle
   _washScheduleWashes=washes;
   _washScheduleMinDate=minDate;
   _washScheduleMaxDate=maxDate;
 
   // Section 1: Wash list with Move/Skip buttons per row
-  // v14.5.27: Date picker is hidden by default — appears inline only when "Move" is clicked.
+  // v14.6.0: Date picker is hidden by default — appears inline only when "Move" is clicked.
   let listHtml='<table style="width:100%;font-size:13px;margin-bottom:16px"><thead><tr><th style="text-align:left">Date</th><th style="text-align:left">Type</th><th style="width:280px"></th></tr></thead><tbody>';
   if(!washes.length){
     listHtml+='<tr><td colspan="3" class="muted" style="padding:12px 0">No wash dates in current schedule.</td></tr>';
@@ -1038,7 +1035,7 @@ function renderWashScheduleModal(){
   document.getElementById('washScheduleBody').innerHTML=listHtml+addHtml+reasonHtml+historyHtml;
 }
 
-// v14.5.27: Toggle inline date picker for moving a specific wash
+// v14.6.0: Toggle inline date picker for moving a specific wash
 function washToggleMove(idx){
   const cellId='wsMoveCell_'+idx;
   const cell=document.getElementById(cellId);
@@ -1102,7 +1099,7 @@ async function washAdd(){
 }
 
 // ============================================================
-// CLEANING CALENDAR (v14.5.27) — Visualize cleaning load over the next 4 weeks
+// CLEANING CALENDAR (v14.6.0) — Visualize cleaning load over the next 4 weeks
 // Helps spot clustering days (30-40 rooms on one day) before they happen.
 // ============================================================
 
@@ -1194,7 +1191,7 @@ function renderCleaningCalendar(){
       const key=toISODate(cellDate);
       const items=loadMap[key]||[];
       const count=items.length;
-      // v14.5.27: Norwegian holidays — distinct visual signal
+      // v14.6.0: Norwegian holidays — distinct visual signal
       const holidayName=getHolidayName(cellDate);
 
       // Color
@@ -2665,25 +2662,34 @@ async function checkHoursReminder(){
 
 function dismissReminder(){document.getElementById('hoursReminder').style.display='none'}
 
-// --- INIT (v14.5.11 — handleRedirectPromise to consume any leftover auth code in URL) ---
+// --- INIT (v14.6.0 — handleRedirectPromise consumes redirect-login response) ---
 let msalReady=false;
 msalInstance.initialize().then(async()=>{
   // Consume any redirect response sitting in URL (#code=...) — MSAL otherwise leaves it
-  // hanging which causes silent token failures later
+  // hanging which causes silent token failures later. v14.6.0: this is now the PRIMARY login path.
+  let redirectLoginCompleted=false;
   try{
     const resp=await msalInstance.handleRedirectPromise();
     if(resp&&resp.accessToken){
       accessToken=resp.accessToken;
       _tokenExpiresAt=resp.expiresOn?resp.expiresOn.getTime():(Date.now()+50*60*1000);
+      redirectLoginCompleted=true;
+      console.log('[Auth] Redirect login completed for',resp.account&&resp.account.username);
     }
   }catch(e){console.warn('[Auth] handleRedirectPromise:',e.message)}
   msalReady=true;initResize();
   const a=msalInstance.getAllAccounts();
   if(a.length>0){
     try{
-      const tok=await getToken(false); // non-interactive on startup — don't blast popup
+      // After redirect-login, accessToken is already set above — getToken(false) should find it cached.
+      // For returning users (not redirect-login), getToken(false) silently refreshes if needed.
+      const tok=await getToken(false);
       if(tok){await loadCurrentUser();showApp();applyPermissions();await loadProperties();await loadData();checkHoursReminder()}
-    }catch(e){console.warn('[Init] startup token failed:',e.message)}
+    }catch(e){
+      console.warn('[Init] startup token failed:',e.message);
+      // If we just completed a redirect-login but still failed → something is wrong, surface it
+      if(redirectLoginCompleted)alert('Innlogging fullført, men kunne ikke laste data: '+e.message);
+    }
   }
 });
 
