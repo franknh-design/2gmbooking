@@ -28,7 +28,17 @@ async function markDirty(id){try{await updateListItem('Bookings',id,{Cleaning_St
 // --- CHECK IN/OUT/CANCEL ---
 async function checkIn(id){
   if(!confirm('Check in this guest?'))return;
-  try{const now=new Date().toISOString();await updateListItem('Bookings',id,{Status:'Active',Check_In:now});const l=allBookings.find(x=>x.id===id);if(l){l.Status='Active';l.Check_In=now}closeDetail();refreshLocal();loadData()}catch(e){alert('Failed')}
+  try{
+    const now=new Date().toISOString();
+    const b=allBookings.find(x=>x.id===id);
+    const r=b?allRooms.find(x=>x.id===String(b.RoomLookupId)):null;
+    const fields={Status:'Active',Check_In:now};
+    // v15: Inherit room cleaning status if booking has none yet — so a clean (green) room stays green at check-in.
+    if(r&&r.Cleaning_Status&&(!b.Cleaning_Status||b.Cleaning_Status==='None'))fields.Cleaning_Status=r.Cleaning_Status;
+    await updateListItem('Bookings',id,fields);
+    if(b){b.Status='Active';b.Check_In=now;if(fields.Cleaning_Status)b.Cleaning_Status=fields.Cleaning_Status;}
+    closeDetail();refreshLocal();loadData();
+  }catch(e){alert('Failed')}
 }
 function checkOut(id){
   const b=allBookings.find(x=>x.id===id);if(!b)return;checkoutBookingId=id;
@@ -341,7 +351,9 @@ async function saveBooking(){
   // Property_Name: find from room's property (works even in "All properties" mode)
   const roomProp=room?properties.find(pr=>String(pr.id)===String(room.PropertyLookupId)):null;
   const propNameForSave=roomProp?roomProp.Title:(selectedProperty?selectedProperty.Title:'');
-  const fields={Person_Name:name,Company:company,Billing_Company:billingCompany||null,Check_In:checkIn+'T15:00:00Z',Status:status,Door_Tag_Status:'Needs-print',Cleaning_Status:'None',Property_Name:propNameForSave,Floor:room?room.Floor:1,Notes:notes||null};
+  // v15: Inherit room cleaning status so a clean (green) room stays green when a booking is created on it.
+  const inheritedCS=(room&&room.Cleaning_Status)||'None';
+  const fields={Person_Name:name,Company:company,Billing_Company:billingCompany||null,Check_In:checkIn+'T15:00:00Z',Status:status,Door_Tag_Status:'Needs-print',Cleaning_Status:inheritedCS,Property_Name:propNameForSave,Floor:room?room.Floor:1,Notes:notes||null};
   fields.Include_Checkout_Fee=document.getElementById('fIncludeCheckoutFee').checked;
   fields.Continuation=document.getElementById('fContinuation').checked;
   if(checkOut)fields.Check_Out=checkOut+'T12:00:00Z';else fields.Check_Out=null;
