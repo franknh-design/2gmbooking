@@ -194,7 +194,6 @@ function buildInviteHtml(u){
 // --- OCCUPANCY REPORT ---
 function showOccupancyReport(){
   const now=new Date();
-  const now=new Date();
   const yearSel=document.getElementById('occYear');
   const propSel=document.getElementById('occProperty');
   if(!yearSel.children.length){
