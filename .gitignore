@@ -1,0 +1,13 @@
+# Azure Functions: contains secrets when configured for real use.
+# Commit only the placeholder template, ignore real values.
+azure_function/tuya_proxy/local.settings.json
+
+# Python bytecode (Azure Function)
+__pycache__/
+*.pyc
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
