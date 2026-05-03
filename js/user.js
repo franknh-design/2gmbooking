@@ -203,6 +203,8 @@ async function loadData(){
     // Re-render Upcoming if open (otherwise it shows bookings from previous property)
     if(document.getElementById('incomingPanel').classList.contains('open'))renderIncoming();
     if(document.getElementById('personsPanel').classList.contains('open'))renderPersons();
+    // v15: silent battery auto-refresh — admin-only, throttled to 6h, fire-and-forget
+    if(typeof _maybeAutoRefreshBattery==='function')_maybeAutoRefreshBattery();
   }catch(e){console.error('Error:',e);document.getElementById('floor1Body').innerHTML='<tr><td colspan="7" class="error">Error: '+e.message+'</td></tr>'}
 }
 

@@ -1263,8 +1263,9 @@ function showCleaningDiagnostics(){
 // ============================================================
 const BATTERY_FILE_PATH='Batteristatus/RoomBattery.csv';
 
-async function refreshBatteryStatus(){
-  const btn=document.querySelector('[data-battery-refresh-btn]');
+// silent=true: no btn manipulation, no alert, no low-battery popup. Used by auto-refresh.
+async function refreshBatteryStatus(silent){
+  const btn=silent?null:document.querySelector('[data-battery-refresh-btn]');
   if(btn){btn.disabled=true;btn.textContent='⏳ Loading CSV...'}
   try{
     // 1. Fetch CSV content
@@ -1329,15 +1330,40 @@ async function refreshBatteryStatus(){
     let summary='✓ Battery status updated: '+updated+' changed, '+unchanged+' unchanged';
     if(skipped)summary+=', '+skipped+' skipped';
     if(notFound.length)summary+='\n\nRooms not found in system: '+notFound.slice(0,20).join(', ')+(notFound.length>20?' (and '+(notFound.length-20)+' more)':'');
-    alert(summary);
+    if(silent){
+      console.log('[Battery auto-refresh]',summary.replace(/\n+/g,' | '));
+    }else{
+      alert(summary);
+    }
     if(typeof renderFloors==='function')renderFloors();
     // Show low-battery alert (v14.5.10) — locks under 30%
-    showLowBatteryAlert();
+    if(!silent)showLowBatteryAlert();
     if(typeof updateStats==='function')updateStats();
   }catch(e){
-    alert('Battery refresh failed:\n\n'+e.message+'\n\nExpected file location: Default document library > '+BATTERY_FILE_PATH);
+    if(silent){
+      console.warn('[Battery auto-refresh] failed:',e.message);
+    }else{
+      alert('Battery refresh failed:\n\n'+e.message+'\n\nExpected file location: Default document library > '+BATTERY_FILE_PATH);
+    }
   }finally{
     if(btn){btn.disabled=false;btn.textContent='🔋 Refresh battery'}
+  }
+}
+
+// Auto-refresh: fired from loadData(), throttled to once per 6h via localStorage,
+// admin-only, no UI feedback (only console). The localStorage timestamp is shared
+// across tabs so concurrent admin sessions don't double-pull.
+const _BATTERY_AUTO_INTERVAL_MS=6*60*60*1000;
+async function _maybeAutoRefreshBattery(){
+  if(!can('admin'))return;
+  try{
+    const last=parseInt(localStorage.getItem('_lastBatteryAutoRefresh')||'0',10);
+    if(Date.now()-last<_BATTERY_AUTO_INTERVAL_MS)return;
+    // Mark started before the work so a second tab opening within the throttle window skips
+    localStorage.setItem('_lastBatteryAutoRefresh',String(Date.now()));
+    await refreshBatteryStatus(true);
+  }catch(e){
+    console.warn('[Battery auto-refresh] outer:',e.message);
   }
 }
 
