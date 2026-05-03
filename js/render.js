@@ -674,18 +674,22 @@ function showDetail(roomId){
     }
     if(can('print_doortag'))btns+='<button onclick="printDoorTag(\''+booking.id+'\')">Print door tag</button>';
     // Door code / Tuya lock buttons (v14.7.0)
+    // Gating: read-only display (Vis PIN / Vis kode) is open to anyone who can see
+    // the booking detail; create/delete/list-all requires manage_lock since those
+    // mutate the lock or expose all guests' PINs at once.
     {
       const hasTuyaId=room&&room.Tuya_Device_ID;
       const hasActivePin=!!(booking.Tuya_Password_ID);
+      const canManageLock=can('manage_lock');
       if(hasTuyaId){
         if(!hasActivePin){
-          btns+='<button id="btnTuyaCreate_'+booking.id+'" onclick="tuyaCreatePin(\''+booking.id+'\')" style="background:rgba(29,158,117,.12);color:#1D9E75;border-color:#1D9E75" title="Opprett og aktiver PIN direkte på låsen via Tuya API">🔑 Opprett PIN på lås</button>';
+          if(canManageLock)btns+='<button id="btnTuyaCreate_'+booking.id+'" onclick="tuyaCreatePin(\''+booking.id+'\')" style="background:rgba(29,158,117,.12);color:#1D9E75;border-color:#1D9E75" title="Opprett og aktiver PIN direkte på låsen via Tuya API">🔑 Opprett PIN på lås</button>';
         }else{
           btns+='<button onclick="showTuyaPinDisplay(allRooms.find(r=>r.id===\''+room.id+'\'),allBookings.find(b=>b.id===\''+booking.id+'\').Tuya_Password_ID||\'?\',allBookings.find(b=>b.id===\''+booking.id+'\').Tuya_Password_ID,\''+booking.id+'\')" style="background:rgba(29,158,117,.12);color:#1D9E75;border-color:#1D9E75" title="Vis nåværende aktive PIN">🔑 Vis PIN</button>';
           // Nødutgang: manuell sletting hvis checkout-automatikken har feilet
-          btns+='<button id="btnTuyaDelete_'+booking.id+'" onclick="tuyaDeletePin(\''+booking.id+'\')" style="background:rgba(209,67,67,.08);color:#A32D2D;border-color:#D14343;font-size:11px" title="Slett PIN manuelt (normalt skjer dette automatisk ved Check-out)">🗑️ Slett PIN (manuelt)</button>';
+          if(canManageLock)btns+='<button id="btnTuyaDelete_'+booking.id+'" onclick="tuyaDeletePin(\''+booking.id+'\')" style="background:rgba(209,67,67,.08);color:#A32D2D;border-color:#D14343;font-size:11px" title="Slett PIN manuelt (normalt skjer dette automatisk ved Check-out)">🗑️ Slett PIN (manuelt)</button>';
         }
-        btns+='<button id="btnTuyaList_'+booking.id+'" onclick="tuyaListPins(\''+booking.id+'\')" style="background:rgba(123,97,255,.1);color:#7B61FF;border-color:#7B61FF" title="List alle aktive PINs på denne låsen">📋 List PINs</button>';
+        if(canManageLock)btns+='<button id="btnTuyaList_'+booking.id+'" onclick="tuyaListPins(\''+booking.id+'\')" style="background:rgba(123,97,255,.1);color:#7B61FF;border-color:#7B61FF" title="List alle aktive PINs på denne låsen">📋 List PINs</button>';
       }else{
         // Fallback: manuell kode (ingen Tuya_Device_ID på rommet)
         btns+='<button onclick="showRoomDoorCode(\''+booking.id+'\')" style="background:rgba(239,159,39,.1);color:#a76800;border-color:#EF9F27" title="Vis PIN (manuell — Tuya_Device_ID ikke satt på rom)">🔑 Vis kode (manuell)</button>';
