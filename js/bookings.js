@@ -110,16 +110,24 @@ function populateRoomSelect(preselectedRoomId){
 }
 
 // Returns id of first available room for given check-in/check-out, or null
+// v15.1: Foretrekk rom med Cleaning_Status === 'Clean' eller 'None' fremfor Dirty rom.
 function findFirstAvailableRoomId(checkInStr,checkOutStr){
   if(!checkInStr)return null;
   const newIn=new Date(checkInStr+'T00:00:00');newIn.setHours(0,0,0,0);
   const newOut=checkOutStr?new Date(checkOutStr+'T00:00:00'):null;
   if(newOut)newOut.setHours(0,0,0,0);
-  const sorted=[...rooms].sort((a,b)=>(a.Title||'').localeCompare(b.Title||'',undefined,{numeric:true}));
+  // Sort: Dirty rom havner sist; innen samme renhetsgruppe sorteres på Title (numerisk).
+  const cleanlinessRank=r=>(r.Cleaning_Status==='Dirty'?1:0);
+  const sorted=[...rooms].sort((a,b)=>{
+    const cr=cleanlinessRank(a)-cleanlinessRank(b);
+    if(cr!==0)return cr;
+    return (a.Title||'').localeCompare(b.Title||'',undefined,{numeric:true});
+  });
   for(const room of sorted){
     const hasConflict=allBookings.some(b=>{
       if(b.Status==='Cancelled'||b.Status==='Completed')return false;
       if(String(b.RoomLookupId)!==String(room.id))return false;
+      if(!b.Check_In)return false; // v15.1: bookinger uten dato kan ikke kollidere
       const bIn=new Date(b.Check_In);bIn.setHours(0,0,0,0);
       const bOut=b.Check_Out?new Date(b.Check_Out):null;if(bOut)bOut.setHours(0,0,0,0);
       if(!bOut)return newIn>=bIn||(newOut?newOut>bIn:true);

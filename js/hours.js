@@ -127,16 +127,22 @@ function openAddHours(){
   editingHoursId=null;
   document.getElementById('hoursModal').querySelector('h2').textContent='Add hours';
   document.getElementById('hoursSaveBtn').textContent='Save';
-  // Default date: last day of selected month, or today if current month
-  const selMonth=parseInt(document.getElementById('hoursMonth').value);
-  const selYear=parseInt(document.getElementById('hoursYear').value);
-  const now=new Date();
-  let defaultDate;
-  if(selMonth===now.getMonth()&&selYear===now.getFullYear()){
-    defaultDate=now.toISOString().split('T')[0];
-  }else{
-    const lastDay=new Date(selYear,selMonth+1,0).getDate();
-    defaultDate=selYear+'-'+String(selMonth+1).padStart(2,'0')+'-'+String(lastDay).padStart(2,'0');
+  // v15.1: Default-dato = dagen etter brukerens siste registrering, capper på dagens dato.
+  // Faller tilbake på dagens dato hvis ingen tidligere registrering.
+  const todayStr=new Date().toISOString().split('T')[0];
+  const myEmail=(currentUser.email||'').toLowerCase();
+  let lastDateStr=null;
+  (allHours||[]).forEach(h=>{
+    if(!h.Date)return;
+    if((h.Worker||'').toLowerCase()!==myEmail)return;
+    const ds=toISODate(h.Date);
+    if(!lastDateStr||ds>lastDateStr)lastDateStr=ds;
+  });
+  let defaultDate=todayStr;
+  if(lastDateStr){
+    const next=new Date(lastDateStr+'T00:00:00');next.setDate(next.getDate()+1);
+    const nextStr=next.toISOString().split('T')[0];
+    defaultDate=nextStr>todayStr?todayStr:nextStr; // aldri framover i tid
   }
   document.getElementById('hDate').value=defaultDate;
   document.getElementById('hFrom').value='08:00';document.getElementById('hTo').value='16:00';

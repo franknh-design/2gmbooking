@@ -27,6 +27,16 @@ function cleanBtn(b,room){
 function batCell(l){if(l==null)return'<span class="muted">—</span>';if(l<30)return'<span class="pill danger">'+l+'%</span>';if(l<60)return'<span class="pill warning">'+l+'%</span>';return'<span>'+l+'%</span>'}
 function datesCell(b){
   if(!b)return'<span class="empty-text">Empty</span>';
+  // v15.1: Booking uten Check_In — vises som "No date set"
+  if(!b.Check_In){
+    const att=bookingNeedsAttention(b);
+    let badge='';
+    if(att&&att.type==='no_date'){
+      badge=' <span style="background:rgba(239,159,39,.15);color:#854F0B;padding:1px 6px;border-radius:3px;font-size:10px;font-weight:500" title="Booking without check-in date — guest has not provided an arrival date">⚠ '+att.label+'</span>';
+    }
+    const co=b.Check_Out?formatDate(b.Check_Out):'Open-ended';
+    return'<span class="muted" style="font-style:italic">No date set</span> — '+co+badge;
+  }
   const ci=formatDate(b.Check_In);const co=b.Check_Out?formatDate(b.Check_Out):'Open-ended';
   const today=new Date();today.setHours(0,0,0,0);const ind=new Date(b.Check_In);ind.setHours(0,0,0,0);
   const days=Math.round((ind-today)/864e5);let s='';
@@ -39,6 +49,10 @@ function datesCell(b){
   }else if(isOverdueCheckOut(b)){
     const d=daysOverdueCheckOut(b);
     overdueBadge=' <span style="background:rgba(209,67,67,.12);color:#A32D2D;padding:1px 6px;border-radius:3px;font-size:10px;font-weight:500" title="Should have been checked out '+d+' day'+(d===1?'':'s')+' ago">⚠ Check-out '+d+'d</span>';
+  }
+  // v15.1: blå "in X days"-badge når check-in er mer enn 4 dager frem i tid
+  if(b.Status==='Upcoming'&&days>4){
+    overdueBadge+=' <span style="background:rgba(44,122,123,.12);color:#1B5C5D;padding:1px 6px;border-radius:3px;font-size:10px;font-weight:500" title="Check-in in '+days+' day'+(days===1?'':'s')+'">in '+days+' day'+(days===1?'':'s')+'</span>';
   }
   // v14.5.18: needs-attention badge (orange) — adds on top of overdue badge if both apply
   const att=bookingNeedsAttention(b);
