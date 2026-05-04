@@ -40,7 +40,7 @@ function renderAdminUsers(){
 
     let html='<div style="padding:12px;border-bottom:1px solid var(--border-tertiary)">';
     html+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;flex-wrap:wrap;gap:8px">';
-    html+='<div><strong>'+(u.DisplayName||'—')+'</strong> <span class="muted" style="font-size:12px">'+(u.Epost||'')+'</span></div>';
+    html+='<div><strong>'+(userDisplayName(u)||'—')+'</strong> <span class="muted" style="font-size:12px">'+(u.Epost||'')+'</span></div>';
     html+='<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">';
     // Role dropdown
     const roles=['SuperAdmin','Admin','Cleaner','ReadOnly','Custom'];
@@ -133,7 +133,7 @@ async function addUser(){
 
 async function deleteUser(userId){
   const u=allUsers.find(x=>x.id===userId);if(!u)return;
-  if(!confirm('Delete '+u.DisplayName+'?'))return;
+  if(!confirm('Delete '+userDisplayName(u)+'?'))return;
   try{const s=await getSiteId();const lid=await getListId('Users');await graphDelete('/sites/'+s+'/lists/'+lid+'/items/'+userId);allUsers=allUsers.filter(x=>x.id!==userId);renderAdminUsers()}catch(e){alert('Failed')}
 }
 
@@ -143,7 +143,7 @@ async function sendInviteEmail(userId){
   if(!u||!u.Epost){alert('No email for this user');return}
   try{
     await sendInviteEmailSilent(u);
-    alert('Invite sent to '+u.DisplayName+' ('+u.Epost+')');
+    alert('Invite sent to '+userDisplayName(u)+' ('+u.Epost+')');
   }catch(e){
     console.error('Send mail failed:',e);
     alert('Failed to send invite: '+e.message);
@@ -153,7 +153,7 @@ async function sendInviteEmail(userId){
 async function sendAllInvites(){
   const active=allUsers.filter(u=>u.Active!==false&&u.Epost);
   if(!active.length){alert('No active users to invite');return}
-  if(!confirm('Send invite email to '+active.length+' users?\n\n'+active.map(u=>u.DisplayName+' ('+u.Epost+')').join('\n')))return;
+  if(!confirm('Send invite email to '+active.length+' users?\n\n'+active.map(u=>userDisplayName(u)+' ('+u.Epost+')').join('\n')))return;
 
   let sent=0,failed=0;
   for(const u of active){
@@ -182,7 +182,7 @@ function buildInviteHtml(u){
   const appUrl='https://franknh-design.github.io/2gmbooking/';
   return'<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px">'
     +'<h2 style="color:#2C2C2A;margin-bottom:4px">Welcome to 2GM Booking</h2>'
-    +'<p style="color:#5F5E5A">Hi '+(u.DisplayName||'')+',</p>'
+    +'<p style="color:#5F5E5A">Hi '+userDisplayName(u)+',</p>'
     +'<p>You have been given access to the 2GM Booking system. Click the button below to sign in with your Microsoft account.</p>'
     +'<div style="margin:24px 0"><a href="'+appUrl+'" style="display:inline-block;padding:12px 32px;background:#1D9E75;color:#fff;text-decoration:none;border-radius:8px;font-size:16px;font-weight:500">Open 2GM Booking</a></div>'
     +'<p style="font-size:13px;color:#888">Sign in using your email: <strong>'+(u.Epost||'')+'</strong></p>'
@@ -750,7 +750,7 @@ function renderHoursCharts(filtered){
   filtered.forEach(h=>{
     const w=h.Worker||'(unknown)';
     const u=allUsers.find(x=>(x.Epost||'').toLowerCase()===w.toLowerCase());
-    const name=u?u.DisplayName:w;
+    const name=u?userDisplayName(u):w;
     byWorker[name]=(byWorker[name]||0)+hoursOf(h);
   });
   if(Object.keys(byWorker).length>1){
@@ -1114,7 +1114,7 @@ function renderEfficiency(){
         else shareStyle='color:var(--text-success);font-weight:500';
       }
       html+='<tr style="border-top:.5px solid var(--border-tertiary)">'
-        +'<td style="padding:8px 10px 8px 0;font-weight:500">'+escapeHtml(u.DisplayName||u.Epost)+'</td>'
+        +'<td style="padding:8px 10px 8px 0;font-weight:500">'+escapeHtml(userDisplayName(u))+'</td>'
         +'<td style="text-align:right;padding:8px 10px">'+Math.round(cleanerHours*10)/10+'</td>'
         +'<td style="text-align:right;padding:8px 10px">'+estTurnovers+'</td>'
         +'<td style="text-align:right;padding:8px 10px;'+shareStyle+'">'+(cleanerHours>0?shareCleaner+'%':'—')+'</td>'

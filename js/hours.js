@@ -21,7 +21,7 @@ function initHoursSelectors(){
     const workers=[...new Set(allUsers.map(u=>u.Epost).filter(Boolean))];
     wf.innerHTML='<option value="all">All workers</option>'+workers.map(w=>{
       const u=allUsers.find(x=>(x.Epost||'').toLowerCase()===w.toLowerCase());
-      return'<option value="'+w+'">'+(u?u.DisplayName:w)+'</option>';
+      return'<option value="'+w+'">'+(u?userDisplayName(u):w)+'</option>';
     }).join('');
     wf.style.display='';
   }else{
@@ -75,7 +75,7 @@ function renderHours(){
     return true;
   }).sort((a,b)=>new Date(a.Date)-new Date(b.Date));
 
-  const workerName=workerFilter==='all'?'All workers':(allUsers.find(u=>(u.Epost||'').toLowerCase()===workerFilter.toLowerCase())||{}).DisplayName||workerFilter;
+  const workerName=workerFilter==='all'?'All workers':userDisplayName(allUsers.find(u=>(u.Epost||'').toLowerCase()===workerFilter.toLowerCase()))||workerFilter;
   let periodLabel;
   if(useRange){
     const f=fromVal?formatDate(fromVal):'…';const t=toVal?formatDate(toVal):'…';
@@ -100,7 +100,7 @@ function renderHours(){
     const hrs=calcHoursDiff(h.Time_From,h.Time_To);total+=hrs;
     const d=new Date(h.Date);
     const workerUser=allUsers.find(u=>(u.Epost||'').toLowerCase()===(h.Worker||'').toLowerCase());
-    const wName=workerUser?workerUser.DisplayName:(h.Worker||'');
+    const wName=workerUser?userDisplayName(workerUser):(h.Worker||'');
     return'<tr data-hours-id="'+h.id+'" style="cursor:pointer"><td>'+days[d.getDay()]+' '+formatDate(h.Date)+'</td><td>'+(h.Location||'')+'</td><td>'+wName+'</td><td>'+(h.Time_From||'')+'</td><td>'+(h.Time_To||'')+'</td><td style="text-align:right">'+hrs.toFixed(2)+'</td>'
       +'<td class="muted" style="font-size:11px">'+_hoursNotes(h)+'</td>'
       +'<td style="text-align:right"><button data-hours-delete="'+h.id+'" style="width:20px;height:20px;border-radius:50%;border:1px solid var(--border-tertiary);background:var(--bg-primary);color:var(--text-danger);cursor:pointer;font-size:11px;line-height:1;padding:0" title="Delete">✕</button></td></tr>';
@@ -165,7 +165,7 @@ function populateHoursWorkerSelect(preselectedWorker){
   const selected=(preselectedWorker||currentUser.email).toLowerCase();
   if(can('edit_others_hours')){
     const workers=allUsers.filter(u=>u.Active!==false);
-    ws.innerHTML=workers.map(u=>'<option value="'+(u.Epost||'')+'"'+((u.Epost||'').toLowerCase()===selected?' selected':'')+'>'+u.DisplayName+'</option>').join('');
+    ws.innerHTML=workers.map(u=>'<option value="'+(u.Epost||'')+'"'+((u.Epost||'').toLowerCase()===selected?' selected':'')+'>'+userDisplayName(u)+'</option>').join('');
     document.getElementById('hWorkerGroup').style.display='';
   }else{
     ws.innerHTML='<option value="'+currentUser.email+'">'+currentUser.displayName+'</option>';
@@ -182,7 +182,7 @@ async function saveHours(){
   const notes=document.getElementById('hNotes').value.trim();
   if(!date){alert('Date required');return}if(!from||!to){alert('From/To required');return}if(!location){alert('Location required');return}
   const workerUser=allUsers.find(u=>(u.Epost||'').toLowerCase()===worker.toLowerCase());
-  const workerName=workerUser?workerUser.DisplayName:worker;
+  const workerName=workerUser?userDisplayName(workerUser):worker;
   const btn=document.getElementById('hoursSaveBtn');btn.disabled=true;btn.textContent='Saving...';
   const fields={Title:workerName+' — '+location+' — '+date,Date:date+'T00:00:00Z',Location:location,Time_From:from,Time_To:to,Worker:worker};
   if(notes)fields.Notes=notes;else fields.Notes='';
@@ -226,11 +226,11 @@ function exportHoursExcel(){
     const hrs=calcHoursDiff(h.Time_From,h.Time_To);total+=hrs;
     const d=new Date(h.Date);
     const wu=allUsers.find(u=>(u.Epost||'').toLowerCase()===(h.Worker||'').toLowerCase());
-    return[formatDate(h.Date),days[d.getDay()],h.Location||'',wu?wu.DisplayName:h.Worker||'',h.Time_From||'',h.Time_To||'',hrs.toFixed(2),_hoursNotes(h)];
+    return[formatDate(h.Date),days[d.getDay()],h.Location||'',wu?userDisplayName(wu):h.Worker||'',h.Time_From||'',h.Time_To||'',hrs.toFixed(2),_hoursNotes(h)];
   });
   // Total row: push to Hours column only, leave Notes empty
   rows.push(['','','','','','Total',total.toFixed(2),'']);
-  const workerName=workerFilter==='all'?'All':(allUsers.find(u=>(u.Epost||'').toLowerCase()===workerFilter.toLowerCase())||{}).DisplayName||workerFilter;
+  const workerName=workerFilter==='all'?'All':userDisplayName(allUsers.find(u=>(u.Epost||'').toLowerCase()===workerFilter.toLowerCase()))||workerFilter;
   const periodStr=useRange?((fromVal||'start')+'_to_'+(toVal||'end')):(months[month]+'_'+year);
   downloadCSV('Hours_'+workerName.replace(/\s+/g,'_')+'_'+periodStr,headers,rows);
 }
@@ -416,7 +416,7 @@ function parseImportHoursFile(){
       else if(!tTo)error='Invalid To time (HH:MM)';
       else if(calcHoursDiff(tFrom,tTo)<=0)error='Time_To must be after Time_From';
       const hrs=(tFrom&&tTo)?calcHoursDiff(tFrom,tTo).toFixed(2):'—';
-      importHoursData.push({date,worker,location,timeFrom:tFrom,timeTo:tTo,notes,hrs,error,workerName:userMatch?userMatch.DisplayName:worker});
+      importHoursData.push({date,worker,location,timeFrom:tFrom,timeTo:tTo,notes,hrs,error,workerName:userMatch?userDisplayName(userMatch):worker});
     }
     const valid=importHoursData.filter(r=>!r.error).length;
     const issues=importHoursData.filter(r=>r.error).length;

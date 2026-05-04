@@ -12,7 +12,7 @@ async function loadCurrentUser(){
     allUsers=await getListItems('Users');
     const match=allUsers.find(u=>(u.Epost||'').toLowerCase()===email&&u.Active!==false);
     if(match){
-      currentUser.displayName=match.DisplayName||email;
+      currentUser.displayName=userDisplayName(match)||email;
       currentUser.userId=match.id;
       // Parse permissions from comma-separated string, or use defaults
       if(match.Permissions){
@@ -35,6 +35,9 @@ async function loadCurrentUser(){
 }
 
 function can(perm){return currentUser.permissions.includes(perm)}
+
+// v15.2: SharePoint Users-lista har ikke alltid en DisplayName-kolonne — fall tilbake på Title (innebygd) og deretter Epost.
+function userDisplayName(u){if(!u)return '';return u.DisplayName||u.Title||u.Epost||''}
 
 // Returns the effective billing company for a booking (falls back to Company if no Billing_Company set)
 function getEffectiveCompany(b){
