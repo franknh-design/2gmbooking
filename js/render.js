@@ -43,9 +43,10 @@ function datesCell(b){
   // v14.5.18: needs-attention badge (orange) — adds on top of overdue badge if both apply
   const att=bookingNeedsAttention(b);
   if(att){
-    const tipText=att.type==='invalid_status'
-      ?'Status is '+(b.Status||'?')+' but Check-out was '+att.daysSinceCheckOut+' day'+(att.daysSinceCheckOut===1?'':'s')+' ago'
-      :'Status Upcoming but Check-in was '+att.daysSinceCheckIn+' days ago';
+    let tipText;
+    if(att.type==='invalid_status')tipText='Status is '+(b.Status||'?')+' but Check-out was '+att.daysSinceCheckOut+' day'+(att.daysSinceCheckOut===1?'':'s')+' ago';
+    else if(att.type==='no_date')tipText='Booking uten check-in dato — gjest har ikke oppgitt ankomstdato';
+    else tipText='Status Upcoming but Check-in was '+att.daysSinceCheckIn+' days ago';
     overdueBadge+=' <span style="background:rgba(239,159,39,.15);color:#854F0B;padding:1px 6px;border-radius:3px;font-size:10px;font-weight:500" title="'+tipText+'">⚠ '+att.label+'</span>';
   }
   return'<span style="'+s+'">'+ci+'</span> — '+co+overdueBadge;
@@ -610,9 +611,10 @@ function showDetail(roomId){
       // v14.5.18: Needs-attention banner (orange) — shown in addition to overdue banner if applicable
       const naAtt=bookingNeedsAttention(booking);
       if(naAtt){
-        const explanation=naAtt.type==='invalid_status'
-          ?'Status is <strong>'+(booking.Status||'?')+'</strong> but Check-out was <strong>'+naAtt.daysSinceCheckOut+' day'+(naAtt.daysSinceCheckOut===1?'':'s')+' ago</strong>. The booking should probably be marked as Completed.'
-          :'Status is <strong>Upcoming</strong> but Check-in was <strong>'+naAtt.daysSinceCheckIn+' days ago</strong>. This booking may have been forgotten — verify whether the guest actually stayed.';
+        let explanation;
+        if(naAtt.type==='invalid_status')explanation='Status is <strong>'+(booking.Status||'?')+'</strong> but Check-out was <strong>'+naAtt.daysSinceCheckOut+' day'+(naAtt.daysSinceCheckOut===1?'':'s')+' ago</strong>. The booking should probably be marked as Completed.';
+        else if(naAtt.type==='no_date')explanation='Denne bookingen er reservert uten check-in dato. Gjest har ikke oppgitt ankomstdato ennå — oppdater Check-in når dato er kjent.';
+        else explanation='Status is <strong>Upcoming</strong> but Check-in was <strong>'+naAtt.daysSinceCheckIn+' days ago</strong>. This booking may have been forgotten — verify whether the guest actually stayed.';
         overdueBanner+='<div style="background:rgba(239,159,39,.12);border-left:3px solid #EF9F27;padding:10px 14px;margin-bottom:12px;border-radius:6px"><div style="font-size:13px;color:#854F0B"><strong>⚠ '+naAtt.label+':</strong> '+explanation+'</div></div>';
       }
       infoHtml=overdueBanner+'<div class="detail-name">'+booking.Person_Name+'</div>'

@@ -215,6 +215,7 @@ function filterBookingsForView(){
     if(!roomIds.has(rid))return false;
     if(b.Status==='Active')return true;
     if(b.Status==='Upcoming'){
+      if(!b.Check_In)return true; // v15.1: booking uten dato vises alltid
       // v14.5.10: Show Upcoming in main list as soon as Check_In <= today (no kl-12 rule)
       const ci=new Date(b.Check_In);ci.setHours(0,0,0,0);
       const today=new Date();today.setHours(0,0,0,0);

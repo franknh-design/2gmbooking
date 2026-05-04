@@ -329,23 +329,25 @@ async function saveBooking(){
   const notes=document.getElementById('fNotes').value.trim();
   const room=rooms.find(r=>r.id===roomId);
   if(!name){alert('Guest name is required');return}
-  if(!checkIn){alert('Check-in date is required');return}
 
-  // Collision check
-  const newIn=new Date(checkIn);newIn.setHours(0,0,0,0);
-  const newOut=checkOut?new Date(checkOut):null;if(newOut)newOut.setHours(0,0,0,0);
-  const conflicts=allBookings.filter(b=>{
-    if(editingBookingId&&b.id===editingBookingId)return false;
-    if(b.Status==='Cancelled'||b.Status==='Completed')return false;
-    if(String(b.RoomLookupId)!==String(roomId))return false;
-    const bIn=new Date(b.Check_In);bIn.setHours(0,0,0,0);const bOut=b.Check_Out?new Date(b.Check_Out):null;if(bOut)bOut.setHours(0,0,0,0);
-    if(!bOut)return newIn>=bIn||(newOut?newOut>bIn:true);
-    if(!newOut)return bOut>newIn||bIn>=newIn;
-    return newIn<bOut&&newOut>bIn;
-  });
-  if(conflicts.length>0){
-    const c=conflicts[0];
-    if(!confirm('Room already booked:\n'+c.Person_Name+' ('+c.Status+')\n'+formatDate(c.Check_In)+' — '+(c.Check_Out?formatDate(c.Check_Out):'Open-ended')+'\n\nContinue anyway?'))return;
+  // Collision check (v15.1: hopp over hvis ingen check-in dato)
+  if(checkIn){
+    const newIn=new Date(checkIn);newIn.setHours(0,0,0,0);
+    const newOut=checkOut?new Date(checkOut):null;if(newOut)newOut.setHours(0,0,0,0);
+    const conflicts=allBookings.filter(b=>{
+      if(editingBookingId&&b.id===editingBookingId)return false;
+      if(b.Status==='Cancelled'||b.Status==='Completed')return false;
+      if(String(b.RoomLookupId)!==String(roomId))return false;
+      if(!b.Check_In)return false;
+      const bIn=new Date(b.Check_In);bIn.setHours(0,0,0,0);const bOut=b.Check_Out?new Date(b.Check_Out):null;if(bOut)bOut.setHours(0,0,0,0);
+      if(!bOut)return newIn>=bIn||(newOut?newOut>bIn:true);
+      if(!newOut)return bOut>newIn||bIn>=newIn;
+      return newIn<bOut&&newOut>bIn;
+    });
+    if(conflicts.length>0){
+      const c=conflicts[0];
+      if(!confirm('Room already booked:\n'+c.Person_Name+' ('+c.Status+')\n'+formatDate(c.Check_In)+' — '+(c.Check_Out?formatDate(c.Check_Out):'Open-ended')+'\n\nContinue anyway?'))return;
+    }
   }
 
   // Property_Name: find from room's property (works even in "All properties" mode)
@@ -353,7 +355,7 @@ async function saveBooking(){
   const propNameForSave=roomProp?roomProp.Title:(selectedProperty?selectedProperty.Title:'');
   // v15: Inherit room cleaning status so a clean (green) room stays green when a booking is created on it.
   const inheritedCS=(room&&room.Cleaning_Status)||'None';
-  const fields={Person_Name:name,Company:company,Billing_Company:billingCompany||null,Check_In:checkIn+'T15:00:00Z',Status:status,Door_Tag_Status:'Needs-print',Cleaning_Status:inheritedCS,Property_Name:propNameForSave,Floor:room?room.Floor:1,Notes:notes||null};
+  const fields={Person_Name:name,Company:company,Billing_Company:billingCompany||null,Check_In:checkIn?checkIn+'T15:00:00Z':null,Status:status,Door_Tag_Status:'Needs-print',Cleaning_Status:inheritedCS,Property_Name:propNameForSave,Floor:room?room.Floor:1,Notes:notes||null};
   fields.Include_Checkout_Fee=document.getElementById('fIncludeCheckoutFee').checked;
   fields.Continuation=document.getElementById('fContinuation').checked;
   if(checkOut)fields.Check_Out=checkOut+'T12:00:00Z';else fields.Check_Out=null;

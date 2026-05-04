@@ -429,6 +429,10 @@ function bookingNeedsAttention(b){
       return{type:'invalid_status',label:'Should be Completed',daysSinceCheckOut:days};
     }
   }
+  // v15.1: Upcoming uten check-in dato — gjest har ikke gitt ankomstdato
+  if(b.Status==='Upcoming'&&!b.Check_In){
+    return{type:'no_date',label:'Dato ikke satt'};
+  }
   // 2. Extreme overdue check-in: Upcoming but Check_In was >30 days ago
   if(b.Status==='Upcoming'&&b.Check_In){
     const ci=new Date(b.Check_In);ci.setHours(0,0,0,0);
