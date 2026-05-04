@@ -255,12 +255,6 @@ function _startAutoRefresh(){
   if(_pollInterval)clearInterval(_pollInterval);
   _pollInterval=setInterval(_checkBookingChanges,5*60*1000);
 }
-    }
-  });
-  // Poll every 5 minutes for changes (non-intrusive — just detects)
-  if(_pollInterval)clearInterval(_pollInterval);
-  _pollInterval=setInterval(_checkBookingChanges,5*60*1000);
-}
 
 // Start the auto-refresh watchers after initial load
 window.addEventListener('DOMContentLoaded',()=>{
