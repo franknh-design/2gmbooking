@@ -250,17 +250,11 @@ function _showRefreshBanner(newCount){
 }
 
 function _startAutoRefresh(){
-  // Refresh when tab regains focus
-  document.addEventListener('visibilitychange',()=>{
-    if(document.visibilityState==='visible'){
-      const sinceLastRefresh=Date.now()-_lastRefreshTime;
-      // If away for more than 60 seconds, force refresh
-      if(sinceLastRefresh>60000){
-        _lastRefreshTime=Date.now();
-        _knownBookingIds=new Set();_knownBookingModifiedMax='';
-        const banner=document.getElementById('refreshBanner');if(banner)banner.remove();
-        loadData();
-      }
+  // visibilitychange-refresh fjernet (v15) — forstyrret ved fanebytte.
+  // Endringer fanges av 5-minutters polling nedenfor.
+  if(_pollInterval)clearInterval(_pollInterval);
+  _pollInterval=setInterval(_checkBookingChanges,5*60*1000);
+}
     }
   });
   // Poll every 5 minutes for changes (non-intrusive — just detects)
