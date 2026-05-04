@@ -425,7 +425,7 @@ function bookingNeedsAttention(b){
   }
   // v15.1: Upcoming uten check-in dato — gjest har ikke gitt ankomstdato
   if(b.Status==='Upcoming'&&!b.Check_In){
-    return{type:'no_date',label:'Dato ikke satt'};
+    return{type:'no_date',label:'No date set'};
   }
   // 2. Extreme overdue check-in: Upcoming but Check_In was >30 days ago
   if(b.Status==='Upcoming'&&b.Check_In){

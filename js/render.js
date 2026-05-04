@@ -45,7 +45,7 @@ function datesCell(b){
   if(att){
     let tipText;
     if(att.type==='invalid_status')tipText='Status is '+(b.Status||'?')+' but Check-out was '+att.daysSinceCheckOut+' day'+(att.daysSinceCheckOut===1?'':'s')+' ago';
-    else if(att.type==='no_date')tipText='Booking uten check-in dato — gjest har ikke oppgitt ankomstdato';
+    else if(att.type==='no_date')tipText='Booking without check-in date — guest has not provided an arrival date';
     else tipText='Status Upcoming but Check-in was '+att.daysSinceCheckIn+' days ago';
     overdueBadge+=' <span style="background:rgba(239,159,39,.15);color:#854F0B;padding:1px 6px;border-radius:3px;font-size:10px;font-weight:500" title="'+tipText+'">⚠ '+att.label+'</span>';
   }
@@ -613,7 +613,7 @@ function showDetail(roomId){
       if(naAtt){
         let explanation;
         if(naAtt.type==='invalid_status')explanation='Status is <strong>'+(booking.Status||'?')+'</strong> but Check-out was <strong>'+naAtt.daysSinceCheckOut+' day'+(naAtt.daysSinceCheckOut===1?'':'s')+' ago</strong>. The booking should probably be marked as Completed.';
-        else if(naAtt.type==='no_date')explanation='Denne bookingen er reservert uten check-in dato. Gjest har ikke oppgitt ankomstdato ennå — oppdater Check-in når dato er kjent.';
+        else if(naAtt.type==='no_date')explanation='This booking is reserved without a check-in date. The guest has not provided an arrival date yet — update Check-in when the date is known.';
         else explanation='Status is <strong>Upcoming</strong> but Check-in was <strong>'+naAtt.daysSinceCheckIn+' days ago</strong>. This booking may have been forgotten — verify whether the guest actually stayed.';
         overdueBanner+='<div style="background:rgba(239,159,39,.12);border-left:3px solid #EF9F27;padding:10px 14px;margin-bottom:12px;border-radius:6px"><div style="font-size:13px;color:#854F0B"><strong>⚠ '+naAtt.label+':</strong> '+explanation+'</div></div>';
       }
