@@ -51,21 +51,9 @@ function printAllPendingDoorTags(){
   );
   if(!pending.length){alert('No door tags need printing.');return}
   if(!confirm('Print '+pending.length+' door tag'+(pending.length!==1?'s':'')+'?\n\nThey will open in a new window as a single printable document.'))return;
-  // Build a single combined document with page-breaks between each tag
-  let html='<html><head><title>Door tags</title><style>@media print{.tag{page-break-after:always}}body{margin:0;font-family:Arial,sans-serif}.tag{padding:40px;max-width:600px;margin:0 auto}</style></head><body>';
-  pending.forEach(b=>{
-    const room=allRooms.find(r=>r.id===String(b.RoomLookupId));
-    const roomTitle=room?room.Title:'?';
-    const prop=properties.find(p=>String(p.id)===String(room?room.PropertyLookupId:''));
-    const propTitle=prop?prop.Title:'';
-    html+='<div class="tag">'
-      +'<div style="text-align:center;margin-bottom:30px"><div style="font-size:72px;font-weight:700;letter-spacing:2px">'+roomTitle+'</div><div style="font-size:14px;color:#888;margin-top:4px">'+propTitle+'</div></div>'
-      +'<div style="border-top:2px solid #2C2C2A;padding-top:20px"><h2 style="font-size:18px;margin:0 0 16px">Welcome, '+(b.Person_Name||'')+'</h2>'
-      +'<table style="font-size:14px;width:100%"><tr><td style="padding:6px 0;color:#888;width:120px">Company</td><td>'+(b.Company||'—')+'</td></tr>'
-      +'<tr><td style="padding:6px 0;color:#888">Check-in</td><td>After 15:00 — '+formatDate(b.Check_In)+'</td></tr>'
-      +'<tr><td style="padding:6px 0;color:#888">Check-out</td><td>'+(b.Check_Out?'Before 12:00 — '+formatDate(b.Check_Out):'Open-ended')+'</td></tr></table></div>'
-      +'</div>';
-  });
+  // v15.3: Hver tag rendres fra DoorTag_Template på sin eiendom; page-break mellom dem.
+  let html='<html><head><title>Door tags</title><style>@media print{.tag{page-break-after:always}}body{margin:0}.tag{padding:0}</style></head><body>';
+  pending.forEach(b=>{html+='<div class="tag">'+_renderDoorTagHtml(b)+'</div>';});
   html+='</body></html>';
   const w=window.open('','_blank');
   w.document.write(html);

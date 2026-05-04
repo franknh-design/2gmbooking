@@ -376,20 +376,16 @@ async function saveBooking(){
 }
 
 // --- DOOR TAG PRINT ---
+// v15.3: Bruker per-eiendom HTML-mal (Properties.DoorTag_Template) — rediger via Templates-modalen.
 function printDoorTag(bookingId){
   const b=allBookings.find(x=>x.id===bookingId);if(!b)return;
   const room=allRooms.find(r=>r.id===String(b.RoomLookupId));const roomTitle=room?room.Title:'?';
-  const html='<div style="font-family:Arial,sans-serif;padding:40px;max-width:600px;margin:0 auto">'
-    +'<div style="text-align:center;margin-bottom:30px"><div style="font-size:72px;font-weight:700;letter-spacing:2px">'+roomTitle+'</div><div style="font-size:14px;color:#888;margin-top:4px">'+(selectedProperty?selectedProperty.Title:'')+'</div></div>'
-    +'<div style="border-top:2px solid #2C2C2A;padding-top:20px"><h2 style="font-size:18px;margin:0 0 16px">Welcome, '+b.Person_Name+'</h2>'
-    +'<table style="font-size:14px;width:100%"><tr><td style="padding:6px 0;color:#888;width:120px">Company</td><td>'+(b.Company||'—')+'</td></tr>'
-    +'<tr><td style="padding:6px 0;color:#888">Check-in</td><td>After 15:00 — '+formatDate(b.Check_In)+'</td></tr>'
-    +'<tr><td style="padding:6px 0;color:#888">Check-out</td><td>Before 12:00 — '+(b.Check_Out?formatDate(b.Check_Out):'Open-ended')+'</td></tr></table></div>'
-    +'<div style="margin-top:24px;padding:16px;background:#f5f4ef;border-radius:8px;font-size:13px"><strong>Room information</strong><br>The room will be washed once a week.<br>New towels every week, and new beddings biweekly.</div>'
-    +'<div style="margin-top:16px;padding:16px;background:#f5f4ef;border-radius:8px;font-size:13px"><strong>Contact</strong><br>Questions? Contact Frank: +47 99 10 10 41 · frank@2gm.no</div>'
-    +'<div style="text-align:center;margin-top:40px;font-size:16px;color:#888">Have a nice stay :)</div></div>';
-  const w=window.open('','_blank','width=700,height=900');w.document.write('<!DOCTYPE html><html><head><title>Door Tag — Room '+roomTitle+'</title></head><body style="margin:0">'+html+'</body></html>');w.document.close();setTimeout(()=>w.print(),500);
+  const html=_renderDoorTagHtml(b);
+  const w=window.open('','_blank','width=700,height=900');
+  w.document.write('<!DOCTYPE html><html><head><title>Door Tag — Room '+roomTitle+'</title></head><body style="margin:0">'+html+'</body></html>');
+  w.document.close();
+  setTimeout(()=>w.print(),500);
   // Mark as printed
-  const bk=allBookings.find(x=>x.id===bookingId);if(bk){updateListItem('Bookings',bookingId,{Door_Tag_Status:'Printed'}).then(()=>{bk.Door_Tag_Status='Printed';renderFloors();updateStats()}).catch(console.error)}
+  updateListItem('Bookings',bookingId,{Door_Tag_Status:'Printed'}).then(()=>{b.Door_Tag_Status='Printed';renderFloors();updateStats()}).catch(console.error);
 }
 

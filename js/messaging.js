@@ -42,6 +42,30 @@ Best regards,
 
 const DEFAULT_EMAIL_SUBJECT='Welcome to {property} — room {room}';
 
+// v15.3: Door-tag template (per-property HTML in Properties.DoorTag_Template).
+// Same placeholders as SMS/Email plus {company} and {check_out_date}.
+const DEFAULT_DOORTAG_TEMPLATE=`<div style="font-family:Arial,sans-serif;padding:40px;max-width:600px;margin:0 auto">
+  <div style="text-align:center;margin-bottom:30px">
+    <div style="font-size:72px;font-weight:700;letter-spacing:2px">{room}</div>
+    <div style="font-size:14px;color:#888;margin-top:4px">{property}</div>
+  </div>
+  <div style="border-top:2px solid #2C2C2A;padding-top:20px">
+    <h2 style="font-size:18px;margin:0 0 16px">Welcome, {guest_name}</h2>
+    <table style="font-size:14px;width:100%">
+      <tr><td style="padding:6px 0;color:#888;width:120px">Company</td><td>{company}</td></tr>
+      <tr><td style="padding:6px 0;color:#888">Check-in</td><td>After 15:00 — {check_in_date}</td></tr>
+      <tr><td style="padding:6px 0;color:#888">Check-out</td><td>Before 12:00 — {check_out_date}</td></tr>
+    </table>
+  </div>
+  <div style="margin-top:24px;padding:16px;background:#f5f4ef;border-radius:8px;font-size:13px">
+    <strong>Room information</strong><br>The room will be washed once a week.<br>New towels every week, and new beddings biweekly.
+  </div>
+  <div style="margin-top:16px;padding:16px;background:#f5f4ef;border-radius:8px;font-size:13px">
+    <strong>Contact</strong><br>Questions? Contact {my_name}: {my_phone} · {my_email}
+  </div>
+  <div style="text-align:center;margin-top:40px;font-size:16px;color:#888">Have a nice stay :)</div>
+</div>`;
+
 function _renderTemplate(template,vars){
   let out=template||'';
   Object.keys(vars).forEach(k=>{
@@ -66,6 +90,7 @@ function _buildMessageVars(booking){
     if(floor==='1')floorInfo=property.Floor1_Info||'';
     else if(floor==='2')floorInfo=property.Floor2_Info||'';
   }
+  const checkOut=booking.Check_Out?formatDate(booking.Check_Out):'Open-ended';
   return{
     guest_name:fullName,
     first_name:firstName,
@@ -77,12 +102,23 @@ function _buildMessageVars(booking){
     welcome_message:property?property.Welcome_Message||'':'',
     floor_info:floorInfo,
     check_in_date:checkIn,
+    check_out_date:checkOut,                  // v15.3: brukes på door tag
+    company:(booking.Company||'—').toString(),// v15.3: brukes på door tag
     my_name:'Frank Haugan',
     my_phone:'+47 99 10 10 41',
     my_email:'frank@2gm.no',
     _person_phone:person?person.Mobile||booking.Mobile||'':booking.Mobile||'',
     _person_email:person?person.Email||booking.Email||'':booking.Email||''
   };
+}
+
+// v15.3: Returnerer ferdig HTML for én booking sin dørmerke.
+// Bruker DoorTag_Template på rommets eiendom hvis satt, ellers DEFAULT_DOORTAG_TEMPLATE.
+function _renderDoorTagHtml(booking){
+  const room=allRooms.find(r=>r.id===String(booking.RoomLookupId));
+  const property=room?properties.find(p=>String(p.id)===String(room.PropertyLookupId)):null;
+  const tmpl=(property&&property.DoorTag_Template)||DEFAULT_DOORTAG_TEMPLATE;
+  return _renderTemplate(tmpl,_buildMessageVars(booking));
 }
 
 function _getTemplate(booking,kind){
@@ -261,6 +297,8 @@ function loadTemplateForProperty(){
   document.getElementById('tmplSms').value=p.SMS_Template||DEFAULT_SMS_TEMPLATE;
   document.getElementById('tmplEmailSubj').value=p.Email_Subject_Template||DEFAULT_EMAIL_SUBJECT;
   document.getElementById('tmplEmail').value=p.Email_Template||DEFAULT_EMAIL_TEMPLATE;
+  // v15.3: dørmerke-mal
+  const dt=document.getElementById('tmplDoorTag');if(dt)dt.value=p.DoorTag_Template||DEFAULT_DOORTAG_TEMPLATE;
 }
 
 // v14.5.10: Reset-knapper for hver mal
@@ -274,6 +312,9 @@ function resetTemplateField(field){
   }else if(field==='email'){
     if(!confirm('Reset Email template to default for this property?\n\n(Click "Lagre for valgt eiendom" after to save.)'))return;
     document.getElementById('tmplEmail').value=DEFAULT_EMAIL_TEMPLATE;
+  }else if(field==='doortag'){
+    if(!confirm('Reset Door tag template to default for this property?\n\n(Click "Lagre for valgt eiendom" after to save.)'))return;
+    document.getElementById('tmplDoorTag').value=DEFAULT_DOORTAG_TEMPLATE;
   }
 }
 
@@ -283,6 +324,7 @@ async function saveTemplateForProperty(){
   if(!p)return;
   const f1=document.getElementById('tmplFloor1');
   const f2=document.getElementById('tmplFloor2');
+  const dt=document.getElementById('tmplDoorTag');
   const fields={
     WiFi_SSID:document.getElementById('tmplWifiSsid').value.trim()||null,
     WiFi_Password:document.getElementById('tmplWifiPwd').value.trim()||null,
@@ -291,7 +333,8 @@ async function saveTemplateForProperty(){
     Floor2_Info:f2?(f2.value||null):null,
     SMS_Template:document.getElementById('tmplSms').value||null,
     Email_Subject_Template:document.getElementById('tmplEmailSubj').value.trim()||null,
-    Email_Template:document.getElementById('tmplEmail').value||null
+    Email_Template:document.getElementById('tmplEmail').value||null,
+    DoorTag_Template:dt?(dt.value||null):null   // v15.3
   };
   try{
     await updateListItem('Properties',p.id,fields);
@@ -310,15 +353,21 @@ function previewTemplate(kind){
   const sample=allBookings.find(b=>propRoomIds.has(String(b.RoomLookupId))&&b.Person_Name);
   if(!sample){alert('Ingen booking funnet på '+p.Title+' for forhåndsvisning. Bruk en gjest som er booket der.');return}
   const vars=_buildMessageVars(sample);
-  let out;
   if(kind==='sms'){
     const tmpl=document.getElementById('tmplSms').value;
-    out='SMS-forhåndsvisning (basert på '+vars.guest_name+'):\n\n'+_renderTemplate(tmpl,vars);
-  }else{
+    alert('SMS-forhåndsvisning (basert på '+vars.guest_name+'):\n\n'+_renderTemplate(tmpl,vars));
+  }else if(kind==='email'){
     const subj=_renderTemplate(document.getElementById('tmplEmailSubj').value,vars);
     const body=_renderTemplate(document.getElementById('tmplEmail').value,vars);
-    out='E-post-forhåndsvisning (basert på '+vars.guest_name+'):\n\nEmne: '+subj+'\n\n'+body;
+    alert('E-post-forhåndsvisning (basert på '+vars.guest_name+'):\n\nEmne: '+subj+'\n\n'+body);
+  }else if(kind==='doortag'){
+    // v15.3: Åpne forhåndsvisning av dørmerke i nytt vindu (rendret HTML, ikke alert).
+    const tmpl=document.getElementById('tmplDoorTag').value||DEFAULT_DOORTAG_TEMPLATE;
+    const html=_renderTemplate(tmpl,vars);
+    const w=window.open('','_blank','width=700,height=900');
+    if(!w){alert('Popup blokkert — tillat popups for å forhåndsvise dørmerket.');return}
+    w.document.write('<!DOCTYPE html><html><head><title>Door tag preview — '+(vars.guest_name||'')+' / '+vars.room+'</title></head><body style="margin:0;background:#f0f0f0;padding:20px"><div style="background:#fff;box-shadow:0 2px 8px rgba(0,0,0,.1);max-width:680px;margin:0 auto">'+html+'</div></body></html>');
+    w.document.close();
   }
-  alert(out);
 }
 
