@@ -162,30 +162,44 @@ function renderInvoicing(){
     const isContinuation=(b.Continuation===true||b.Continuation==='true'||b.Continuation===1);
     const propTitleForB=getBookingPropertyTitle(b); // v14.5.12: per-booking
 
-    // v15.8: Pre-compute cross-period hints so user sees where the rest of the booking is invoiced.
+    // v15.9: Cross-period info + utvask follows the month of the LAST NIGHT (not checkout day).
+    // This keeps utvask on the same invoice as the rent for short stays that check out early
+    // in the next month (e.g., 29.04→01.05: last night is 30. april → utvask in april).
     const _MONTHS_NB=['januar','februar','mars','april','mai','juni','juli','august','september','oktober','november','desember'];
-    let nightsOutsidePeriod=0, beforeLabel='';
+    let nightsBeforeP=0, beforeLabel='', nightsAfterP=0, afterLabel='';
+    let utvaskInThisPeriod=false, utvaskWillAppearIn='';
     if(b.Check_In&&b.Check_Out){
       const ciD=new Date(b.Check_In);ciD.setHours(0,0,0,0);
       const coD=new Date(b.Check_Out);coD.setHours(0,0,0,0);
       const totalN=Math.max(0,Math.round((coD-ciD)/864e5));
-      nightsOutsidePeriod=Math.max(0,totalN-nights);
-      if(nightsOutsidePeriod>0){
-        if(useRange){
-          beforeLabel='annet tidsrom';
-        }else{
+      nightsBeforeP=ciD<fromDate?Math.max(0,Math.round((fromDate-ciD)/864e5)):0;
+      nightsAfterP=Math.max(0,totalN-nightsBeforeP-nights);
+      if(nightsBeforeP>0){
+        if(useRange){beforeLabel='annet tidsrom'}
+        else{
           const prevEnd=new Date(fromDate.getFullYear(),fromDate.getMonth(),0,23,59,59);
           const prevStart=new Date(prevEnd.getFullYear(),prevEnd.getMonth(),1);
           beforeLabel=(ciD>=prevStart&&ciD<=prevEnd)?_MONTHS_NB[prevEnd.getMonth()]:'tidligere måneder';
         }
       }
-    }
-    let utvaskLaterMonth='';
-    if(b.Status==='Completed'&&b.Check_Out&&!isContinuation&&!hasPercentFee(effectiveCo,propTitleForB)){
-      const coD=new Date(b.Check_Out);coD.setHours(0,0,0,0);
-      const feeEnabled=(b.Include_Checkout_Fee===undefined||b.Include_Checkout_Fee===null||b.Include_Checkout_Fee===true||b.Include_Checkout_Fee==='true'||b.Include_Checkout_Fee===1);
-      if(feeEnabled&&coD>toDate&&getCheckoutFee(effectiveCo,propTitleForB)>0){
-        utvaskLaterMonth=useRange?'senere tidsrom':_MONTHS_NB[coD.getMonth()];
+      if(nightsAfterP>0){
+        if(useRange){afterLabel='senere tidsrom'}
+        else{
+          const nextStart=new Date(toDate.getFullYear(),toDate.getMonth()+1,1);
+          const nextEnd=new Date(nextStart.getFullYear(),nextStart.getMonth()+1,0,23,59,59);
+          afterLabel=(coD<=nextEnd)?_MONTHS_NB[nextStart.getMonth()]:'senere måneder';
+        }
+      }
+      // Utvask attribution: month of last sleep night (= checkout date - 1 day)
+      const lastNight=new Date(coD.getTime()-864e5);lastNight.setHours(0,0,0,0);
+      if(b.Status==='Completed'&&!isContinuation&&!hasPercentFee(effectiveCo,propTitleForB)){
+        const feeEnabled=(b.Include_Checkout_Fee===undefined||b.Include_Checkout_Fee===null||b.Include_Checkout_Fee===true||b.Include_Checkout_Fee==='true'||b.Include_Checkout_Fee===1);
+        if(feeEnabled&&getCheckoutFee(effectiveCo,propTitleForB)>0){
+          utvaskInThisPeriod=(lastNight>=fromDate&&lastNight<=toDate);
+          if(!utvaskInThisPeriod){
+            utvaskWillAppearIn=(lastNight<fromDate)?(beforeLabel||(useRange?'annet tidsrom':'tidligere måneder')):(afterLabel||(useRange?'senere tidsrom':'senere måneder'));
+          }
+        }
       }
     }
 
@@ -203,38 +217,31 @@ function renderInvoicing(){
         source:cost.source,
         nearMiss:cost.nearMiss,
         lineType:'nights',
-        utvaskLaterMonth
+        nightsBeforeP, beforeLabel,
+        nightsAfterP, afterLabel,
+        utvaskInAfter: !utvaskInThisPeriod && nightsAfterP>0 && utvaskWillAppearIn===afterLabel
       });
     }
-    // CHECKOUT FEE: only for Completed bookings where Check_Out falls within period
-    // and Include_Checkout_Fee is not explicitly false
-    // Skip if this company has a Percent-based fee (handled per-company below)
-    // Skip if Continuation=true (mid-stay room change — only one utvask per logical stay)
-    if(b.Status==='Completed'&&b.Check_Out&&!isContinuation&&!hasPercentFee(effectiveCo,propTitleForB)){
-      const checkoutDate=new Date(b.Check_Out);checkoutDate.setHours(0,0,0,0);
-      const feeEnabled=(b.Include_Checkout_Fee===undefined||b.Include_Checkout_Fee===null||b.Include_Checkout_Fee===true||b.Include_Checkout_Fee==='true'||b.Include_Checkout_Fee===1);
-      if(feeEnabled&&checkoutDate>=fromDate&&checkoutDate<=toDate){
-        const fee=getCheckoutFee(effectiveCo,propTitleForB);
-        if(fee>0){
-          items.push({
-            booking:b,
-            room:room?room.Title:'?',
-            name:b.Person_Name||'',
-            company:effectiveCo,
-            guestCompany:origCo,
-            hasBillingOverride,
-            nights:1,
-            rate:fee,
-            total:fee,
-            source:'Checkout fee',
-            nearMiss:null,
-            lineType:'checkout',
-            checkoutDate:b.Check_Out,
-            nightsBefore:nightsOutsidePeriod,
-            beforeLabel
-          });
-        }
-      }
+    // CHECKOUT FEE attached where the LAST NIGHT lies, not where checkout happened.
+    if(utvaskInThisPeriod){
+      const fee=getCheckoutFee(effectiveCo,propTitleForB);
+      items.push({
+        booking:b,
+        room:room?room.Title:'?',
+        name:b.Person_Name||'',
+        company:effectiveCo,
+        guestCompany:origCo,
+        hasBillingOverride,
+        nights:1,
+        rate:fee,
+        total:fee,
+        source:'Checkout fee',
+        nearMiss:null,
+        lineType:'checkout',
+        checkoutDate:b.Check_Out,
+        nightsBefore:nightsBeforeP,
+        beforeLabel
+      });
     }
   });
 
@@ -443,8 +450,12 @@ function renderInvoicing(){
         }
         else{
           sourceCell=(i.nearMiss?'<span title="'+escapeHtml(i.nearMiss)+'" style="color:var(--text-warning)">⚠ '+escapeHtml(i.source)+'</span>':escapeHtml(i.source));
-          if(i.utvaskLaterMonth){
-            sourceCell+='<div style="color:var(--text-tertiary);font-size:10px;margin-top:2px">📌 utvask faktureres i '+escapeHtml(i.utvaskLaterMonth)+'</div>';
+          // v15.9: Symmetric hints — show what's billed in earlier and/or later periods
+          const hints=[];
+          if(i.nightsBeforeP>0&&i.beforeLabel)hints.push('📌 '+i.nightsBeforeP+' netter fakturert i '+escapeHtml(i.beforeLabel));
+          if(i.nightsAfterP>0&&i.afterLabel)hints.push('📌 '+i.nightsAfterP+' netter'+(i.utvaskInAfter?' + utvask':'')+' faktureres i '+escapeHtml(i.afterLabel));
+          if(hints.length){
+            sourceCell+='<div style="color:var(--text-tertiary);font-size:10px;margin-top:2px">'+hints.join('<br>')+'</div>';
           }
         }
         let rowStyle;
@@ -602,7 +613,49 @@ function exportInvoicingCSV(companyFilterName){
     const room=allRooms.find(r=>r.id===rid);
     const origCo=(b.Company||'').trim();
     const billingCo=effectiveCo!==origCo?effectiveCo:'';
+    const isContinuationExp=(b.Continuation===true||b.Continuation==='true'||b.Continuation===1);
+    const propTitleForB=getBookingPropertyTitle(b); // v14.5.12: per-booking
+
+    // v15.9: Same cross-period logic as renderInvoicing — utvask follows last-night month.
+    const _MONTHS_NB_X=['januar','februar','mars','april','mai','juni','juli','august','september','oktober','november','desember'];
+    let nightsBeforePX=0, beforeLabelX='', nightsAfterPX=0, afterLabelX='';
+    let utvaskInThisPeriodX=false;
+    if(b.Check_In&&b.Check_Out){
+      const ciD=new Date(b.Check_In);ciD.setHours(0,0,0,0);
+      const coD=new Date(b.Check_Out);coD.setHours(0,0,0,0);
+      const totalN=Math.max(0,Math.round((coD-ciD)/864e5));
+      nightsBeforePX=ciD<fromDate?Math.max(0,Math.round((fromDate-ciD)/864e5)):0;
+      nightsAfterPX=Math.max(0,totalN-nightsBeforePX-nights);
+      if(nightsBeforePX>0){
+        if(useRange){beforeLabelX='annet tidsrom'}
+        else{
+          const prevEnd=new Date(fromDate.getFullYear(),fromDate.getMonth(),0,23,59,59);
+          const prevStart=new Date(prevEnd.getFullYear(),prevEnd.getMonth(),1);
+          beforeLabelX=(ciD>=prevStart&&ciD<=prevEnd)?_MONTHS_NB_X[prevEnd.getMonth()]:'tidligere måneder';
+        }
+      }
+      if(nightsAfterPX>0){
+        if(useRange){afterLabelX='senere tidsrom'}
+        else{
+          const nextStart=new Date(toDate.getFullYear(),toDate.getMonth()+1,1);
+          const nextEnd=new Date(nextStart.getFullYear(),nextStart.getMonth()+1,0,23,59,59);
+          afterLabelX=(coD<=nextEnd)?_MONTHS_NB_X[nextStart.getMonth()]:'senere måneder';
+        }
+      }
+      const lastNight=new Date(coD.getTime()-864e5);lastNight.setHours(0,0,0,0);
+      if(b.Status==='Completed'&&!isContinuationExp&&!hasPercentFee(effectiveCo,propTitleForB)){
+        const feeEnabled=(b.Include_Checkout_Fee===undefined||b.Include_Checkout_Fee===null||b.Include_Checkout_Fee===true||b.Include_Checkout_Fee==='true'||b.Include_Checkout_Fee===1);
+        if(feeEnabled&&getCheckoutFee(effectiveCo,propTitleForB)>0){
+          utvaskInThisPeriodX=(lastNight>=fromDate&&lastNight<=toDate);
+        }
+      }
+    }
+    const utvaskInAfterX=!utvaskInThisPeriodX && nightsAfterPX>0 && b.Status==='Completed' && b.Check_Out;
+
     if(nights>0){
+      const noteParts=[];
+      if(nightsBeforePX>0&&beforeLabelX)noteParts.push(nightsBeforePX+' netter fakturert i '+beforeLabelX);
+      if(nightsAfterPX>0&&afterLabelX)noteParts.push(nightsAfterPX+' netter'+(utvaskInAfterX?' + utvask':'')+' faktureres i '+afterLabelX);
       rows.push({
         room:room?room.Title:'',
         guest:b.Person_Name||'',
@@ -612,32 +665,28 @@ function exportInvoicingCSV(companyFilterName){
         checkOut:b.Check_Out?formatDate(b.Check_Out):'Open',
         nights:nights,
         rate:cost.rate||0,
-        total:nights*(cost.rate||0)
+        total:nights*(cost.rate||0),
+        note:noteParts.join(' · ')
       });
       if(effectiveCo){companyNightSum[effectiveCo]=(companyNightSum[effectiveCo]||0)+nights*(cost.rate||0)}
     }
-    // Checkout fee line (skip if company has Percent fee, skip if Continuation)
-    const isContinuationExp=(b.Continuation===true||b.Continuation==='true'||b.Continuation===1);
-    const propTitleForB=getBookingPropertyTitle(b); // v14.5.12: per-booking
-    if(b.Status==='Completed'&&b.Check_Out&&!isContinuationExp&&!hasPercentFee(effectiveCo,propTitleForB)){
-      const checkoutDate=new Date(b.Check_Out);checkoutDate.setHours(0,0,0,0);
-      const feeEnabled=(b.Include_Checkout_Fee===undefined||b.Include_Checkout_Fee===null||b.Include_Checkout_Fee===true||b.Include_Checkout_Fee==='true'||b.Include_Checkout_Fee===1);
-      if(feeEnabled&&checkoutDate>=fromDate&&checkoutDate<=toDate){
-        const fee=getCheckoutFee(effectiveCo,propTitleForB);
-        if(fee>0){
-          rows.push({
-            room:room?room.Title:'',
-            guest:'Utvask: '+(b.Person_Name||''),
-            company:origCo,
-            billing:billingCo,
-            checkIn:'Checkout '+formatDate(b.Check_Out),
-            checkOut:'',
-            nights:0,
-            rate:fee,
-            total:fee
-          });
-        }
-      }
+    // Utvask attached where the last-night lies (v15.9)
+    if(utvaskInThisPeriodX){
+      const fee=getCheckoutFee(effectiveCo,propTitleForB);
+      const noteParts=[];
+      if(nightsBeforePX>0&&beforeLabelX)noteParts.push(nightsBeforePX+' netter fakturert i '+beforeLabelX);
+      rows.push({
+        room:room?room.Title:'',
+        guest:'Utvask: '+(b.Person_Name||''),
+        company:origCo,
+        billing:billingCo,
+        checkIn:'Checkout '+formatDate(b.Check_Out),
+        checkOut:'',
+        nights:0,
+        rate:fee,
+        total:fee,
+        note:noteParts.join(' · ')
+      });
     }
   });
   // Full-tenant lease lines
@@ -709,35 +758,39 @@ function exportInvoicingCSV(companyFilterName){
 
   // Determine if Billing column should be shown (any non-empty value)
   const showBilling=rows.some(r=>r.billing&&r.billing.trim()!=='');
+  // v15.9: Show a Notes column only if any row has a note (cross-period info)
+  const showNotes=rows.some(r=>r.note&&String(r.note).trim()!=='');
 
   // Build header + AOA (array of arrays) for SheetJS
-  const headers=showBilling
+  const headers=(showBilling
     ?['Room','Guest','Company','Billing','Check-in','Check-out','Nights','Rate','Total']
-    :['Room','Guest','Company','Check-in','Check-out','Nights','Rate','Total'];
+    :['Room','Guest','Company','Check-in','Check-out','Nights','Rate','Total']
+  ).concat(showNotes?['Notes']:[]);
   const aoa=[headers];
   rows.forEach(r=>{
-    if(showBilling){
-      aoa.push([r.room,r.guest,r.company,r.billing,r.checkIn,r.checkOut,r.nights,r.rate,r.total]);
-    }else{
-      aoa.push([r.room,r.guest,r.company,r.checkIn,r.checkOut,r.nights,r.rate,r.total]);
-    }
+    const base=showBilling
+      ?[r.room,r.guest,r.company,r.billing,r.checkIn,r.checkOut,r.nights,r.rate,r.total]
+      :[r.room,r.guest,r.company,r.checkIn,r.checkOut,r.nights,r.rate,r.total];
+    if(showNotes)base.push(r.note||'');
+    aoa.push(base);
   });
   // Total row
   const totalN=rows.reduce((s,r)=>s+(typeof r.nights==='number'?r.nights:0),0);
   const totalT=rows.reduce((s,r)=>s+(typeof r.total==='number'?r.total:0),0);
-  if(showBilling){
-    aoa.push(['','','','','','Total',totalN,'',totalT]);
-  }else{
-    aoa.push(['','','','','Total',totalN,'',totalT]);
-  }
+  const totalRow=showBilling
+    ?['','','','','','Total',totalN,'',totalT]
+    :['','','','','Total',totalN,'',totalT];
+  if(showNotes)totalRow.push('');
+  aoa.push(totalRow);
 
   // Build worksheet
   const ws=XLSX.utils.aoa_to_sheet(aoa);
 
   // Column widths
-  const colWidths=showBilling
+  const colWidths=(showBilling
     ?[{wch:10},{wch:24},{wch:18},{wch:18},{wch:12},{wch:12},{wch:8},{wch:10},{wch:12}]
-    :[{wch:10},{wch:24},{wch:18},{wch:12},{wch:12},{wch:8},{wch:10},{wch:12}];
+    :[{wch:10},{wch:24},{wch:18},{wch:12},{wch:12},{wch:8},{wch:10},{wch:12}]
+  ).concat(showNotes?[{wch:48}]:[]);
   ws['!cols']=colWidths;
 
   // v14.5.13: Apply formatting using xlsx-js-style (writes styles into the file)
@@ -748,6 +801,9 @@ function exportInvoicingCSV(companyFilterName){
   const cellAddr=(r,c)=>XLSX.utils.encode_cell({r:r,c:c});
   const ncols=headers.length;
 
+  // v15.9: Notes column (if present) lives at the end and should be left-aligned
+  const notesCol=showNotes?(ncols-1):-1;
+  const isNumericCol=c=>(c>=numColsNights&&c!==notesCol);
   // Header row (row 0) — bold, light gray background, bottom border
   for(let c=0;c<ncols;c++){
     const a=cellAddr(0,c);
@@ -755,7 +811,7 @@ function exportInvoicingCSV(companyFilterName){
     ws[a].s={
       font:{bold:true,sz:11},
       fill:{patternType:'solid',fgColor:{rgb:'EEEEEE'}},
-      alignment:{horizontal:c>=numColsNights?'right':'left',vertical:'center'},
+      alignment:{horizontal:isNumericCol(c)?'right':'left',vertical:'center'},
       border:{bottom:{style:'thin',color:{rgb:'888888'}}}
     };
   }
@@ -766,8 +822,18 @@ function exportInvoicingCSV(companyFilterName){
     ws[a].s={
       font:{bold:true,sz:11},
       border:{top:{style:'thin',color:{rgb:'000000'}}},
-      alignment:{horizontal:c>=numColsNights?'right':'left'}
+      alignment:{horizontal:isNumericCol(c)?'right':'left'}
     };
+  }
+  // Wrap text in Notes column for readability
+  if(showNotes){
+    for(let r=1;r<lastRow-1;r++){
+      const a=cellAddr(r,notesCol);
+      if(ws[a]){
+        const existingStyle=ws[a].s||{};
+        ws[a].s={...existingStyle,alignment:{...existingStyle.alignment,wrapText:true,vertical:'top'}};
+      }
+    }
   }
   // Number format for Rate, Total, Nights columns (data rows + total row)
   for(let r=1;r<lastRow;r++){
@@ -869,28 +935,66 @@ function exportInvoicingPDF(companyFilterName){
     const origCo=(b.Company||'').trim();
     const key=effectiveCo||'(uten firma)';
     if(!groups[key])groups[key]={nights:[],fees:[],percent:null,fullTenant:null,longTerm:[]};
+    const isContinuation=(b.Continuation===true||b.Continuation==='true'||b.Continuation===1);
+    const propTitleForB=getBookingPropertyTitle(b); // v14.5.12: per-booking lookup
+
+    // v15.9: Same cross-period logic as render/CSV export.
+    const _MONTHS_NB_P=monthNames;
+    let nightsBeforePP=0, beforeLabelP='', nightsAfterPP=0, afterLabelP='';
+    let utvaskInThisPeriodP=false;
+    if(b.Check_In&&b.Check_Out){
+      const ciD=new Date(b.Check_In);ciD.setHours(0,0,0,0);
+      const coD=new Date(b.Check_Out);coD.setHours(0,0,0,0);
+      const totalN=Math.max(0,Math.round((coD-ciD)/864e5));
+      nightsBeforePP=ciD<fromDate?Math.max(0,Math.round((fromDate-ciD)/864e5)):0;
+      nightsAfterPP=Math.max(0,totalN-nightsBeforePP-nights);
+      if(nightsBeforePP>0){
+        if(useRange){beforeLabelP='annet tidsrom'}
+        else{
+          const prevEnd=new Date(fromDate.getFullYear(),fromDate.getMonth(),0,23,59,59);
+          const prevStart=new Date(prevEnd.getFullYear(),prevEnd.getMonth(),1);
+          beforeLabelP=(ciD>=prevStart&&ciD<=prevEnd)?_MONTHS_NB_P[prevEnd.getMonth()]:'tidligere måneder';
+        }
+      }
+      if(nightsAfterPP>0){
+        if(useRange){afterLabelP='senere tidsrom'}
+        else{
+          const nextStart=new Date(toDate.getFullYear(),toDate.getMonth()+1,1);
+          const nextEnd=new Date(nextStart.getFullYear(),nextStart.getMonth()+1,0,23,59,59);
+          afterLabelP=(coD<=nextEnd)?_MONTHS_NB_P[nextStart.getMonth()]:'senere måneder';
+        }
+      }
+      const lastNight=new Date(coD.getTime()-864e5);lastNight.setHours(0,0,0,0);
+      if(b.Status==='Completed'&&!isContinuation&&!hasPercentFee(effectiveCo,propTitleForB)){
+        const feeEnabled=(b.Include_Checkout_Fee===undefined||b.Include_Checkout_Fee===null||b.Include_Checkout_Fee===true||b.Include_Checkout_Fee==='true'||b.Include_Checkout_Fee===1);
+        if(feeEnabled&&getCheckoutFee(effectiveCo,propTitleForB)>0){
+          utvaskInThisPeriodP=(lastNight>=fromDate&&lastNight<=toDate);
+        }
+      }
+    }
+    const utvaskInAfterP=!utvaskInThisPeriodP && nightsAfterPP>0 && b.Status==='Completed' && b.Check_Out;
+
     if(nights>0){
+      const noteParts=[];
+      if(nightsBeforePP>0&&beforeLabelP)noteParts.push(nightsBeforePP+' netter fakturert i '+beforeLabelP);
+      if(nightsAfterPP>0&&afterLabelP)noteParts.push(nightsAfterPP+' netter'+(utvaskInAfterP?' + utvask':'')+' faktureres i '+afterLabelP);
       groups[key].nights.push({
         name:b.Person_Name||'',guestCompany:origCo,effectiveCo,
         room:room?room.Title:'?',checkIn:b.Check_In,checkOut:b.Check_Out,
-        nightsCount:nights,rate:cost.rate||0,total:nights*(cost.rate||0),source:cost.source||''
+        nightsCount:nights,rate:cost.rate||0,total:nights*(cost.rate||0),source:cost.source||'',
+        note:noteParts.join(' · ')
       });
       if(effectiveCo){companyNightSum[effectiveCo]=(companyNightSum[effectiveCo]||0)+nights*(cost.rate||0)}
     }
-    const isContinuation=(b.Continuation===true||b.Continuation==='true'||b.Continuation===1);
-    const propTitleForB=getBookingPropertyTitle(b); // v14.5.12: per-booking lookup
-    if(b.Status==='Completed'&&b.Check_Out&&!isContinuation&&!hasPercentFee(effectiveCo,propTitleForB)){
-      const checkoutDate=new Date(b.Check_Out);checkoutDate.setHours(0,0,0,0);
-      const feeEnabled=(b.Include_Checkout_Fee===undefined||b.Include_Checkout_Fee===null||b.Include_Checkout_Fee===true||b.Include_Checkout_Fee==='true'||b.Include_Checkout_Fee===1);
-      if(feeEnabled&&checkoutDate>=fromDate&&checkoutDate<=toDate){
-        const fee=getCheckoutFee(effectiveCo,propTitleForB);
-        if(fee>0){
-          groups[key].fees.push({
-            name:b.Person_Name||'',room:room?room.Title:'?',
-            checkoutDate:b.Check_Out,fee
-          });
-        }
-      }
+    if(utvaskInThisPeriodP){
+      const fee=getCheckoutFee(effectiveCo,propTitleForB);
+      const noteParts=[];
+      if(nightsBeforePP>0&&beforeLabelP)noteParts.push(nightsBeforePP+' netter fakturert i '+beforeLabelP);
+      groups[key].fees.push({
+        name:b.Person_Name||'',room:room?room.Title:'?',
+        checkoutDate:b.Check_Out,fee,
+        note:noteParts.join(' · ')
+      });
     }
   });
   // Percent fees
@@ -1000,9 +1104,10 @@ function exportInvoicingPDF(companyFilterName){
     g.nights.forEach(n=>{
       groupTotal+=n.total;
       const billingInfo=n.guestCompany&&n.guestCompany!==n.effectiveCo?'<br><small class="muted">Gjest jobber for: '+escapeHtml(n.guestCompany)+'</small>':'';
+      const noteInfo=n.note?'<br><small class="muted">📌 '+escapeHtml(n.note)+'</small>':'';
       tableRows+='<tr>'
         +'<td>'+escapeHtml(n.room)+'</td>'
-        +'<td>'+escapeHtml(n.name)+billingInfo+'</td>'
+        +'<td>'+escapeHtml(n.name)+billingInfo+noteInfo+'</td>'
         +'<td>'+formatDate(n.checkIn)+' → '+(n.checkOut?formatDate(n.checkOut):'Åpen')+'</td>'
         +'<td class="num">'+n.nightsCount+'</td>'
         +'<td class="num">'+fmtKr(n.rate)+'</td>'
@@ -1013,9 +1118,10 @@ function exportInvoicingPDF(companyFilterName){
     // Checkout fees — column order: Rom, Gjest, Periode, Netter, Sats, Sum
     g.fees.forEach(f=>{
       groupTotal+=f.fee;
+      const noteInfo=f.note?'<br><small class="muted">📌 '+escapeHtml(f.note)+'</small>':'';
       tableRows+='<tr class="fee-row">'
         +'<td>'+escapeHtml(f.room)+'</td>'
-        +'<td>↳ Utvask: '+escapeHtml(f.name)+'</td>'
+        +'<td>↳ Utvask: '+escapeHtml(f.name)+noteInfo+'</td>'
         +'<td>'+formatDate(f.checkoutDate)+'</td>'
         +'<td class="num">—</td>'
         +'<td class="num">—</td>'
