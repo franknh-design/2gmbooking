@@ -138,9 +138,18 @@ function findFirstAvailableRoomId(checkInStr,checkOutStr){
   }
   return null;
 }
+// v15.5: Swap status-options based on whether we are creating/editing a live or archived booking.
+function _setBookingStatusOptions(isArchived){
+  const sel=document.getElementById('fStatus');if(!sel)return;
+  sel.innerHTML=isArchived
+    ?'<option value="Completed">Completed</option><option value="Cancelled">Cancelled</option>'
+    :'<option value="Upcoming">Upcoming</option><option value="Active">Active (checked in)</option>';
+}
+
 function openNewBooking(preselectedRoomId){
   ensureMainView();
   editingBookingId=null;document.getElementById('bookingModalTitle').textContent='New booking';
+  _setBookingStatusOptions(false);
   document.getElementById('bookingSaveBtn').textContent='Create booking';
   const todayStr=toISODate(new Date());
   // If no room pre-selected, find first available for today
@@ -189,6 +198,9 @@ function openEditBooking(bookingId){
   const b=allBookings.find(x=>x.id===bookingId);if(!b)return;editingBookingId=bookingId;
   document.getElementById('bookingModalTitle').textContent='Edit booking';
   document.getElementById('bookingSaveBtn').textContent='Save changes';
+  // v15.5: Show appropriate status options. For archived bookings, only Completed/Cancelled are
+  // selectable in this modal — use Reopen on the archive row to bring it back to live.
+  _setBookingStatusOptions(b.Status==='Completed'||b.Status==='Cancelled');
   populateRoomSelect(String(b.RoomLookupId));
   document.getElementById('fName').value=b.Person_Name||'';document.getElementById('fCompany').value=b.Company||'';
   document.getElementById('fBillingCompany').value=b.Billing_Company||'';
@@ -370,9 +382,31 @@ async function saveBooking(){
   fields.RoomLookupId=parseInt(roomId);
   const btn=document.getElementById('bookingSaveBtn');btn.disabled=true;btn.textContent='Saving...';
   try{
-    if(editingBookingId){delete fields.Door_Tag_Status;delete fields.Cleaning_Status;await updateListItem('Bookings',editingBookingId,fields);const l=allBookings.find(x=>x.id===editingBookingId);if(l){Object.assign(l,fields);l.Check_Out=fields.Check_Out}closeBookingModal();closeDetail();refreshLocal();loadData()}
+    if(editingBookingId){delete fields.Door_Tag_Status;delete fields.Cleaning_Status;await updateListItem('Bookings',editingBookingId,fields);const l=allBookings.find(x=>x.id===editingBookingId);if(l){Object.assign(l,fields);l.Check_Out=fields.Check_Out}closeBookingModal();closeDetail();refreshLocal();loadData();
+      // v15.5: If the archive panel is open (we may have edited an archived booking), redraw it.
+      const arch=document.getElementById('archivePanel');if(arch&&arch.classList.contains('open')&&typeof renderArchive==='function')renderArchive();
+    }
     else{await createListItem('Bookings',fields);closeBookingModal();closeDetail();await loadData()}
   }catch(e){alert('Failed: '+e.message)}finally{btn.disabled=false;btn.textContent=editingBookingId?'Save changes':'Create booking'}
+}
+
+// v15.5: Permanent delete of a booking (used from the Archive panel).
+async function deleteBookingPermanent(id){
+  const b=allBookings.find(x=>x.id===id);if(!b)return;
+  const summary=(b.Person_Name||'(no name)')+' / '+getRoomTitle(b)+'\n'
+    +'Check-in: '+formatDate(b.Check_In)+(b.Check_Out?'\nCheck-out: '+formatDate(b.Check_Out):'\nOpen-ended')+'\n'
+    +'Status: '+(b.Status||'');
+  if(!confirm('Permanently delete this booking?\n\n'+summary+'\n\nThis cannot be undone.'))return;
+  if(!confirm('Are you sure? Type OK in the next prompt to confirm.'))return;
+  const typed=prompt('Type DELETE to confirm permanent deletion:');
+  if((typed||'').trim().toUpperCase()!=='DELETE')return;
+  try{
+    await deleteListItem('Bookings',id);
+    const idx=allBookings.findIndex(x=>x.id===id);if(idx>=0)allBookings.splice(idx,1);
+    if(typeof renderArchive==='function')renderArchive();
+    if(typeof renderFloors==='function')renderFloors();
+    if(typeof updateStats==='function')updateStats();
+  }catch(e){alert('Delete failed: '+e.message)}
 }
 
 // --- DOOR TAG PRINT ---

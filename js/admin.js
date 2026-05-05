@@ -1868,7 +1868,11 @@ function renderArchive(){
   body.innerHTML=pageItems.map(b=>{
     const sc={Completed:'background:var(--bg-secondary);color:var(--text-secondary)',Cancelled:'background:var(--bg-danger);color:var(--text-danger)',Active:'background:var(--bg-success);color:var(--text-success)',Upcoming:'background:var(--bg-warning);color:var(--text-warning)'}[b.Status]||'';
     return'<tr><td style="font-weight:500">'+getRoomTitle(b)+'</td><td>'+(b.Person_Name?guestMarkedName(b.Person_Name):'—')+'</td><td class="muted">'+(b.Company||'')+'</td><td>'+formatDate(b.Check_In)+'</td><td>'+(b.Check_Out?formatDate(b.Check_Out):'Open-ended')+'</td><td><span class="pill" style="'+sc+'">'+b.Status+'</span></td>'
-      +'<td>'+(b.Status==='Completed'||b.Status==='Cancelled'?'<button onclick="reopenBooking(\''+b.id+'\')" style="padding:3px 10px;border:1px solid var(--accent);border-radius:4px;background:var(--bg-success);color:var(--text-success);cursor:pointer;font-size:11px;font-family:inherit">Reopen</button>':'')+'</td></tr>';
+      +'<td><div style="display:flex;gap:4px;flex-wrap:wrap">'
+        +'<button onclick="openEditBooking(\''+b.id+'\')" style="padding:3px 10px;border:1px solid var(--border-tertiary);border-radius:4px;background:var(--bg-secondary);cursor:pointer;font-size:11px;font-family:inherit" title="Edit booking details">Edit</button>'
+        +(b.Status==='Completed'||b.Status==='Cancelled'?'<button onclick="reopenBooking(\''+b.id+'\')" style="padding:3px 10px;border:1px solid var(--accent);border-radius:4px;background:var(--bg-success);color:var(--text-success);cursor:pointer;font-size:11px;font-family:inherit">Reopen</button>':'')
+        +'<button onclick="deleteBookingPermanent(\''+b.id+'\')" style="padding:3px 10px;border:1px solid #D14343;border-radius:4px;background:rgba(209,67,67,.08);color:#A32D2D;cursor:pointer;font-size:11px;font-family:inherit" title="Permanently delete">Delete</button>'
+      +'</div></td></tr>';
   }).join('');
   renderArchivePagination(archived.length,totalPages);
 }
