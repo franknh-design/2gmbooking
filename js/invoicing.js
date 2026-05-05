@@ -159,6 +159,36 @@ function renderInvoicing(){
     const effectiveCo=getEffectiveCompany(b);
     const origCo=(b.Company||'').trim();
     const hasBillingOverride=(b.Billing_Company||'').trim()&&(b.Billing_Company||'').trim()!==origCo;
+    const isContinuation=(b.Continuation===true||b.Continuation==='true'||b.Continuation===1);
+    const propTitleForB=getBookingPropertyTitle(b); // v14.5.12: per-booking
+
+    // v15.8: Pre-compute cross-period hints so user sees where the rest of the booking is invoiced.
+    const _MONTHS_NB=['januar','februar','mars','april','mai','juni','juli','august','september','oktober','november','desember'];
+    let nightsOutsidePeriod=0, beforeLabel='';
+    if(b.Check_In&&b.Check_Out){
+      const ciD=new Date(b.Check_In);ciD.setHours(0,0,0,0);
+      const coD=new Date(b.Check_Out);coD.setHours(0,0,0,0);
+      const totalN=Math.max(0,Math.round((coD-ciD)/864e5));
+      nightsOutsidePeriod=Math.max(0,totalN-nights);
+      if(nightsOutsidePeriod>0){
+        if(useRange){
+          beforeLabel='annet tidsrom';
+        }else{
+          const prevEnd=new Date(fromDate.getFullYear(),fromDate.getMonth(),0,23,59,59);
+          const prevStart=new Date(prevEnd.getFullYear(),prevEnd.getMonth(),1);
+          beforeLabel=(ciD>=prevStart&&ciD<=prevEnd)?_MONTHS_NB[prevEnd.getMonth()]:'tidligere måneder';
+        }
+      }
+    }
+    let utvaskLaterMonth='';
+    if(b.Status==='Completed'&&b.Check_Out&&!isContinuation&&!hasPercentFee(effectiveCo,propTitleForB)){
+      const coD=new Date(b.Check_Out);coD.setHours(0,0,0,0);
+      const feeEnabled=(b.Include_Checkout_Fee===undefined||b.Include_Checkout_Fee===null||b.Include_Checkout_Fee===true||b.Include_Checkout_Fee==='true'||b.Include_Checkout_Fee===1);
+      if(feeEnabled&&coD>toDate&&getCheckoutFee(effectiveCo,propTitleForB)>0){
+        utvaskLaterMonth=useRange?'senere tidsrom':_MONTHS_NB[coD.getMonth()];
+      }
+    }
+
     if(nights>0){
       items.push({
         booking:b,
@@ -172,15 +202,14 @@ function renderInvoicing(){
         total:nights*cost.rate,
         source:cost.source,
         nearMiss:cost.nearMiss,
-        lineType:'nights'
+        lineType:'nights',
+        utvaskLaterMonth
       });
     }
     // CHECKOUT FEE: only for Completed bookings where Check_Out falls within period
     // and Include_Checkout_Fee is not explicitly false
     // Skip if this company has a Percent-based fee (handled per-company below)
     // Skip if Continuation=true (mid-stay room change — only one utvask per logical stay)
-    const isContinuation=(b.Continuation===true||b.Continuation==='true'||b.Continuation===1);
-    const propTitleForB=getBookingPropertyTitle(b); // v14.5.12: per-booking
     if(b.Status==='Completed'&&b.Check_Out&&!isContinuation&&!hasPercentFee(effectiveCo,propTitleForB)){
       const checkoutDate=new Date(b.Check_Out);checkoutDate.setHours(0,0,0,0);
       const feeEnabled=(b.Include_Checkout_Fee===undefined||b.Include_Checkout_Fee===null||b.Include_Checkout_Fee===true||b.Include_Checkout_Fee==='true'||b.Include_Checkout_Fee===1);
@@ -200,7 +229,9 @@ function renderInvoicing(){
             source:'Checkout fee',
             nearMiss:null,
             lineType:'checkout',
-            checkoutDate:b.Check_Out
+            checkoutDate:b.Check_Out,
+            nightsBefore:nightsOutsidePeriod,
+            beforeLabel
           });
         }
       }
@@ -404,8 +435,18 @@ function renderInvoicing(){
         else if(isLongTerm)sourceCell='<span style="color:#0EA5A5">'+escapeHtml(i.source)+'</span>';
         else if(isLongTermEmpty)sourceCell='<span style="color:#a76800;font-style:italic">'+escapeHtml(i.source)+'</span>';
         else if(isPercent)sourceCell='<span style="color:#EF9F27">📊 '+escapeHtml(i.source)+'</span>';
-        else if(isCheckout)sourceCell='<span style="color:#7B61FF">🧹 Checkout fee</span>';
-        else sourceCell=(i.nearMiss?'<span title="'+escapeHtml(i.nearMiss)+'" style="color:var(--text-warning)">⚠ '+escapeHtml(i.source)+'</span>':escapeHtml(i.source));
+        else if(isCheckout){
+          sourceCell='<span style="color:#7B61FF">🧹 Checkout fee</span>';
+          if(i.nightsBefore>0&&i.beforeLabel){
+            sourceCell+='<div style="color:var(--text-tertiary);font-size:10px;margin-top:2px">📌 '+i.nightsBefore+' netter fakturert i '+escapeHtml(i.beforeLabel)+'</div>';
+          }
+        }
+        else{
+          sourceCell=(i.nearMiss?'<span title="'+escapeHtml(i.nearMiss)+'" style="color:var(--text-warning)">⚠ '+escapeHtml(i.source)+'</span>':escapeHtml(i.source));
+          if(i.utvaskLaterMonth){
+            sourceCell+='<div style="color:var(--text-tertiary);font-size:10px;margin-top:2px">📌 utvask faktureres i '+escapeHtml(i.utvaskLaterMonth)+'</div>';
+          }
+        }
         let rowStyle;
         if(isFullTenant)rowStyle='border-top:.5px solid var(--border-tertiary);cursor:default;background:rgba(29,158,117,.08)';
         else if(isLongTerm)rowStyle='border-top:.5px solid var(--border-tertiary);cursor:default;background:rgba(14,165,165,.07)';
