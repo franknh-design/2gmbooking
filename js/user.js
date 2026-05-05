@@ -107,8 +107,10 @@ function applyPermissions(){
   show('menuBtnTemplates',can('admin')||can('manage_properties'));
   show('menuBtnMassSMS',can('edit_bookings'));
   show('menuBtnMassEmail',can('edit_bookings'));
-  // v15.6: Fakturagrunnlag krever admin eller prisinnsyn
-  show('menuBtnInvoicing',can('admin')||can('view_prices'));
+  // v15.7: Fakturagrunnlag — admin, dedikert view_invoicing, eller arvet view_prices
+  show('menuBtnInvoicing',can('admin')||can('view_invoicing')||can('view_prices'));
+  // v15.7: Import Hours krever import_export
+  show('btnImportHours',can('admin')||can('import_export'));
   show('btnArchive',can('archive')||can('view_bookings'));
   show('btnUpcoming',can('view_bookings'));
   show('btnHours',can('view_hours')||can('edit_hours'));
