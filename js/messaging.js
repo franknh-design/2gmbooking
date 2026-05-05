@@ -121,6 +121,43 @@ function _renderDoorTagHtml(booking){
   return _renderTemplate(tmpl,_buildMessageVars(booking));
 }
 
+// v15.4: Hjelpere for live preview + variabel-innsetting i Templates-modalen.
+const _DOORTAG_VARS=['first_name','guest_name','property','room','room_door_code','wifi_ssid','wifi_password','welcome_message','floor_info','check_in_date','check_out_date','company','my_name','my_phone','my_email'];
+
+function _previewVarsForDoorTag(){
+  const sel=document.getElementById('tmplPropSel');if(!sel)return null;
+  const p=properties.find(x=>String(x.id)===String(sel.value));if(!p)return null;
+  const propRooms=allRooms.filter(r=>String(r.PropertyLookupId)===String(p.id));
+  const ids=new Set(propRooms.map(r=>r.id));
+  const sample=allBookings.find(b=>ids.has(String(b.RoomLookupId))&&b.Person_Name);
+  if(sample)return _buildMessageVars(sample);
+  // Mock-data så preview fungerer selv uten reelle bookinger på eiendommen
+  const room=propRooms[0];
+  return{guest_name:'Ola Nordmann',first_name:'Ola',property:p.Title||'',room:room?room.Title:'101',room_door_code:room?(room.Door_Code||''):'',wifi_ssid:p.WiFi_SSID||'',wifi_password:p.WiFi_Password||'',welcome_message:p.Welcome_Message||'',floor_info:p.Floor1_Info||'',check_in_date:'2026-05-10',check_out_date:'2026-05-17',company:'Eksempel AS',my_name:'Frank Haugan',my_phone:'+47 99 10 10 41',my_email:'frank@2gm.no'};
+}
+
+function _renderDoorTagVarBar(){
+  const bar=document.getElementById('doorTagVarBar');if(!bar)return;
+  bar.innerHTML='<span style="font-size:11px;color:var(--text-secondary);margin-right:4px">Insert variable:</span>'+_DOORTAG_VARS.map(v=>'<button type="button" onclick="_insertDoorTagVar(\''+v+'\')" style="padding:2px 8px;border:1px solid var(--border-tertiary);border-radius:4px;background:var(--bg-secondary);cursor:pointer;font-size:11px;font-family:Consolas,monospace">{'+v+'}</button>').join('');
+}
+
+function _insertDoorTagVar(name){
+  const ta=document.getElementById('tmplDoorTag');if(!ta)return;
+  const s=ta.selectionStart,e=ta.selectionEnd,tag='{'+name+'}';
+  ta.value=ta.value.slice(0,s)+tag+ta.value.slice(e);
+  ta.selectionStart=ta.selectionEnd=s+tag.length;
+  ta.focus();
+  _updateDoorTagPreview();
+}
+
+function _updateDoorTagPreview(){
+  const ta=document.getElementById('tmplDoorTag'),ifr=document.getElementById('tmplDoorTagPreview');
+  if(!ta||!ifr)return;
+  const vars=_previewVarsForDoorTag()||{};
+  const html=_renderTemplate(ta.value||'',vars);
+  ifr.srcdoc='<!DOCTYPE html><html><head><meta charset="utf-8"></head><body style="margin:0;padding:8px;background:#f0f0f0"><div style="background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.1);max-width:600px;margin:0 auto">'+html+'</div></body></html>';
+}
+
 function _getTemplate(booking,kind){
   const room=allRooms.find(r=>r.id===String(booking.RoomLookupId));
   const property=room?properties.find(p=>String(p.id)===String(room.PropertyLookupId)):null;
@@ -299,6 +336,9 @@ function loadTemplateForProperty(){
   document.getElementById('tmplEmail').value=p.Email_Template||DEFAULT_EMAIL_TEMPLATE;
   // v15.3: dørmerke-mal
   const dt=document.getElementById('tmplDoorTag');if(dt)dt.value=p.DoorTag_Template||DEFAULT_DOORTAG_TEMPLATE;
+  // v15.4: render variabel-knapper og live preview
+  _renderDoorTagVarBar();
+  _updateDoorTagPreview();
 }
 
 // v14.5.10: Reset-knapper for hver mal
@@ -315,6 +355,7 @@ function resetTemplateField(field){
   }else if(field==='doortag'){
     if(!confirm('Reset Door tag template to default for this property?\n\n(Click "Lagre for valgt eiendom" after to save.)'))return;
     document.getElementById('tmplDoorTag').value=DEFAULT_DOORTAG_TEMPLATE;
+    _updateDoorTagPreview();
   }
 }
 
