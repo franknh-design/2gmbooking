@@ -28,6 +28,9 @@ async function loadCurrentUser(){
         currentUser.permissions=roleMap[match.Role]||['view_bookings'];
       }
     }else{
+      // v15.6: Hvis Microsoft-pålogging gir e-post som ikke finnes i Users-lista,
+      // havner brukeren her med kun view_bookings. Gjør det åpenbart i konsollen.
+      console.warn('[Auth] No matching user in Users list for email "'+email+'" — defaulting to view_bookings only. Check SharePoint Users.Epost field.');
       currentUser.permissions=['view_bookings'];
     }
   }catch(e){console.error('Failed to load user:',e);currentUser.permissions=['view_bookings']}
@@ -104,6 +107,8 @@ function applyPermissions(){
   show('menuBtnTemplates',can('admin')||can('manage_properties'));
   show('menuBtnMassSMS',can('edit_bookings'));
   show('menuBtnMassEmail',can('edit_bookings'));
+  // v15.6: Fakturagrunnlag krever admin eller prisinnsyn
+  show('menuBtnInvoicing',can('admin')||can('view_prices'));
   show('btnArchive',can('archive')||can('view_bookings'));
   show('btnUpcoming',can('view_bookings'));
   show('btnHours',can('view_hours')||can('edit_hours'));
