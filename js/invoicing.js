@@ -32,6 +32,27 @@ function closeMoreMenu(){
 // ============================================================
 let invoicingInitialized=false;
 
+// v15.10: Log every actual generation of an invoicing export to a SharePoint list
+// (display name 'InvoiceExportLog'). Fire-and-forget — failures only warn.
+async function _logInvoiceExport(data){
+  try{
+    await createListItem('InvoiceExportLog',{
+      Title:(data.period||'?')+' — '+(data.company||'Alle')+' — '+(data.format||'?'),
+      ExportedBy:(typeof currentUser!=='undefined'&&(currentUser.displayName||currentUser.email))||'',
+      ExportedByEmail:(typeof currentUser!=='undefined'&&currentUser.email)||'',
+      ExportedAt:new Date().toISOString(),
+      Property:data.property||'',
+      Period:data.period||'',
+      Company:data.company||'',
+      Format:data.format||'',
+      RowCount:data.rowCount||0,
+      TotalAmount:Math.round(data.totalAmount||0)
+    });
+  }catch(e){
+    console.warn('[InvoiceExportLog] could not log export — sjekk at SharePoint-lista InvoiceExportLog finnes:',e.message);
+  }
+}
+
 function toggleInvoicing(){
   ensureMainView();
   // Close other panels
@@ -863,6 +884,19 @@ function exportInvoicingCSV(companyFilterName){
   const companyPart=companyFilterName?'_'+companyFilterName.replace(/\s+/g,'_'):'';
   const filename='Fakturagrunnlag_'+propName+companyPart+'_'+periodStr+'.xlsx';
   XLSX.writeFile(wb,filename);
+  // v15.10: log this generation
+  const _MN=['januar','februar','mars','april','mai','juni','juli','august','september','oktober','november','desember'];
+  const periodLabelHuman=useRange
+    ?((fromVal?formatDate(fromVal):'start')+' → '+(toVal?formatDate(toVal):'slutt'))
+    :(_MN[parseInt(monthVal)]+' '+yearVal);
+  _logInvoiceExport({
+    format:'XLSX',
+    property:selectedProperty?selectedProperty.Title:'Alle eiendommer',
+    period:periodLabelHuman,
+    company:companyFilterName||'',
+    rowCount:rows.length,
+    totalAmount:totalT
+  });
 }
 
 // ============================================================
@@ -1202,6 +1236,20 @@ function exportInvoicingPDF(companyFilterName){
   w.document.close();
   // Auto-trigger print dialog after render
   setTimeout(()=>{try{w.focus();w.print()}catch(e){console.error(e)}},500);
+  // v15.10: log this generation
+  let pdfRowCount=0;
+  groupKeys.forEach(k=>{
+    const g=groups[k];
+    pdfRowCount+=(g.nights?g.nights.length:0)+(g.fees?g.fees.length:0)+(g.percent?1:0)+(g.fullTenant?1:0)+(g.longTerm?g.longTerm.length:0);
+  });
+  _logInvoiceExport({
+    format:'PDF',
+    property:propTitle,
+    period:periodLabel,
+    company:companyFilterName||'',
+    rowCount:pdfRowCount,
+    totalAmount:grandTotal
+  });
 }
 
 // ============================================================
@@ -1458,6 +1506,80 @@ async function bulkApplyLongTermContract(){
   alert('Applied to '+success+' rooms'+(failed?', '+failed+' failed':'')+'. Now set the individual prices in the Long-term tab.');
   document.getElementById('longTermBulkModal').classList.remove('open');
   renderLongTermList();
+}
+
+// ============================================================
+// EKSPORT-LOGG / INVOICE EXPORT LOG (v15.10) — admin-only panel
+// ============================================================
+let _invoiceLogCache=null;
+
+async function toggleInvoiceLogPanel(){
+  if(!can('admin')){alert('Admin permission required');return}
+  ensureMainView();
+  ['incomingPanel','archivePanel','personsPanel','companiesPanel','pricingPanel','adminPanel','invoicingPanel'].forEach(id=>{
+    const p=document.getElementById(id);if(p)p.classList.remove('open');
+  });
+  const panel=document.getElementById('invoiceLogPanel');
+  panel.classList.toggle('open');
+  const isOpen=panel.classList.contains('open');
+  document.getElementById('mainView').classList.toggle('panel-mode',isOpen);
+  if(isOpen){
+    _invoiceLogCache=null;
+    await renderInvoiceLog();
+  }
+}
+
+async function renderInvoiceLog(){
+  const body=document.getElementById('invLogBody');if(!body)return;
+  if(!_invoiceLogCache){
+    body.innerHTML='<tr><td colspan="8" class="loading">Loading...</td></tr>';
+    try{
+      _invoiceLogCache=await getListItems('InvoiceExportLog');
+    }catch(e){
+      body.innerHTML='<tr><td colspan="8" class="error" style="color:var(--text-danger);padding:12px">Kunne ikke laste eksport-logg: '+escapeHtml(e.message||'?')+'<br><small>Sjekk at SharePoint-lista <strong>InvoiceExportLog</strong> er opprettet med kolonnene <code>ExportedBy</code>, <code>ExportedByEmail</code>, <code>ExportedAt</code>, <code>Property</code>, <code>Period</code>, <code>Company</code>, <code>Format</code>, <code>RowCount</code>, <code>TotalAmount</code>.</small></td></tr>';
+      return;
+    }
+  }
+  const search=(document.getElementById('invLogSearch').value||'').toLowerCase();
+  const fromVal=document.getElementById('invLogFrom').value;
+  const toVal=document.getElementById('invLogTo').value;
+  const fromTime=fromVal?new Date(fromVal+'T00:00:00').getTime():0;
+  const toTime=toVal?new Date(toVal+'T23:59:59').getTime():Number.POSITIVE_INFINITY;
+  const items=_invoiceLogCache.filter(x=>{
+    const t=x.ExportedAt?new Date(x.ExportedAt).getTime():0;
+    if(t<fromTime||t>toTime)return false;
+    if(search){
+      const blob=((x.ExportedBy||'')+' '+(x.Property||'')+' '+(x.Period||'')+' '+(x.Company||'')+' '+(x.Format||'')).toLowerCase();
+      if(!blob.includes(search))return false;
+    }
+    return true;
+  }).sort((a,b)=>new Date(b.ExportedAt||0)-new Date(a.ExportedAt||0));
+  document.getElementById('invoiceLogTitle').textContent='📋 Eksport-logg — '+items.length+' eksport'+(items.length!==1?'er':'');
+  if(!items.length){
+    body.innerHTML='<tr><td colspan="8" class="loading">Ingen eksporter funnet</td></tr>';
+    return;
+  }
+  body.innerHTML=items.map(x=>{
+    const ts=x.ExportedAt?new Date(x.ExportedAt):null;
+    const tsStr=ts?ts.toLocaleDateString('nb-NO')+' '+String(ts.getHours()).padStart(2,'0')+':'+String(ts.getMinutes()).padStart(2,'0'):'?';
+    const total=Number(x.TotalAmount||0);
+    return '<tr>'
+      +'<td style="font-variant-numeric:tabular-nums">'+escapeHtml(tsStr)+'</td>'
+      +'<td>'+escapeHtml(x.ExportedBy||'?')+'</td>'
+      +'<td>'+escapeHtml(x.Property||'')+'</td>'
+      +'<td>'+escapeHtml(x.Period||'')+'</td>'
+      +'<td>'+escapeHtml(x.Company||'Alle')+'</td>'
+      +'<td>'+escapeHtml(x.Format||'')+'</td>'
+      +'<td style="text-align:right">'+(x.RowCount||0)+'</td>'
+      +'<td style="text-align:right">'+(total?total.toLocaleString('nb-NO')+' kr':'')+'</td>'
+      +'</tr>';
+  }).join('');
+}
+
+function clearInvoiceLogDateRange(){
+  document.getElementById('invLogFrom').value='';
+  document.getElementById('invLogTo').value='';
+  renderInvoiceLog();
 }
 
 // ============================================================

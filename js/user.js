@@ -111,6 +111,8 @@ function applyPermissions(){
   show('menuBtnInvoicing',can('admin')||can('view_invoicing')||can('view_prices'));
   // v15.7: Import Hours krever import_export
   show('btnImportHours',can('admin')||can('import_export'));
+  // v15.10: Eksport-logg er admin-only
+  show('menuBtnInvoiceLog',can('admin'));
   show('btnArchive',can('archive')||can('view_bookings'));
   show('btnUpcoming',can('view_bookings'));
   show('btnHours',can('view_hours')||can('edit_hours'));
@@ -140,7 +142,7 @@ function resetViewStateForPropertyChange(){
   const dp=document.getElementById('detailPanel');if(dp)dp.classList.remove('open');
   selectedRoom=null;selectedBooking=null;
   // Close side panels
-  ['incomingPanel','archivePanel','personsPanel','invoicingPanel'].forEach(id=>{
+  ['incomingPanel','archivePanel','personsPanel','invoicingPanel','invoiceLogPanel'].forEach(id=>{
     const el=document.getElementById(id);if(el)el.classList.remove('open');
   });
   // Remove panel-mode on main view
